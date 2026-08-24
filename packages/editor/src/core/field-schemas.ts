@@ -19,6 +19,7 @@ export {
   resolveSchemaDefaultValue,
   isSchemaRequired,
   isSchemaReadonly,
+  isTableCellInheritedReadonly,
   isFieldEditableInFillMode,
   convertSchemaType,
   createDefaultSchema,

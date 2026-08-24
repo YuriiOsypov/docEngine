@@ -716,6 +716,221 @@ describe('renderDocumentPreview', () => {
     assert.ok(childToken, 'child cell token should render inside the preview table');
   });
 
+  it('inherits table last-column split for a following 2-column totals row', () => {
+    const tableId = 'products_table';
+    const doc = {
+      fieldSchemas: {
+        [tableId]: {
+          type: 'table',
+          label: 'Products',
+          columns: [
+            { key: 'product', label: 'Product', width: '72%' },
+            { key: 'total', label: 'Total', width: '28%' },
+          ],
+          rows: [{ key: 'r1', label: '' }],
+        },
+        [`${tableId}_r1_product`]: { type: 'text', label: 'Product' },
+        [`${tableId}_r1_total`]: { type: 'text', label: 'Total' },
+        grand_total_label: { type: 'text', label: 'Total label' },
+        grand_total_value: { type: 'text', label: 'Total value' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'main',
+            segments: [
+              { type: 'table', id: tableId, rows: [{ key: 'r1', label: '' }] },
+              {
+                type: 'columns',
+                columns: [
+                  [{ type: 'field', id: 'grand_total_label' }],
+                  [{ type: 'field', id: 'grand_total_value' }],
+                ],
+              },
+            ],
+            fieldValues: {
+              [`${tableId}_r1_product`]: 'Item',
+              [`${tableId}_r1_total`]: '$100.00',
+              grand_total_label: 'Total:',
+              grand_total_value: '$100.00',
+            },
+          },
+        },
+      ],
+    };
+
+    const root = renderDocumentPreview(doc, { hideEmptyValues: false });
+    const grid = root.querySelector('.document-columns__grid') as HTMLElement | null;
+    assert.ok(grid, 'columns grid should render');
+    assert.equal(grid?.style.gridTemplateColumns, '72% 28%');
+  });
+
+  it('overrides default 50/50 totals columns split after a table in preview', () => {
+    const tableId = 'products_table_equal_split';
+    const doc = {
+      fieldSchemas: {
+        [tableId]: {
+          type: 'table',
+          label: 'Products',
+          columns: [
+            { key: 'product', label: 'Product', width: '72%' },
+            { key: 'total', label: 'Total', width: '28%' },
+          ],
+          rows: [{ key: 'r1', label: '' }],
+        },
+        [`${tableId}_r1_product`]: { type: 'text', label: 'Product' },
+        [`${tableId}_r1_total`]: { type: 'text', label: 'Total' },
+        grand_total_label_2: { type: 'text', label: 'Total label 2' },
+        grand_total_value_2: { type: 'text', label: 'Total value 2' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'main',
+            segments: [
+              { type: 'table', id: tableId, rows: [{ key: 'r1', label: '' }] },
+              {
+                type: 'columns',
+                widths: ['50%', '50%'],
+                columns: [
+                  [{ type: 'field', id: 'grand_total_label_2' }],
+                  [{ type: 'field', id: 'grand_total_value_2' }],
+                ],
+              },
+            ],
+            fieldValues: {
+              [`${tableId}_r1_product`]: 'Item',
+              [`${tableId}_r1_total`]: '$100.00',
+              grand_total_label_2: 'Total:',
+              grand_total_value_2: '$100.00',
+            },
+          },
+        },
+      ],
+    };
+
+    const root = renderDocumentPreview(doc, { hideEmptyValues: false });
+    const grid = root.querySelector('.document-columns__grid') as HTMLElement | null;
+    assert.ok(grid, 'columns grid should render');
+    assert.equal(grid?.style.gridTemplateColumns, '72% 28%');
+  });
+
+  it('overrides explicit totals columns split after a table in preview', () => {
+    const tableId = 'products_table_custom_split';
+    const doc = {
+      fieldSchemas: {
+        [tableId]: {
+          type: 'table',
+          label: 'Products',
+          columns: [
+            { key: 'product', label: 'Product', width: '72%' },
+            { key: 'total', label: 'Total', width: '28%' },
+          ],
+          rows: [{ key: 'r1', label: '' }],
+        },
+        [`${tableId}_r1_product`]: { type: 'text', label: 'Product' },
+        [`${tableId}_r1_total`]: { type: 'text', label: 'Total' },
+        grand_total_label_3: { type: 'text', label: 'Total label 3' },
+        grand_total_value_3: { type: 'text', label: 'Total value 3' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'main',
+            segments: [
+              { type: 'table', id: tableId, rows: [{ key: 'r1', label: '' }] },
+              {
+                type: 'columns',
+                widths: ['60%', '40%'],
+                columns: [
+                  [{ type: 'field', id: 'grand_total_label_3' }],
+                  [{ type: 'field', id: 'grand_total_value_3' }],
+                ],
+              },
+            ],
+            fieldValues: {
+              [`${tableId}_r1_product`]: 'Item',
+              [`${tableId}_r1_total`]: '$100.00',
+              grand_total_label_3: 'Total:',
+              grand_total_value_3: '$100.00',
+            },
+          },
+        },
+      ],
+    };
+
+    const root = renderDocumentPreview(doc, { hideEmptyValues: false });
+    const grid = root.querySelector('.document-columns__grid') as HTMLElement | null;
+    assert.ok(grid, 'columns grid should render');
+    assert.equal(grid?.style.gridTemplateColumns, '72% 28%');
+  });
+
+  it('inherits table last-column split across consecutive preview sections', () => {
+    const tableId = 'products_table_cross_section';
+    const doc = {
+      fieldSchemas: {
+        [tableId]: {
+          type: 'table',
+          label: 'Products',
+          columns: [
+            { key: 'product', label: 'Product', width: '72%' },
+            { key: 'total', label: 'Total', width: '28%' },
+          ],
+          rows: [{ key: 'r1', label: '' }],
+        },
+        [`${tableId}_r1_product`]: { type: 'text', label: 'Product' },
+        [`${tableId}_r1_total`]: { type: 'text', label: 'Total' },
+        grand_total_label_4: { type: 'text', label: 'Total label 4' },
+        grand_total_value_4: { type: 'text', label: 'Total value 4' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'Products',
+            hideTitleInPreview: true,
+            segments: [
+              { type: 'table', id: tableId, rows: [{ key: 'r1', label: '' }] },
+            ],
+            fieldValues: {
+              [`${tableId}_r1_product`]: 'Item',
+              [`${tableId}_r1_total`]: '$100.00',
+            },
+          },
+        },
+        {
+          type: 'documentSection',
+          data: {
+            label: 'Totals',
+            hideTitleInPreview: true,
+            segments: [
+              {
+                type: 'columns',
+                widths: ['60%', '40%'],
+                columns: [
+                  [{ type: 'field', id: 'grand_total_label_4' }],
+                  [{ type: 'field', id: 'grand_total_value_4' }],
+                ],
+              },
+            ],
+            fieldValues: {
+              grand_total_label_4: 'Total:',
+              grand_total_value_4: '$100.00',
+            },
+          },
+        },
+      ],
+    };
+
+    const root = renderDocumentPreview(doc, { hideEmptyValues: false });
+    const grid = root.querySelector('.document-columns__grid') as HTMLElement | null;
+    assert.ok(grid, 'columns grid should render in the Totals section');
+    assert.equal(grid?.style.gridTemplateColumns, '72% 28%');
+  });
+
   it('applies field highlight CSS vars on preview root', () => {
     const doc = {
       pageSetup: { fieldHighlight: { color: '#7c3aed' } },

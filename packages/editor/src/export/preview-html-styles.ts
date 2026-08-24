@@ -199,15 +199,23 @@ body {
 }
 .document-columns {
   margin: 0.5em 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .document-columns__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  /* Percent tracks (table-synced totals) must not add gap or they overflow 100%. */
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   align-items: stretch;
 }
 .document-columns__col {
   position: relative;
+  min-width: 0;
   min-height: 1.5em;
   outline: none;
   font-family: inherit;
@@ -243,13 +251,6 @@ body {
   font-size: var(--me-table-font-size);
   table-layout: fixed;
   white-space: normal;
-}
-.preview-document .vision-table col:last-child,
-.preview-document .vision-table thead th:last-child,
-.preview-document .vision-table tbody td:last-child {
-  width: auto;
-  min-width: 0;
-  max-width: none;
 }
 .vision-table th,
 .vision-table td,

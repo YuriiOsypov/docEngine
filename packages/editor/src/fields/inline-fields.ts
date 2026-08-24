@@ -1,7 +1,7 @@
 import { resolveRegistry, getRegistryFromNode } from '../registry/registry-context.js';
 import { schemaToDisplayConfig } from '../registry/schema-registry.js';
 import { getFieldHandler } from './handlers/registry.js';
-import { createDefaultBlockData, createDefaultSchema, resolveSchemaDefaultValue, ensureCellSchemasForRows, resolveTableInstanceRows, parseCellFieldId, isFieldEditableInFillMode } from '../core/field-schemas.js';
+import { createDefaultBlockData, createDefaultSchema, resolveSchemaDefaultValue, ensureCellSchemasForRows, resolveTableInstanceRows, parseCellFieldId, isFieldEditableInFillMode, isTableCellInheritedReadonly, isSchemaReadonly } from '../core/field-schemas.js';
 import { allocateFieldIdentity } from '../core/field-id.js';
 import { remapperMovedSubtreeToSection } from './cross-section-reposition.js';
 import { PALETTE_DRAG_MIME, parsePaletteDrag, isPaletteDragSessionActive } from '../design/field-palette.js';
@@ -48,7 +48,11 @@ import {
   addTableRowsFromText,
   removeTableRowFromWrapper,
 } from './table-field.js';
-import { wireTableColumnResize } from './wire-table-column-resize.js';
+import {
+  schemaWidthToColCss,
+  scalePercentCssWidthsToFill,
+  wireTableColumnResize,
+} from './wire-table-column-resize.js';
 import { wireColumnsResize } from './wire-columns-resize.js';
 import { showNotification } from '../ui/notification.js';
 import {
@@ -611,7 +615,13 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
 
   if (def?.picker === 'computed') {
     token.classList.add('field-token--computed');
-  } else if (schema?.readonly) {
+  } else if (
+    schema?.readonly ||
+    isTableCellInheritedReadonly(
+      fieldId,
+      registry?.getFieldSchemas?.() ?? context?.fieldSchemas,
+    )
+  ) {
     token.classList.add('field-token--readonly');
   }
 
@@ -1049,6 +1059,9 @@ function alignmentDivHasContent(div: any) {
 
 function renderSegmentListInto(parent: any, segments: any, fieldValues: any, options: any = {}) {
   const { designMode, previewMode, onEditSchema, onDeleteField, designPropertiesPanel } = options;
+  // Preview may carry the previous section's table so a Totals columns block
+  // in the next section can still sync to that table's last-column split.
+  let lastTableSegForColumns: any = options.lastTableSegForColumns ?? null;
 
   function renderSegmentInto(target: any, seg: any) {
     if (seg.type === 'text') {
@@ -1061,12 +1074,28 @@ function renderSegmentListInto(parent: any, segments: any, fieldValues: any, opt
     }
 
     if (seg.type === 'columns') {
-      target.appendChild(renderColumnsSegment(seg, fieldValues, options));
+      const useTableFallbackWidths = !!previewMode
+        && !!lastTableSegForColumns
+        && isTwoColumnSegment(seg)
+        && (
+          columnsNeedAutoWidths(seg) ||
+          columnsHaveDefaultEvenSplit(seg.widths) ||
+          Array.isArray(seg.widths)
+        );
+      const fallbackWidths = useTableFallbackWidths
+        ? deriveColumnsWidthsFromTableSeg(lastTableSegForColumns, options)
+        : null;
+      const columnsSeg = fallbackWidths
+        ? { ...seg, widths: fallbackWidths }
+        : seg;
+      target.appendChild(renderColumnsSegment(columnsSeg, fieldValues, options));
+      lastTableSegForColumns = null;
       return;
     }
 
     if (seg.type === 'table') {
       target.appendChild(renderTableSegment(seg, fieldValues, options));
+      lastTableSegForColumns = seg;
       return;
     }
 
@@ -1121,7 +1150,11 @@ function renderSegmentListInto(parent: any, segments: any, fieldValues: any, opt
         updateFieldToken(token, value, label, options);
       }
       ensureCaretAnchorAfter(token);
+      lastTableSegForColumns = null;
+      return;
     }
+
+    lastTableSegForColumns = null;
   }
 
   let i = 0;
@@ -1145,6 +1178,10 @@ function renderSegmentListInto(parent: any, segments: any, fieldValues: any, opt
       for (const seg of group) renderSegmentInto(parent, seg);
     }
     i = j;
+  }
+
+  if (typeof options.onLastTableSegForColumns === 'function') {
+    options.onLastTableSegForColumns(lastTableSegForColumns);
   }
 
   return parent;
@@ -1267,7 +1304,7 @@ function renderTableSegment(seg: any, fieldValues: any, options: any = {}) {
     if (!previewMode) pruneTableCellCaretAnchors(tableEl);
   }
 
-  if (!previewMode && !options.mappingMode) {
+  if (!previewMode && !options.mappingMode && (designMode || !isSchemaReadonly(tableSchema))) {
     const actions = document.createElement('div');
     actions.className = 'document-table__row-actions';
     const addBtn = document.createElement('button');
@@ -1515,6 +1552,51 @@ function resolveColumnGridTracks(widths: any, { withSplitter = false }: any = {}
   const w1 = sanitizeColumnWidth(widths?.[1]) || '1fr';
   if (withSplitter) return `${w0} ${COLUMNS_SPLITTER_TRACK} ${w1}`;
   return `${w0} ${w1}`;
+}
+
+function parsePercentWidth(value: any) {
+  const match = String(value ?? '').trim().match(/^(\d+(?:\.\d+)?)%$/);
+  return match ? Number(match[1]) : null;
+}
+
+function columnsNeedAutoWidths(seg: any) {
+  if (seg?.type !== 'columns') return false;
+  if (!Array.isArray(seg.widths) || seg.widths.length < 2) return true;
+  const left = sanitizeColumnWidth(seg.widths[0]).toLowerCase();
+  const right = sanitizeColumnWidth(seg.widths[1]).toLowerCase();
+  return !left || !right;
+}
+
+function isTwoColumnSegment(seg: any) {
+  return seg?.type === 'columns' && Array.isArray(seg.columns) && seg.columns.length === 2;
+}
+
+function columnsHaveDefaultEvenSplit(widths: any) {
+  if (!Array.isArray(widths) || widths.length < 2) return false;
+  const left = sanitizeColumnWidth(widths[0]).toLowerCase();
+  const right = sanitizeColumnWidth(widths[1]).toLowerCase();
+  if (!left || !right) return false;
+  if (left === '1fr' && right === '1fr') return true;
+  const leftPct = parsePercentWidth(left);
+  const rightPct = parsePercentWidth(right);
+  if (leftPct == null || rightPct == null) return false;
+  return Math.abs(leftPct - 50) < 0.15 && Math.abs(rightPct - 50) < 0.15;
+}
+
+function deriveColumnsWidthsFromTableSeg(tableSeg: any, options: any = {}) {
+  if (!tableSeg?.id) return null;
+  const tableSchema = getTableSchema(tableSeg.id, options);
+  const columns = tableSchema?.columns ?? [];
+  if (columns.length < 2) return null;
+  const scaled = scalePercentCssWidthsToFill(
+    columns.map((col: any) => schemaWidthToColCss(col?.width)),
+  );
+  const percents = scaled.map(parsePercentWidth);
+  if (percents.some((pct: any) => pct == null)) return null;
+  const rightPct = percents[percents.length - 1];
+  if (!(rightPct > 0 && rightPct < 100)) return null;
+  const leftPct = Math.round((100 - rightPct) * 10) / 10;
+  return [`${leftPct}%`, `${rightPct}%`];
 }
 
 export function createEmptyColumnsSegment(overrides: any = {}) {
@@ -1941,7 +2023,10 @@ export async function openFieldPicker(fieldId: any, currentValue: any, callbacks
   if (def.picker === 'computed') return currentValue;
 
   const schema = registry?.getFieldSchemas()?.[fieldId];
-  if (!isFieldEditableInFillMode(schema)) return currentValue;
+  if (!isFieldEditableInFillMode(schema, {
+    fieldId,
+    fieldSchemas: registry?.getFieldSchemas?.() ?? callbacks.fieldSchemas,
+  })) return currentValue;
   if (def?.picker === 'child' || schema?.type === 'child') {
     if (callbacks.openRepeaterEditor) {
       return callbacks.openRepeaterEditor({
@@ -3233,7 +3318,9 @@ export async function pickFillFieldFromToken(
     options.schema ??
     registry?.getFieldSchemas()?.[fieldId] ??
     callbacks.fieldSchemas?.[fieldId];
-  if (!isFieldEditableInFillMode(schema)) return undefined;
+  const fieldSchemas =
+    registry?.getFieldSchemas?.() ?? callbacks.fieldSchemas ?? options.updateContext?.fieldSchemas;
+  if (!isFieldEditableInFillMode(schema, { fieldId, fieldSchemas })) return undefined;
 
   const holder =
     callbacks.editorHolder ??
@@ -3315,8 +3402,9 @@ export function wireFieldClicks(container: any, callbacks: any, onUpdate: any, o
 
     const fieldId = token.dataset.fieldId;
     const registry = registryFrom(callbacks);
-    const schema = registry?.getFieldSchemas()?.[fieldId];
-    if (!isFieldEditableInFillMode(schema)) return;
+    const fieldSchemas = registry?.getFieldSchemas?.() ?? callbacks.fieldSchemas;
+    const schema = fieldSchemas?.[fieldId];
+    if (!isFieldEditableInFillMode(schema, { fieldId, fieldSchemas })) return;
 
     e.preventDefault();
     e.stopPropagation();

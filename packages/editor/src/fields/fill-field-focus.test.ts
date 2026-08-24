@@ -155,6 +155,31 @@ describe('fill-field-focus', () => {
     holder.remove();
   });
 
+  it('skips cells when parent table is readonly', () => {
+    const holder = makeHolder();
+    const tableId = 'va_table';
+    const cellId = `${tableId}_od_sph`;
+    const cell = createFieldToken(cellId, '1.0', 'Sph');
+    cell.classList.add('field-token--cell');
+    holder.append(cell);
+
+    const schemas = {
+      [tableId]: {
+        type: 'table',
+        name: tableId,
+        label: 'VA',
+        readonly: true,
+        columns: [{ key: 'sph', label: 'Sph' }],
+        rows: [{ key: 'od', label: 'OD' }],
+      },
+      [cellId]: { type: 'text', name: 'sph', label: 'Sph' },
+    };
+
+    const tokens = collectEditableFillFieldTokens(holder, () => schemas);
+    assert.deepEqual(tokens.map((t: any) => t.dataset.fieldId), []);
+    holder.remove();
+  });
+
   it('restores focused class after picker close', async () => {
     const focus = await import('./fill-field-focus.js');
     const holder = makeHolder();
