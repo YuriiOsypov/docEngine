@@ -1334,7 +1334,14 @@ export function tagTableCellToken(
 ): void;
 export function isSchemaRequired(schema: FieldSchema | undefined): boolean;
 export function isSchemaReadonly(schema: FieldSchema | undefined): boolean;
-export function isFieldEditableInFillMode(schema: FieldSchema | undefined): boolean;
+export function isTableCellInheritedReadonly(
+  fieldId: string | undefined,
+  fieldSchemas?: Record<string, FieldSchema>,
+): boolean;
+export function isFieldEditableInFillMode(
+  schema: FieldSchema | undefined,
+  options?: { fieldId?: string; fieldSchemas?: Record<string, FieldSchema> },
+): boolean;
 
 /** Palette field entry. Prefer getFieldTypes() so host-registered plugins are included. */
 export const FIELD_TYPES: Array<{ kind?: 'field'; type: FieldType | string; label: string }>;

@@ -8,6 +8,7 @@ import {
   resolveTableInstanceRows,
   tagTableCellToken,
   isFieldEditableInFillMode,
+  isSchemaReadonly,
 } from '../core/field-schemas.js';
 import { evaluateComputedField } from '../core/computed-formula.js';
 import {
@@ -110,11 +111,8 @@ function clearColumnWidthCss(el: any) {
 }
 
 function applyScaledWidthsToCols(colEls: any, scaledWidths: any) {
-  const last = colEls.length - 1;
   colEls.forEach((colEl: any, index: any) => {
     clearColumnWidthCss(colEl);
-    // Last data column stays auto so leftover table width fills to the page edge.
-    if (index === last && last > 0) return;
     applyColumnWidthCss(colEl, scaledWidths[index], { pin: true });
   });
 }
@@ -123,12 +121,7 @@ function syncHeaderWidthsFromColgroup(table: any) {
   const widths = getTableDataColElements(table).map((colEl: any) =>
     String(colEl?.style?.width ?? '').trim(),
   );
-  const last = widths.length - 1;
   getTableDataHeaderCells(table).forEach((th: any, index: any) => {
-    if (index === last && last > 0) {
-      th.style.width = '';
-      return;
-    }
     if (widths[index]) th.style.width = widths[index];
   });
 }
@@ -276,9 +269,10 @@ function attachFillCellToken(token: any, fieldId: any, colLabel: any, options: a
   token.addEventListener('click', async (e: any) => {
     e.preventDefault();
     e.stopPropagation();
-    const schema = options.getRegistry?.()?.getFieldSchemas?.()?.[fieldId]
-      ?? options.fieldSchemas?.[fieldId];
-    if (!isFieldEditableInFillMode(schema)) return;
+    const fieldSchemas =
+      options.getRegistry?.()?.getFieldSchemas?.() ?? options.fieldSchemas ?? {};
+    const schema = fieldSchemas?.[fieldId];
+    if (!isFieldEditableInFillMode(schema, { fieldId, fieldSchemas })) return;
 
     await pickFillFieldFromToken(
       token,
@@ -302,7 +296,9 @@ function attachFillCellToken(token: any, fieldId: any, colLabel: any, options: a
 
 function buildTableRowElement(row: any, tableFieldId: any, tableSchema: any, fieldValues: any, options: any = {}) {
   const { designMode, previewMode, mappingMode, onCellValueChange } = options;
-  const editable = !previewMode && !mappingMode;
+  // Design mode always allows structural edits; fill mode respects table readonly.
+  const editable =
+    !previewMode && !mappingMode && (designMode || !isSchemaReadonly(tableSchema));
   const includeRowLabels = options.includeRowLabels === true;
 
   const tr = document.createElement('tr');
@@ -715,6 +711,9 @@ export function addTableRowToWrapper(tableWrapper: any, options: any = {}, rowSp
   if (!tableId) return null;
 
   const tableSchema = getTableSchema(tableId, options);
+  // Fill-mode: refuse structural edits on read-only tables.
+  if (!options.designMode && isSchemaReadonly(tableSchema)) return null;
+
   const rows = readTableRowsFromDom(tableWrapper);
   const label = String(rowSpec?.label ?? '').trim();
   const usedKeys = new Set(rows.map((row: any) => row.key));
@@ -765,6 +764,8 @@ export function addTableRowsFromText(tableWrapper: any, text: any, options: any 
   if (!tableId) return [];
 
   let tableSchema = getTableSchema(tableId, options);
+  if (!options.designMode && isSchemaReadonly(tableSchema)) return [];
+
   const existingRows = readTableRowsFromDom(tableWrapper);
   const hadRowLabels = shouldShowRowLabels(tableSchema, existingRows);
 
@@ -831,6 +832,9 @@ export function addTableRowsFromText(tableWrapper: any, text: any, options: any 
 export function removeTableRowFromWrapper(tableWrapper: any, rowKey: any, options: any = {}) {
   const tableId = tableWrapper?.dataset.tableId;
   if (!tableId || !rowKey) return false;
+
+  const tableSchema = getTableSchema(tableId, options);
+  if (!options.designMode && isSchemaReadonly(tableSchema)) return false;
 
   const rows = readTableRowsFromDom(tableWrapper);
   if (rows.length <= 1) return false;

@@ -110,11 +110,15 @@ describe('table column widths', () => {
     const cols = [...table.querySelectorAll(':scope > colgroup > col')];
     assert.equal(cols.length, 2);
     assert.equal(cols[0].style.width, '71.2%');
-    assert.ok(!cols[1].style.width);
+    assert.equal(cols[1].style.width, '28.8%');
     assert.equal(cols[0].style.minWidth, cols[0].style.width);
+    assert.equal(cols[1].style.minWidth, cols[1].style.width);
     assert.equal(cols[0].style.maxWidth, '');
-    assert.equal(table.querySelector('th')?.style.width, '71.2%');
-    assert.ok(!table.querySelector('td:last-child')?.style.width);
+    assert.equal(cols[1].style.maxWidth, '');
+    const headers = [...table.querySelectorAll('th')];
+    assert.equal(headers[0]?.style.width, '71.2%');
+    assert.equal(headers[1]?.style.width, '28.8%');
+    assert.equal((table.querySelector('td:last-child') as HTMLElement | null)?.style.width ?? '', '');
     const removeBtn = table.querySelector('[data-action="remove-table-row"]');
     assert.ok(removeBtn);
     assert.ok(removeBtn?.closest('td')?.classList.contains('vision-table__cell--with-remove'));
@@ -129,10 +133,13 @@ describe('table column widths', () => {
     const cols = [...table.querySelectorAll(':scope > colgroup > col')];
     assert.equal(cols.length, 2);
     assert.equal(cols[0].style.width, '71.2%');
-    assert.ok(!cols[1].style.width);
+    assert.equal(cols[1].style.width, '28.8%');
     assert.equal(cols[0].style.maxWidth, '');
-    assert.equal(table.querySelector('th')?.style.width, '71.2%');
-    assert.ok(!table.querySelector('td:last-child')?.style.width);
+    assert.equal(cols[1].style.maxWidth, '');
+    const headers = [...table.querySelectorAll('th')];
+    assert.equal(headers[0]?.style.width, '71.2%');
+    assert.equal(headers[1]?.style.width, '28.8%');
+    assert.equal((table.querySelector('td:last-child') as HTMLElement | null)?.style.width ?? '', '');
     assert.equal(table.style.width, '100%');
   });
 
@@ -148,7 +155,7 @@ describe('table column widths', () => {
     ]);
     const cols = [...table.querySelectorAll(':scope > colgroup > col')];
     assert.equal(cols[0].style.width, '70%');
-    assert.ok(!cols[1].style.width);
+    assert.equal(cols[1].style.width, '30%');
   });
 });
 
@@ -413,5 +420,61 @@ describe('fill table computed cells', () => {
     assert.equal(totalToken.style.fontFamily, beforeFont);
     assert.equal(totalToken.style.fontSize, beforeSize);
     assert.equal((totalToken.textContent ?? '').trim(), beforeText);
+  });
+});
+
+describe('table readonly when filling', () => {
+  const tableId = 'readonly_va';
+  const fieldSchemas = {
+    [tableId]: {
+      type: 'table',
+      label: 'Visual acuity',
+      name: 'Visual acuity',
+      readonly: true,
+      columns: [
+        { key: 'eye', label: 'Eye' },
+        { key: 'sph', label: 'Sph' },
+      ],
+      rows: [
+        { key: 'od', label: 'OD' },
+        { key: 'os', label: 'OS' },
+      ],
+    },
+    [`${tableId}_od_eye`]: { type: 'text', label: 'Eye' },
+    [`${tableId}_od_sph`]: { type: 'text', label: 'Sph' },
+    [`${tableId}_os_eye`]: { type: 'text', label: 'Eye' },
+    [`${tableId}_os_sph`]: { type: 'text', label: 'Sph' },
+  };
+
+  it('marks fill-mode cells as readonly and omits row remove controls', () => {
+    const table = buildTableElement(tableId, {
+      [`${tableId}_od_eye`]: 'OD',
+      [`${tableId}_od_sph`]: '-1.00',
+    }, {
+      fieldSchemas,
+      tableRows: [
+        { key: 'od', label: 'OD' },
+        { key: 'os', label: 'OS' },
+      ],
+    });
+
+    const cells = [...table.querySelectorAll('.field-token--cell')];
+    assert.ok(cells.length >= 2);
+    for (const cell of cells) {
+      assert.ok(cell.classList.contains('field-token--readonly'));
+    }
+    assert.equal(table.querySelector('[data-action="remove-table-row"]'), null);
+  });
+
+  it('keeps design-mode row remove controls even when table is readonly', () => {
+    const table = buildTableElement(tableId, {}, {
+      designMode: true,
+      fieldSchemas,
+      tableRows: [
+        { key: 'od', label: 'OD' },
+        { key: 'os', label: 'OS' },
+      ],
+    });
+    assert.ok(table.querySelector('[data-action="remove-table-row"]'));
   });
 });

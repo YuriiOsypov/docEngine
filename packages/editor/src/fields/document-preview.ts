@@ -600,6 +600,10 @@ export function renderDocumentPreview(doc: any, options: any = {}) {
   }
   applyFieldHighlightCssVars(root, fieldHighlightStyle);
 
+  // Carry the last table across consecutive sections so a Totals "2 columns"
+  // block in the next section can inherit that table's right-column split.
+  let lastTableSegForColumns: any = null;
+
   for (const block of blocks) {
     const data = block.data ?? {};
 
@@ -617,7 +621,13 @@ export function renderDocumentPreview(doc: any, options: any = {}) {
         bodyEl.className = 'preview-document__section document-section__body';
         applyDocumentBodyTextStyle(bodyEl, textStyle);
         bodyEl.appendChild(
-          renderSegmentsToDom(segments, values, previewContext),
+          renderSegmentsToDom(segments, values, {
+            ...previewContext,
+            lastTableSegForColumns,
+            onLastTableSegForColumns: (seg: any) => {
+              lastTableSegForColumns = seg;
+            },
+          }),
         );
         if (hideEmpty && !bodyEl.textContent?.trim() && !bodyEl.querySelector('img')) {
           bodyEl = null;

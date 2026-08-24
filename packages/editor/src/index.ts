@@ -119,6 +119,7 @@ export {
   tagTableCellToken,
   isSchemaRequired,
   isSchemaReadonly,
+  isTableCellInheritedReadonly,
   isFieldEditableInFillMode,
 } from './core/field-schemas.js';
 

@@ -150,6 +150,7 @@ export {
   tagTableCellToken,
   isSchemaRequired,
   isSchemaReadonly,
+  isTableCellInheritedReadonly,
   isFieldEditableInFillMode,
   ensureSchemaForFieldProperties,
   getDefaultFieldValue,

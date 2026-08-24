@@ -10,6 +10,7 @@ import {
   ensureCellSchemasForRows,
   buildRepeaterInstancesFromLabels,
   isSchemaReadonly,
+  isTableCellInheritedReadonly,
   isFieldEditableInFillMode,
   convertSchemaType,
   ensureSchemaForFieldProperties,
@@ -378,6 +379,29 @@ describe('readonly schema helpers', () => {
     assert.equal(isFieldEditableInFillMode({ type: 'text', name: 'a', label: 'A', readonly: true }), false);
     assert.equal(isFieldEditableInFillMode({ type: 'computed', name: 'a', label: 'A', formula: '1' }), false);
     assert.equal(isFieldEditableInFillMode({ type: 'text', name: 'a', label: 'A' }), true);
+  });
+
+  it('inherits table readonly for cell fields in fill mode', () => {
+    const tableId = 'visual_acuity';
+    const cellId = cellFieldId(tableId, 'od', 'sph');
+    const fieldSchemas = {
+      [tableId]: {
+        type: 'table',
+        name: 'visual_acuity',
+        label: 'Visual acuity',
+        readonly: true,
+        columns: [{ key: 'sph', label: 'Sph' }],
+        rows: [{ key: 'od', label: 'OD' }],
+      },
+      [cellId]: { type: 'text', name: 'sph', label: 'Sph' },
+    };
+
+    assert.equal(isTableCellInheritedReadonly(cellId, fieldSchemas), true);
+    assert.equal(
+      isFieldEditableInFillMode(fieldSchemas[cellId], { fieldId: cellId, fieldSchemas }),
+      false,
+    );
+    assert.equal(isFieldEditableInFillMode(fieldSchemas[cellId]), true);
   });
 
   it('preserves readonly when converting schema type', () => {

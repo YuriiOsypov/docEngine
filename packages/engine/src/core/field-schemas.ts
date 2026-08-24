@@ -531,11 +531,36 @@ export function isSchemaReadonly( schema: any) {
   return !!schema?.readonly;
 }
 
-export function isFieldEditableInFillMode( schema: any) {
-  if (!schema) return true;
-  const handler = getFieldHandler(schema.type);
-  if (handler && handler.editableInFill === false) return false;
-  return !schema.readonly;
+/**
+ * True when a table cell inherits read-only from its parent table schema.
+ * Table-level `readonly` applies to all cells in fill mode.
+ */
+export function isTableCellInheritedReadonly(fieldId: any, fieldSchemas: any = {}) {
+  if (!fieldId) return false;
+  const cellRef = parseCellFieldId(fieldId, fieldSchemas);
+  if (!cellRef) return false;
+  return !!fieldSchemas?.[cellRef.tableFieldId]?.readonly;
+}
+
+/**
+ * @param {object} [options]
+ * @param {string} [options.fieldId] When set with fieldSchemas, table cells also
+ *   respect the parent table's `readonly` flag.
+ * @param {Record<string, object>} [options.fieldSchemas]
+ */
+export function isFieldEditableInFillMode(schema: any, options: any = undefined) {
+  if (schema) {
+    const handler = getFieldHandler(schema.type);
+    if (handler && handler.editableInFill === false) return false;
+    if (schema.readonly) return false;
+  }
+  if (
+    options?.fieldId &&
+    isTableCellInheritedReadonly(options.fieldId, options.fieldSchemas)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function convertSchemaType(schema: any, newType: any, catalogProvider: any = null): SoftSchema | null | undefined {

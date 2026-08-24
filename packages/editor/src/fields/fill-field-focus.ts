@@ -52,7 +52,8 @@ export function collectEditableFillFieldTokens(holder: any, getFieldSchemas: any
     if (!token?.dataset?.fieldId) return false;
     if (token.classList.contains('field-token--design')) return false;
     if (token.classList.contains('field-token--preview')) return false;
-    return isFieldEditableInFillMode(schemas[token.dataset.fieldId]);
+    const fieldId = token.dataset.fieldId;
+    return isFieldEditableInFillMode(schemas[fieldId], { fieldId, fieldSchemas: schemas });
   });
   return sortTokensByDocumentOrder(tokens);
 }
