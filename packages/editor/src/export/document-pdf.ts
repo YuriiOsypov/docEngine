@@ -1,4 +1,3 @@
-import { generateDocumentPdfBlob as renderJsonDocumentPdfBlob } from '@docengine/pdf-renderer/browser';
 import { saveBlobToDisk } from '../utils/save-blob.js';
 import { resolvePreviewExportOptions } from './preview-export-options.js';
 
@@ -8,6 +7,10 @@ export const isClientPdfAvailable = true;
 /**
  * Portal / browser PDF: same JSON → pdfmake path as `/api/v1/render/pdf`.
  * Repeating page headers and long-table header repetition come from that renderer.
+ *
+ * pdfmake + font VFS (~5MB) load only when PDF is actually requested so the
+ * editor shell stays small on first playground / fill paint.
+ *
  * @param {import('../types.d.ts').EditorDocument} doc
  * @param {import('../types.d.ts').PdfExportOptions} [options]
  * @returns {Promise<Blob>}
@@ -15,6 +18,9 @@ export const isClientPdfAvailable = true;
 export async function generateDocumentPdfBlob(doc: any, options: any = {}) {
   try {
     const exportOptions = resolvePreviewExportOptions(doc, options);
+    const { generateDocumentPdfBlob: renderJsonDocumentPdfBlob } = await import(
+      '@docengine/pdf-renderer/browser'
+    );
     return await renderJsonDocumentPdfBlob(doc, exportOptions);
   } catch (err: any) {
     const message = err instanceof Error ? err.message : String(err);
