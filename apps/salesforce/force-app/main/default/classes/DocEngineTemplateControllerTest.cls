@@ -115,8 +115,12 @@ private class DocEngineTemplateControllerTest {
 
   @IsTest
   static void saveAndGetPersistsAccessGroupId() {
-    Group g = new Group(Name = 'DocEngine Access Test', Type = 'Regular');
-    insert g;
+    Group g;
+    System.runAs(new User(Id = UserInfo.getUserId())) {
+      g = new Group(Name = 'DocEngine Access Test', Type = 'Regular');
+      insert g;
+      insert new GroupMember(GroupId = g.Id, UserOrGroupId = UserInfo.getUserId());
+    }
 
     DocEngineTemplateController.TemplateDTO dto = new DocEngineTemplateController.TemplateDTO();
     dto.name = 'Grouped Template';

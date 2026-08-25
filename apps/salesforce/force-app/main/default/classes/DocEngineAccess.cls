@@ -115,6 +115,9 @@ public with sharing class DocEngineAccess {
     if (cachedHasViewAllTemplates != null) {
       return cachedHasViewAllTemplates;
     }
+    // Packaging / namespaced orgs store ObjectPermissions.SObjectType with the prefix
+    // (e.g. logicomapp__DocEngine_Template__c); local describe name is always correct.
+    String templateTypeName = DocEngine_Template__c.SObjectType.getDescribe().getName();
     List<PermissionSetAssignment> assignments = [
       SELECT Id
       FROM PermissionSetAssignment
@@ -122,7 +125,7 @@ public with sharing class DocEngineAccess {
         AND PermissionSetId IN (
           SELECT ParentId
           FROM ObjectPermissions
-          WHERE SObjectType = 'DocEngine_Template__c' AND PermissionsViewAllRecords = true
+          WHERE SObjectType = :templateTypeName AND PermissionsViewAllRecords = true
         )
       LIMIT 1
     ];

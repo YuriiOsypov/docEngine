@@ -360,22 +360,18 @@ private class DocEngineInstanceControllerTest {
 
   @IsTest
   static void deleteInstanceDeniedWithoutDeletePermission() {
-    DocEngine_Template__c t = makeTemplate();
-    Account a = new Account(Name = 'Acme');
-    insert a;
-    DocEngine_Document__c inst = new DocEngine_Document__c(
-      Template__c = t.Id,
-      Record_Id__c = a.Id,
-      Object_API_Name__c = 'Account',
-      Document_JSON__c = '{}',
-      Status__c = 'Draft'
-    );
-    insert inst;
-
+    // Setup-object DML (User / PermissionSetAssignment) must run inside System.runAs
+    // to avoid MIXED_DML_OPERATION with custom objects in the same test context.
     Profile p = [
       SELECT Id
       FROM Profile
       WHERE Name = 'Standard User'
+      LIMIT 1
+    ];
+    PermissionSet ps = [
+      SELECT Id
+      FROM PermissionSet
+      WHERE Name = 'DocEngine_User'
       LIMIT 1
     ];
     User u = new User(
@@ -389,15 +385,22 @@ private class DocEngineInstanceControllerTest {
       TimeZoneSidKey = 'America/Los_Angeles',
       UserName = 'docengine.user.' + String.valueOf(Crypto.getRandomInteger()) + '@example.com'
     );
-    insert u;
+    System.runAs(new User(Id = UserInfo.getUserId())) {
+      insert u;
+      insert new PermissionSetAssignment(AssigneeId = u.Id, PermissionSetId = ps.Id);
+    }
 
-    PermissionSet ps = [
-      SELECT Id
-      FROM PermissionSet
-      WHERE Name = 'DocEngine_User'
-      LIMIT 1
-    ];
-    insert new PermissionSetAssignment(AssigneeId = u.Id, PermissionSetId = ps.Id);
+    DocEngine_Template__c t = makeTemplate();
+    Account a = new Account(Name = 'Acme');
+    insert a;
+    DocEngine_Document__c inst = new DocEngine_Document__c(
+      Template__c = t.Id,
+      Record_Id__c = a.Id,
+      Object_API_Name__c = 'Account',
+      Document_JSON__c = '{}',
+      Status__c = 'Draft'
+    );
+    insert inst;
 
     Boolean denied = false;
     System.runAs(u) {

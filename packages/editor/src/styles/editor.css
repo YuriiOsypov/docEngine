@@ -712,15 +712,21 @@ body.document-columns-col-resize-active .field-token {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  margin-right: 4px;
+  margin-right: 8px;
   padding: 3px 8px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
-  border: 1px solid #999;
+  border: 1px solid #93c5fd;
   border-radius: 4px;
-  background: #fff;
+  background: #eff6ff;
+  color: #1e40af;
   cursor: pointer;
+}
+
+.rich-text-toolbar__preview:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #2563eb;
 }
 
 .rich-text-toolbar__preview[hidden] {
@@ -732,7 +738,8 @@ body.document-columns-col-resize-active .field-token {
   cursor: default;
 }
 
-.rich-text-toolbar--inactive {
+/* Dim format controls only — Preview stays a full-strength document action. */
+.rich-text-toolbar--inactive > :not(.rich-text-toolbar__preview) {
   opacity: 0.65;
 }
 
@@ -1036,7 +1043,7 @@ body.document-columns-col-resize-active .field-token {
 }
 
 /* Fill mode: underline all field values with configured highlight color */
-.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--required-missing),
+.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--required-missing) {
   text-decoration: underline;
   text-decoration-color: var(--me-field-fill-color, #0000FF);
@@ -1045,11 +1052,11 @@ body.document-columns-col-resize-active .field-token {
   cursor: pointer;
 }
 
-.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design).field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section__body .field-token--design.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.document-section__body .field-token--design.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .vision-table .field-token--cell.field-token--design.field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .document-section--mapping .vision-table .field-token--cell.field-token--empty:not(.field-token--readonly):not(.field-token--required-missing) {
   background: var(--me-field-fill-bg, transparent);
   color: var(--me-field-fill-color, #0000FF);
@@ -1928,6 +1935,19 @@ body.modal-move-active {
   box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
 }
 
+/*
+ * HTML text values can include block nodes (ul/ol/p). Those force anonymous
+ * blocks inside the default inline field-token span, so outline/background
+ * fragment into per-line boxes (and a stray corner that looks like a "0").
+ * One inline-block box keeps focus + fill chrome around the whole value.
+ */
+.field-token--html {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  white-space: normal;
+}
+
 .field-token--html ul,
 .field-token--html ol,
 .html-text-modal__editor ul,
@@ -2097,17 +2117,33 @@ body.modal-move-active {
   border-radius: 2px;
 }
 
-/* Design mode */
+/* Design mode — match Preview accent action chrome */
 .design-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
-  padding: 6px 10px;
-  border: 1px solid #999;
-  border-radius: 3px;
-  background: #fff;
+  user-select: none;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1e40af;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.design-toggle:hover:not(:has(input:disabled)) {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+.design-toggle:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .document-actions {
@@ -3128,7 +3164,7 @@ body.design-mode--panels .editor-top-chrome {
 }
 
 .modal--preview {
-  width: min(960px, 94vw);
+  width: min(1200px, 94vw);
   /* Fixed viewport so HTML / hide-empty / PDF do not resize the dialog. */
   height: min(90vh, 900px);
   max-height: min(90vh, 900px);

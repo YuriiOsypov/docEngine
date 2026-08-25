@@ -87,10 +87,25 @@ body.design-mode--panels .page > .design-shell--active,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  /* Match Preview accent (also set in editor/bridge; kept here so demo wins cascade). */
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--me-accent-hover-border, #93c5fd);
+  border-radius: var(--me-radius-sm, 4px);
+  background: var(--me-accent-surface, #eff6ff);
+  color: var(--me-primary-muted, #1e40af);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.design-toggle:hover:not(:has(input:disabled)) {
+  background: var(--me-accent-hover, #dbeafe);
+  border-color: var(--me-primary, #2563eb);
+  color: var(--me-primary, #2563eb);
 }
 
 .design-toggle:has(input:disabled) {

@@ -504,7 +504,11 @@
 .document-columns__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  /* Percent tracks (table-synced totals) must not add gap or they overflow 100%. */
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   align-items: stretch;
 }
 
@@ -516,6 +520,7 @@
 
 .document-columns__col {
   position: relative;
+  min-width: 0;
   min-height: 1.5em;
   outline: none;
   font-family: var(--me-document-font-family);
@@ -704,15 +709,21 @@ body.document-columns-col-resize-active .field-token {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  margin-right: 4px;
+  margin-right: 8px;
   padding: 3px 8px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
-  border: 1px solid #999;
+  border: 1px solid #93c5fd;
   border-radius: 4px;
-  background: #fff;
+  background: #eff6ff;
+  color: #1e40af;
   cursor: pointer;
+}
+
+.rich-text-toolbar__preview:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #2563eb;
 }
 
 .rich-text-toolbar__preview[hidden] {
@@ -724,7 +735,8 @@ body.document-columns-col-resize-active .field-token {
   cursor: default;
 }
 
-.rich-text-toolbar--inactive {
+/* Dim format controls only — Preview stays a full-strength document action. */
+.rich-text-toolbar--inactive > :not(.rich-text-toolbar__preview) {
   opacity: 0.65;
 }
 
@@ -2089,17 +2101,33 @@ body.modal-move-active {
   border-radius: 2px;
 }
 
-/* Design mode */
+/* Design mode — match Preview accent action chrome */
 .design-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
-  padding: 6px 10px;
-  border: 1px solid #999;
-  border-radius: 3px;
-  background: #fff;
+  user-select: none;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1e40af;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.design-toggle:hover:not(:has(input:disabled)) {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+.design-toggle:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .document-actions {
@@ -3120,7 +3148,7 @@ body.design-mode--panels .editor-top-chrome {
 }
 
 .modal--preview {
-  width: min(960px, 94vw);
+  width: min(1200px, 94vw);
   /* Fixed viewport so HTML / hide-empty / PDF do not resize the dialog. */
   height: min(90vh, 900px);
   max-height: min(90vh, 900px);
@@ -3815,10 +3843,24 @@ body.field-mapping-split-active {
   color: inherit;
 }
 
-.preview-document .vision-table {
+.preview-document .document-table,
+.preview-document .vision-table-block,
+.preview-document .preview-document__block {
+  display: block;
   width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.preview-document .vision-table {
+  display: table;
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
   table-layout: fixed;
   border-collapse: collapse;
+  white-space: normal;
 }
 
 .preview-document .vision-table th {
@@ -3839,7 +3881,8 @@ body.field-mapping-split-active {
 
 .preview-document .vision-table th,
 .preview-document .vision-table td {
-  overflow: hidden;
+  overflow: visible;
+  white-space: normal;
 }
 
 .preview-document .vision-table--borderless th,
@@ -4778,16 +4821,17 @@ body.field-mapping-split-active {
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
-  margin-right: 0.35rem;
+  margin-right: 0.5rem;
   padding: 0.2rem 0.55rem;
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.2;
-  border: 1px solid var(--me-border-strong);
+  border: 1px solid var(--me-accent-hover-border);
   border-radius: var(--me-radius-sm);
-  background: var(--me-surface-0);
-  color: var(--me-text);
+  background: var(--me-accent-surface);
+  color: var(--me-primary-muted);
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .rich-text-toolbar__preview[hidden] {
@@ -4799,7 +4843,9 @@ body.field-mapping-split-active {
 }
 
 .rich-text-toolbar__preview:hover:not(:disabled) {
-  background: var(--me-surface-100);
+  background: var(--me-accent-hover);
+  border-color: var(--me-primary);
+  color: var(--me-primary);
 }
 
 .rich-text-toolbar__preview:disabled {
@@ -5888,13 +5934,30 @@ body.design-mode .ce-block--selected .ce-block__content {
   color: #7a1f1f;
 }
 
-/* ── Design toggle (if host reuses editor class) ─────────────────────────── */
+/* ── Design toggle (if host reuses editor class) — match Preview accent ─── */
 
 .design-toggle {
   font-family: var(--me-font-family);
-  border-color: var(--me-border-strong);
-  background: var(--me-surface-0);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--me-accent-hover-border);
   border-radius: var(--me-radius-sm);
+  background: var(--me-accent-surface);
+  color: var(--me-primary-muted);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.design-toggle:hover:not(:has(input:disabled)) {
+  background: var(--me-accent-hover);
+  border-color: var(--me-primary);
+  color: var(--me-primary);
+}
+
+.design-toggle:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .document-actions__title {

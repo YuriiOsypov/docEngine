@@ -27,8 +27,12 @@ private class DocEngineAccessTest {
 
   @IsTest
   static void assertTemplateAccessHonorsMembership() {
-    Group g = new Group(Name = 'DocEngine Access Gate', Type = 'Regular');
-    insert g;
+    Group g;
+    System.runAs(new User(Id = UserInfo.getUserId())) {
+      g = new Group(Name = 'DocEngine Access Gate', Type = 'Regular');
+      insert g;
+      insert new GroupMember(GroupId = g.Id, UserOrGroupId = UserInfo.getUserId());
+    }
 
     DocEngine_Template__c t = new DocEngine_Template__c(
       Name = 'Restricted',
@@ -41,18 +45,18 @@ private class DocEngineAccessTest {
     insert t;
 
     DocEngineAccess.clearCache();
-    // Test runner typically has View All via Admin permset — assert does not throw.
     DocEngineAccess.assertTemplateAccess(t.Id);
-    System.assertEquals(
-      true,
-      DocEngineAccess.canAccessByGroup(String.valueOf(g.Id)) || DocEngineAccess.hasViewAllTemplates()
-    );
+    System.assertEquals(true, DocEngineAccess.canAccessByGroup(String.valueOf(g.Id)));
   }
 
   @IsTest
   static void documentInheritsTemplateGroup() {
-    Group g = new Group(Name = 'DocEngine Doc Inherit', Type = 'Regular');
-    insert g;
+    Group g;
+    System.runAs(new User(Id = UserInfo.getUserId())) {
+      g = new Group(Name = 'DocEngine Doc Inherit', Type = 'Regular');
+      insert g;
+      insert new GroupMember(GroupId = g.Id, UserOrGroupId = UserInfo.getUserId());
+    }
 
     DocEngine_Template__c t = new DocEngine_Template__c(
       Name = 'Parent T',
@@ -84,13 +88,15 @@ private class DocEngineAccessTest {
 
   @IsTest
   static void nestedPublicGroupMembershipCounts() {
-    Group parent = new Group(Name = 'DocEngine Parent PG', Type = 'Regular');
-    Group child = new Group(Name = 'DocEngine Child PG', Type = 'Regular');
-    insert new List<Group>{ parent, child };
-    insert new GroupMember(GroupId = parent.Id, UserOrGroupId = child.Id);
-
-    // Direct membership only on child; expansion should include parent.
-    insert new GroupMember(GroupId = child.Id, UserOrGroupId = UserInfo.getUserId());
+    Group parent;
+    Group child;
+    System.runAs(new User(Id = UserInfo.getUserId())) {
+      parent = new Group(Name = 'DocEngine Parent PG', Type = 'Regular');
+      child = new Group(Name = 'DocEngine Child PG', Type = 'Regular');
+      insert new List<Group>{ parent, child };
+      insert new GroupMember(GroupId = parent.Id, UserOrGroupId = child.Id);
+      insert new GroupMember(GroupId = child.Id, UserOrGroupId = UserInfo.getUserId());
+    }
 
     DocEngineAccess.clearCache();
     Set<String> ids = DocEngineAccess.currentUserPublicGroupIds();
