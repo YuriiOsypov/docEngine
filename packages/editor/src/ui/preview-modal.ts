@@ -15,6 +15,24 @@ import { wireModalEscape } from './wire-modal-escape.js';
 import { renderPdfBlobToContainer } from './pdf-canvas-preview.js';
 import { mountFieldModalOverlay } from './wire-modal-palette.js';
 
+const PDF_ENGINE_WARM_KEY = 'docengine-pdf-engine-warm';
+
+function isClientPdfEngineWarm() {
+  try {
+    return sessionStorage.getItem(PDF_ENGINE_WARM_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markClientPdfEngineWarm() {
+  try {
+    sessionStorage.setItem(PDF_ENGINE_WARM_KEY, '1');
+  } catch {
+    /* private mode / blocked storage */
+  }
+}
+
 async function resolvePdfAvailableFlag({
   pdfAvailable,
   generatePdfBlob,
@@ -191,6 +209,10 @@ export function createPreviewModal({
     btn.hidden = !visible;
   }
 
+  function usesClientPdfEngine() {
+    return typeof generatePdfBlob !== 'function' && isClientPdfAvailable;
+  }
+
   function syncFooterButtons() {
     // HTML mode: never show "Back to HTML". PDF mode: show it to return.
     setFooterButtonVisible(btnViewPdf, pdfEnabled && viewMode === 'html');
@@ -205,6 +227,12 @@ export function createPreviewModal({
     }
     if (pdfHint) {
       pdfHint.hidden = pdfEnabled || !pdfAvailabilityResolved;
+    }
+    if (btnViewPdf) {
+      const coldClientPdf = usesClientPdfEngine() && !isClientPdfEngineWarm();
+      btnViewPdf.title = coldClientPdf
+        ? 'First PDF can take 30–50 seconds while the engine downloads'
+        : 'View as PDF';
     }
     updateSaveChrome();
   }
@@ -263,14 +291,18 @@ export function createPreviewModal({
   function showLoading(message: any = 'Generating PDF…') {
     pdfLoading = true;
     setBodyMode('pdf');
-    body.innerHTML = `<p class="preview-modal__loading">${message}</p>`;
+    const coldClientPdf = usesClientPdfEngine() && !isClientPdfEngineWarm();
+    const hint = coldClientPdf
+      ? `<p class="preview-modal__loading-hint">First time can take 30–50 seconds while the PDF engine downloads.</p>`
+      : '';
+    body.innerHTML = `<div class="preview-modal__loading"><p class="preview-modal__loading-title">${message}</p>${hint}</div>`;
     syncFooterButtons();
   }
 
   function showError(message: any) {
     pdfLoading = false;
     setBodyMode('pdf');
-    body.innerHTML = `<p class="preview-modal__loading preview-modal__loading--error">${message}</p>`;
+    body.innerHTML = `<div class="preview-modal__loading preview-modal__loading--error"><p class="preview-modal__loading-title">${message}</p></div>`;
     syncFooterButtons();
   }
 
@@ -345,6 +377,7 @@ export function createPreviewModal({
       pdfBlob = await generatePdfBlob(currentDoc, options);
     } else {
       pdfBlob = await generateDocumentPdfBlob(currentDoc, options);
+      markClientPdfEngineWarm();
     }
     return pdfBlob;
   }

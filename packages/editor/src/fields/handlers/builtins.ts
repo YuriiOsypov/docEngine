@@ -283,6 +283,101 @@ const BUILTIN_HANDLERS = [
     pdfRenderMode: () => 'plain',
   },
   {
+    type: 'logical',
+    label: 'Logical',
+    paletteOrder: 45,
+    createSchema(label: any, name: any) {
+      return { ...baseSchema('logical', label, name), defaultValue: null };
+    },
+    getEmptyValue: () => null,
+    resolveDefaultValue(schema: any) {
+      const value = schema.defaultValue;
+      return value === true || value === false ? value : null;
+    },
+    toDisplayConfig(schema: any) {
+      return { picker: 'logical', label: schema.label };
+    },
+    toPickerConfig(schema: any) {
+      return { picker: 'logical', label: schema.label };
+    },
+    renderSchemaFields(host: any, schema: any) {
+      const defaultValue = schema.defaultValue;
+      host.innerHTML = `
+        <label class="schema-form__row">
+          <span>Default value</span>
+          <select data-field="defaultValue">
+            <option value=""${defaultValue !== true && defaultValue !== false ? ' selected' : ''}>Empty</option>
+            <option value="true"${defaultValue === true ? ' selected' : ''}>Yes</option>
+            <option value="false"${defaultValue === false ? ' selected' : ''}>No</option>
+          </select>
+        </label>
+      `;
+    },
+    readSchemaFields(host: any) {
+      const raw = readInputValue(host, 'defaultValue');
+      if (raw === 'true') return { defaultValue: true };
+      if (raw === 'false') return { defaultValue: false };
+      return { defaultValue: undefined };
+    },
+    formatDisplay(value: any, { emptyLabel }: any) {
+      if (value !== true && value !== false) return emptyLabel ?? '';
+      return value ? 'Yes' : 'No';
+    },
+    isEmpty(value: any) {
+      return value !== true && value !== false;
+    },
+    pdfRenderMode: () => 'plain',
+  },
+  {
+    type: 'signature',
+    label: 'Signature',
+    paletteOrder: 52,
+    createSchema(label: any, name: any) {
+      return { ...baseSchema('signature', label, name), maxWidth: 320 };
+    },
+    getEmptyValue: () => '',
+    resolveDefaultValue() {
+      return '';
+    },
+    toDisplayConfig(schema: any) {
+      return {
+        picker: 'signature',
+        label: schema.label,
+        maxWidth: schema.maxWidth ?? 320,
+      };
+    },
+    toPickerConfig(schema: any) {
+      return {
+        picker: 'signature',
+        label: schema.label,
+        maxWidth: schema.maxWidth ?? 320,
+      };
+    },
+    renderSchemaFields(host: any, schema: any) {
+      host.innerHTML = `
+        <label class="schema-form__row">
+          <span>Max width (px)</span>
+          <input type="number" data-field="maxWidth" value="${schema.maxWidth ?? 320}" />
+        </label>
+        <p class="schema-form__hint">Drawn in fill mode and stored as a PNG data URL in document JSON.</p>
+        <p class="schema-form__hint schema-form__hint--legal">Display-only signature pad for internal validation — not a cryptographically signed legal e-signature.</p>
+      `;
+    },
+    readSchemaFields(host: any) {
+      return {
+        maxWidth: Number(readInputValue(host, 'maxWidth') || 320),
+      };
+    },
+    formatDisplay(value: any, { emptyLabel }: any) {
+      if (isImageValueEmpty(value)) return emptyLabel ?? '';
+      return '[Signature]';
+    },
+    isEmpty(value: any) {
+      return isImageValueEmpty(value);
+    },
+    pdfRenderMode: () => 'plain',
+  },
+  {
     type: 'list',
     label: 'List',
     paletteOrder: 60,

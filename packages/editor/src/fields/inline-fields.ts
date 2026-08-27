@@ -297,10 +297,14 @@ export function formatFieldDisplay(fieldId: any, value: any, placeholder: any, c
     return String(value);
   }
 
-  if (def.picker === 'image') {
+  if (def.picker === 'image' || def.picker === 'signature') {
     if (isImageValueEmpty(value)) return emptyLabel;
     const img = normalizeImageValue(value);
-    return img.caption || '[Image]';
+    return def.picker === 'signature' ? '[Signature]' : img.caption || '[Image]';
+  }
+
+  if (value === true || value === false) {
+    return value ? 'Yes' : 'No';
   }
 
   if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) {
@@ -603,6 +607,9 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
   token.textContent = '';
   token.classList.remove(
     'field-token--image',
+    'field-token--logical',
+    'field-token--logical-yes',
+    'field-token--logical-no',
     'field-token--html',
     'field-token--computed',
     'field-token--readonly',
@@ -644,15 +651,20 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
       token.appendChild(renderRepeaterFieldPreview(fieldId, value, registryCtx));
     }
     // Optional empty preview tokens without a template stay blank.
-  } else if (def?.picker === 'image') {
+  } else if (def?.picker === 'image' || def?.picker === 'signature') {
     const maxW = Number(def.maxWidth) > 0 ? Number(def.maxWidth) : 320;
     token.style.setProperty('--field-image-max-width', `${maxW}px`);
     token.dataset.maxWidth = String(maxW);
+  } else if (def?.picker === 'logical' || schema?.type === 'logical') {
+    token.classList.add('field-token--logical');
   }
 
   if (schema?.type === 'child') {
     /* rendered above */
-  } else if (def?.picker === 'image' && !isImageValueEmpty(value)) {
+  } else if (
+    (def?.picker === 'image' || def?.picker === 'signature') &&
+    !isImageValueEmpty(value)
+  ) {
     const imgVal = normalizeImageValue(value);
     rememberLiveImageValue(fieldId, imgVal);
     token.classList.add('field-token--image');
@@ -674,12 +686,29 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
       cap.textContent = imgVal.caption;
       token.appendChild(cap);
     }
-  } else if (def?.picker === 'image' && isImageValueEmpty(value)) {
+  } else if (
+    (def?.picker === 'image' || def?.picker === 'signature') &&
+    isImageValueEmpty(value)
+  ) {
     rememberLiveImageValue(fieldId, null);
     // Design/fill: show the field label so an empty Image token is visible and selectable.
     // Preview: keep optional empties blank (required empties still get a placeholder).
     if (showEmptyPlaceholder) {
       token.textContent = label;
+    }
+  } else if (def?.picker === 'logical' || schema?.type === 'logical') {
+    const empty = isFieldEmpty(value, { schema });
+    token.classList.add('field-token--logical');
+    if (empty && showEmptyPlaceholder) {
+      token.textContent = label;
+    } else if (!empty) {
+      if (value === true) {
+        token.classList.add('field-token--logical-yes');
+        token.textContent = 'Yes ✓';
+      } else {
+        token.classList.add('field-token--logical-no');
+        token.textContent = 'No';
+      }
     }
   } else if (def?.htmlEditor) {
     token.classList.add('field-token--html');
@@ -2015,6 +2044,21 @@ async function pickWithManualEdit({ schema, currentValue, schemaType, openStruct
   return openStructured({ allowManualEdit: false });
 }
 
+/** Coerce stored logical values to boolean or null. */
+export function normalizeLogicalValue(value: unknown): boolean | null {
+  if (value === true || value === false) return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return null;
+}
+
+/** Inline fill-mode cycle: empty → Yes, then Yes ↔ No. */
+export function cycleLogicalValue(value: unknown): boolean {
+  const current = normalizeLogicalValue(value);
+  if (current !== true && current !== false) return true;
+  return !current;
+}
+
 export async function openFieldPicker(fieldId: any, currentValue: any, callbacks: any) {
   const registry = registryFrom(callbacks);
   const def = registry?.getFieldDef(fieldId);
@@ -2044,9 +2088,15 @@ export async function openFieldPicker(fieldId: any, currentValue: any, callbacks
     openTextPicker,
     openHtmlTextPicker,
     openIntegerPicker,
+    openSignaturePicker,
     openImagePicker,
     openDatePicker,
   } = callbacks;
+
+  if (def.picker === 'logical' || schema?.type === 'logical') {
+    const initial = resolvePickerInitialValue(currentValue, fieldId, callbacks);
+    return cycleLogicalValue(initial);
+  }
 
   if (def.picker === 'integer' && openIntegerPicker) {
     const initial = resolvePickerInitialValue(currentValue, fieldId, callbacks);
@@ -2073,6 +2123,14 @@ export async function openFieldPicker(fieldId: any, currentValue: any, callbacks
     if (openTextPicker) {
       return openTextPicker(opts);
     }
+  }
+
+  if (def.picker === 'signature' && openSignaturePicker) {
+    const initial = resolvePickerInitialValue(currentValue, fieldId, callbacks);
+    return openSignaturePicker({
+      title: def.label,
+      value: normalizeImageValue(initial).url,
+    });
   }
 
   if (def.picker === 'image' && openImagePicker) {

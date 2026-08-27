@@ -1436,6 +1436,11 @@ body.design-mode .ce-block--selected .ce-block__content {
   color: var(--me-text-muted);
 }
 
+.preview-modal__loading-hint {
+  color: var(--me-text-muted);
+  opacity: 0.9;
+}
+
 .preview-modal__loading--error {
   color: #a00;
 }

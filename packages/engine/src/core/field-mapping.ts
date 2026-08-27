@@ -507,6 +507,17 @@ function validateMappedFieldValue( schema: any, value: any) {
         return `Field "${schema.name ?? schema.label}" expects a string or number.`;
       }
       return null;
+    case 'logical':
+      if (value == null) return null;
+      if (typeof value !== 'boolean') {
+        return `Field "${schema.name ?? schema.label}" expects a boolean value.`;
+      }
+      return null;
+    case 'signature':
+      if (value == null || value === '') return null;
+      if (typeof value === 'string') return null;
+      if (typeof value === 'object' && !Array.isArray(value) && 'url' in value) return null;
+      return `Field "${schema.name ?? schema.label}" expects a signature data URL string.`;
     default:
       return null;
   }

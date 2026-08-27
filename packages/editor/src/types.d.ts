@@ -6,10 +6,12 @@ export type FieldType =
   | 'text'
   | 'integer'
   | 'date'
+  | 'logical'
   | 'choice'
   | 'list'
   | 'tree'
   | 'image'
+  | 'signature'
   | 'table'
   | 'child'
   | 'computed';
@@ -24,6 +26,7 @@ export interface ImageValue {
 export type FieldValue =
   | string
   | string[]
+  | boolean
   | ImageValue
   | RepeaterValue
   | null
@@ -201,6 +204,16 @@ export interface ImageFieldSchema extends FieldSchemaBase {
   altText?: string;
 }
 
+export interface LogicalFieldSchema extends FieldSchemaBase {
+  type: 'logical';
+  defaultValue?: boolean | null;
+}
+
+export interface SignatureFieldSchema extends FieldSchemaBase {
+  type: 'signature';
+  maxWidth?: number;
+}
+
 export interface TableColumnDef {
   key: string;
   label: string;
@@ -274,10 +287,12 @@ export type FieldSchema =
   | TextFieldSchema
   | IntegerFieldSchema
   | DateFieldSchema
+  | LogicalFieldSchema
   | ChoiceFieldSchema
   | ListFieldSchema
   | TreeFieldSchema
   | ImageFieldSchema
+  | SignatureFieldSchema
   | TableFieldSchema
   | RepeaterFieldSchema
   | ComputedFieldSchema;
@@ -636,6 +651,16 @@ export interface ImagePickerOptions {
   value: ImageValue;
 }
 
+export interface LogicalPickerOptions {
+  title: string;
+  value?: boolean | null;
+}
+
+export interface SignaturePickerOptions {
+  title: string;
+  value?: string | ImageValue | null;
+}
+
 export interface DatePickerOptions {
   title: string;
   value: string;
@@ -650,6 +675,8 @@ export interface PickerCallbacks {
   openHtmlTextPicker(opts: HtmlTextPickerOptions): Promise<string>;
   openIntegerPicker(opts: IntegerPickerOptions): Promise<string>;
   openImagePicker(opts: ImagePickerOptions): Promise<ImageValue>;
+  openLogicalPicker(opts: LogicalPickerOptions): Promise<boolean | null>;
+  openSignaturePicker(opts: SignaturePickerOptions): Promise<string>;
   openDatePicker(opts: DatePickerOptions): Promise<string>;
 }
 
