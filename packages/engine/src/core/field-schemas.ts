@@ -360,7 +360,9 @@ function flattenTreeToItems(nodes: any, ancestors: any = []): Array<{ id: string
 function getBuiltinEmptyValue( type: any) {
   if (type === 'list' || type === 'tree') return [];
   if (type === 'integer' || type === 'date') return '';
+  if (type === 'logical') return null;
   if (type === 'image') return createEmptyImageValue();
+  if (type === 'signature') return '';
   if (type === 'child') return {};
   return '';
 }
@@ -391,6 +393,12 @@ function resolveBuiltinDefaultValue( schema: any, { forTemplate = false } = {}) 
       return {};
     case 'image':
       return createEmptyImageValue();
+    case 'logical': {
+      const value = schema.defaultValue;
+      return value === true || value === false ? value : null;
+    }
+    case 'signature':
+      return '';
     default:
       return getBuiltinEmptyValue(schema.type);
   }
@@ -422,6 +430,10 @@ function createBuiltinDefaultSchema(type: any, label: any = 'New field', name: a
       };
     case 'image':
       return { ...base, maxWidth: 320, altText: '' };
+    case 'logical':
+      return { ...base, defaultValue: null };
+    case 'signature':
+      return { ...base, maxWidth: 320 };
     case 'list':
       return {
         ...base,
@@ -470,10 +482,12 @@ function createBuiltinBlockData( fieldType: any) {
   const labels: Record<string, string> = {
     text: 'Text',
     integer: 'Number',
+    logical: 'Logical',
     list: 'List',
     choice: 'Choice',
     tree: 'Tree',
     image: 'Image',
+    signature: 'Signature',
     table: 'Table',
     child: 'Child',
   };
@@ -489,10 +503,14 @@ function createBuiltinBlockData( fieldType: any) {
         ? {}
         : fieldType === 'list' || fieldType === 'tree'
           ? []
-          : fieldType === 'integer'
+          : fieldType === 'logical'
+            ? null
+            : fieldType === 'integer'
             ? ''
             : fieldType === 'image'
               ? createEmptyImageValue()
+              : fieldType === 'signature'
+                ? ''
               : '',
     cells: fieldType === 'table' ? {} : undefined,
   };

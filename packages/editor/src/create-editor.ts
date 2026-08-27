@@ -11,6 +11,7 @@ import { createListModal } from './ui/list-modal.js';
 import { createTextModal } from './ui/text-modal.js';
 import { createHtmlTextModal } from './ui/html-text-modal.js';
 import { createIntegerModal } from './ui/integer-modal.js';
+import { createSignatureModal } from './ui/signature-modal.js';
 import { createImageModal } from './ui/image-modal.js';
 import { resolveFieldModalParent, resolvePreviewModalParent } from './ui/wire-modal-palette.js';
 import { createSchemaEditorModal } from './design/schema-editor-modal.js';
@@ -637,6 +638,7 @@ export function createEditor(options: any = {}) {
   const textModal = createTextModal({ parent: fieldModalParent });
   const htmlTextModal = createHtmlTextModal({ parent: fieldModalParent });
   const integerModal = createIntegerModal({ parent: fieldModalParent });
+  const signatureModal = createSignatureModal({ parent: fieldModalParent });
   const imageModal = createImageModal({ parent: fieldModalParent });
   const repeaterEditorModal = createRepeaterEditorModal({
     getEditorOptions: () => options,
@@ -717,6 +719,8 @@ export function createEditor(options: any = {}) {
     ((opts: any) => htmlTextModal.open({ ...opts, textStyle: getFormTextStyle() }));
   const openInteger =
     options.pickers?.openIntegerPicker ?? ((opts: any) => integerModal.open(opts));
+  const openSignature =
+    options.pickers?.openSignaturePicker ?? ((opts: any) => signatureModal.open(opts));
   const openImage =
     options.pickers?.openImagePicker ?? ((opts: any) => imageModal.open(opts));
   const openDate = options.pickers?.openDatePicker;
@@ -728,6 +732,7 @@ export function createEditor(options: any = {}) {
     openTextPicker: (opts: any) => guardNestedModal(Promise.resolve(openText(opts))),
     openHtmlTextPicker: (opts: any) => guardNestedModal(Promise.resolve(openHtmlText(opts))),
     openIntegerPicker: (opts: any) => guardNestedModal(Promise.resolve(openInteger(opts))),
+    openSignaturePicker: (opts: any) => guardNestedModal(Promise.resolve(openSignature(opts))),
     openImagePicker: (opts: any) => guardNestedModal(Promise.resolve(openImage(opts))),
     openDatePicker: openDate
       ? (opts: any) =>

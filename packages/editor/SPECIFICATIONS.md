@@ -466,15 +466,18 @@ type FieldType =
   | 'text'
   | 'integer'
   | 'date'      // requires @docengine/field-date plugin
+  | 'logical'
   | 'choice'
   | 'list'
   | 'tree'
   | 'image'
+  | 'signature'
   | 'table'
+  | 'child'
   | 'computed';
 ```
 
-`getFieldTypes()` — live palette list from the field-handler registry (built-in order: text, integer, computed, image, list, choice, tree, table, child). Host plugins such as `@docengine/field-date` appear after they call `registerField`.
+`getFieldTypes()` — live palette list from the field-handler registry (built-in order: text, integer, computed, logical, image, signature, list, choice, tree, table, child). Host plugins such as `@docengine/field-date` appear after they call `registerField`.
 
 `FIELD_TYPES` — snapshot of built-ins at module load; prefer `getFieldTypes()` when host plugins may be registered.
 
@@ -587,6 +590,38 @@ interface ImageFieldSchema extends FieldSchemaBase {
   altText?: string;
 }
 ```
+
+#### `logical`
+
+Boolean Yes/No field. Stored as `true`, `false`, or empty (`null` in templates).
+
+```ts
+interface LogicalFieldSchema extends FieldSchemaBase {
+  type: 'logical';
+  defaultValue?: boolean | null;
+}
+```
+
+Fill mode uses **inline click-to-cycle** (empty → Yes, then Yes ↔ No). No modal. Export/PDF display: `Yes` / `No`.
+
+#### `signature`
+
+HTML5 canvas capture (mouse/touch). On save, the value is a **PNG data URL** string:
+
+```json
+"Patient Signature": "data:image/png;base64,iVBORw0KGgo..."
+```
+
+```ts
+interface SignatureFieldSchema extends FieldSchemaBase {
+  type: 'signature';
+  maxWidth?: number;    // default 320 (px) in preview/PDF
+}
+```
+
+> **Legal scope:** Display-only signature pad for internal acknowledgment and validation. **Not** a cryptographically signed or legally binding electronic signature (ESIGN, eIDAS, DocuSign, etc.). Integrators requiring compliant e-signatures must use a certified provider separately.
+
+Preview and PDF render the signature like an image token (`field-token--image`).
 
 #### `table`
 
@@ -1189,7 +1224,9 @@ That gives you: palette entry, default schema, designer extras, empty/default va
 
 #### Picker kinds you can reuse today
 
-`text`, `integer`, `date`, `list`, `tree`, `image`, `child`, `computed`
+`text`, `integer`, `date`, `signature`, `list`, `tree`, `image`, `child`, `computed`
+
+Logical fields use inline click-to-cycle in fill mode (no picker modal). Hosts may still supply `openLogicalPicker` for a custom modal, but the built-in handler cycles inline by default.
 
 Point `picker` at one of these in `toDisplayConfig` / `toPickerConfig`. Fully custom pickers can also be supplied via `createEditor({ pickers: ... })`.
 

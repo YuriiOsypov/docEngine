@@ -31,6 +31,7 @@ Read-only preview with optional PDF export from the same document model.
 ## Features
 
 - **Template editor** — Editor.js-based design mode with inline fields, schema editing, and JSON import/export
+- **Logical & signature fields** — built-in Yes/No (`logical`) and canvas signature capture (`signature`, stored as PNG data URLs in JSON). The signature pad is **display-only for internal validation — not a cryptographically signed legal e-signature**.
 - **Headless engine** — field schemas, mapping, formulas, and document I/O without a UI
 - **PDF & HTML export** — pdfmake-based rendering for browser and Node
 - **Salesforce** — managed-package-ready metadata (templates, filler LWCs, Apex controllers)

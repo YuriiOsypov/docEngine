@@ -14,7 +14,7 @@ import {
 import { createDefaultSchema, resolveSchemaDefaultValue, isFieldEditableInFillMode } from '../../core/field-schemas.js';
 import { schemaToDisplayConfig, SchemaRegistry } from '../../registry/schema-registry.js';
 import { createCatalogProvider } from '../../catalog/catalog-provider.js';
-import { formatFieldDisplay, isFieldEmpty } from '../inline-fields.js';
+import { formatFieldDisplay, isFieldEmpty, cycleLogicalValue, normalizeLogicalValue } from '../inline-fields.js';
 import { dateFieldHandler } from '@docengine/field-date';
 import { formatNumericDisplay } from '@docengine/engine';
 
@@ -36,7 +36,9 @@ describe('field handler registry', () => {
       'text',
       'integer',
       'computed',
+      'logical',
       'image',
+      'signature',
       'list',
       'choice',
       'tree',
@@ -104,6 +106,41 @@ describe('field handler registry', () => {
       '2024-01-02',
     );
     assert.equal(isFieldEmpty('', { schema: { type: 'date' } }), true);
+  });
+
+  it('logical and signature built-ins format and emptiness', () => {
+    assert.equal(createDefaultSchema('logical', 'Agree').type, 'logical');
+    assert.equal(createDefaultSchema('signature', 'Sign').type, 'signature');
+    assert.equal(
+      formatFieldDisplay('agree', true, 'Agree', {
+        fieldSchemas: { agree: { type: 'logical', label: 'Agree', name: 'Agree' } },
+      }),
+      'Yes',
+    );
+    assert.equal(
+      formatFieldDisplay('agree', false, 'Agree', {
+        fieldSchemas: { agree: { type: 'logical', label: 'Agree', name: 'Agree' } },
+      }),
+      'No',
+    );
+    assert.equal(isFieldEmpty(null, { schema: { type: 'logical' } }), true);
+    assert.equal(isFieldEmpty(false, { schema: { type: 'logical' } }), false);
+    assert.equal(normalizeLogicalValue('true'), true);
+    assert.equal(normalizeLogicalValue('false'), false);
+    assert.equal(normalizeLogicalValue(null), null);
+    assert.equal(cycleLogicalValue(null), true);
+    assert.equal(cycleLogicalValue(true), false);
+    assert.equal(cycleLogicalValue(false), true);
+    const dataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    assert.equal(
+      formatFieldDisplay('sig', dataUrl, 'Sign', {
+        fieldSchemas: { sig: { type: 'signature', label: 'Sign', name: 'Sign' } },
+      }),
+      '[Signature]',
+    );
+    assert.equal(isFieldEmpty('', { schema: { type: 'signature' } }), true);
+    assert.equal(isFieldEmpty(dataUrl, { schema: { type: 'signature' } }), false);
   });
 
   it('formatDisplay / isEmpty use field handlers', () => {
