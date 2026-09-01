@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSetGroup xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Assign to users who fill documents from templates. Read templates; create and edit document instances.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>DocEngine End User</label>
+    <permissionSets>logicomapp__DocEngine_User</permissionSets>
+    <status>Updated</status>
+</PermissionSetGroup>

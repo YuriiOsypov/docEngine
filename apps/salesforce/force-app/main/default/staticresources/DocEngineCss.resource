@@ -1040,7 +1040,7 @@ body.document-columns-col-resize-active .field-token {
 }
 
 /* Fill mode: underline all field values with configured highlight color */
-.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--required-missing),
+.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--required-missing) {
   text-decoration: underline;
   text-decoration-color: var(--me-field-fill-color, #0000FF);
@@ -1049,11 +1049,11 @@ body.document-columns-col-resize-active .field-token {
   cursor: pointer;
 }
 
-.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design).field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section__body .field-token--design.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.document-section__body .field-token--design.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .vision-table .field-token--cell.field-token--design.field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .document-section--mapping .vision-table .field-token--cell.field-token--empty:not(.field-token--readonly):not(.field-token--required-missing) {
   background: var(--me-field-fill-bg, transparent);
   color: var(--me-field-fill-color, #0000FF);
@@ -1138,6 +1138,46 @@ body.document-columns-col-resize-active .field-token {
 
 .image-modal__browse-row .btn {
   width: 100%;
+}
+
+.signature-modal__disclaimer {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.signature-modal__canvas-wrap {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.signature-modal__canvas {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.field-token--logical {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.field-token--logical-yes {
+  color: #0a7a2f;
+}
+
+.field-token--logical-no {
+  color: #b42318;
+}
+
+.field-token--preview.field-token--logical-yes,
+.field-token--preview.field-token--logical-no {
+  cursor: default;
 }
 
 .image-files-modal-overlay {
@@ -1930,6 +1970,19 @@ body.modal-move-active {
 .html-text-modal__editor:focus {
   border-color: #4a90d9;
   box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+}
+
+/*
+ * HTML text values can include block nodes (ul/ol/p). Those force anonymous
+ * blocks inside the default inline field-token span, so outline/background
+ * fragment into per-line boxes (and a stray corner that looks like a "0").
+ * One inline-block box keeps focus + fill chrome around the whole value.
+ */
+.field-token--html {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  white-space: normal;
 }
 
 .field-token--html ul,
@@ -3682,8 +3735,10 @@ body.field-mapping-split-active {
   margin: 0;
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   padding: 48px 20px;
   text-align: center;
   font-size: 14px;
@@ -3691,7 +3746,23 @@ body.field-mapping-split-active {
   background: #fff;
 }
 
+.preview-modal__loading-title {
+  margin: 0;
+}
+
+.preview-modal__loading-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #777;
+}
+
 .preview-modal__loading--error {
+  color: #a00;
+}
+
+.preview-modal__loading--error .preview-modal__loading-hint {
   color: #a00;
 }
 
@@ -4736,11 +4807,11 @@ body.field-mapping-split-active {
   cursor: pointer;
 }
 
-.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design).field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section__body .field-token--design.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.document-section__body .field-token--design.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .vision-table .field-token--cell.field-token--design.field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image),
+.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .document-section--mapping .vision-table .field-token--cell.field-token--empty:not(.field-token--readonly):not(.field-token--required-missing) {
   background: var(--me-field-fill-bg);
   color: var(--me-field-fill-color);
@@ -4776,13 +4847,21 @@ body.field-mapping-split-active {
 }
 
 /* Filled values render as ultra-light rounded pills (e.g. OD/OS → "Hyperemia"). */
-.editor-holder--show-fields .field-token:not(.field-token--design):not(.field-token--empty):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--required-missing) {
+.editor-holder--show-fields .field-token:not(.field-token--design):not(.field-token--empty):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing) {
   background-color: var(--me-surface-200, #f1f5f9);
   color: var(--me-text-body, #1e293b);
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 500;
   font-size: 0.95em;
+}
+
+/* HTML tokens are multi-line blocks — one light surface, not per-line pills. */
+.editor-holder--show-fields .field-token--html:not(.field-token--design):not(.field-token--empty):not(.field-token--required-missing) {
+  background-color: var(--me-surface-200, #f1f5f9);
+  color: var(--me-text-body, #1e293b);
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 /* ── Rich text toolbar ─────────────────────────────────────────────────── */
@@ -5876,6 +5955,11 @@ body.design-mode .ce-block--selected .ce-block__content {
 
 .preview-modal__loading {
   color: var(--me-text-muted);
+}
+
+.preview-modal__loading-hint {
+  color: var(--me-text-muted);
+  opacity: 0.9;
 }
 
 .preview-modal__loading--error {

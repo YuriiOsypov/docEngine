@@ -5,7 +5,7 @@ import LightningConfirm from 'lightning/confirm';
 import getTemplate from '@salesforce/apex/DocEngineTemplateController.getTemplate';
 import getVersion from '@salesforce/apex/DocEngineTemplateController.getVersion';
 import listVersions from '@salesforce/apex/DocEngineTemplateController.listVersions';
-import saveTemplate from '@salesforce/apex/DocEngineTemplateController.saveTemplate';
+import saveTemplateJson from '@salesforce/apex/DocEngineTemplateController.saveTemplateJson';
 import listPublicGroups from '@salesforce/apex/DocEngineTemplateController.listPublicGroups';
 import resolveListItems from '@salesforce/apex/DocEngineListController.resolveListItems';
 import buildSourceSampleJson from '@salesforce/apex/DocEngineObjectDescribeController.buildSourceSampleJson';
@@ -533,19 +533,23 @@ export default class DocEngineTemplateBuilder extends LightningElement {
         }
       }
 
-      const saved = await saveTemplate({
-        dto: {
-          id: this._templateId || null,
-          name: String(this.templateName || '').trim(),
-          objectApiName: String(this.objectApiName || '').trim(),
-          templateJson: JSON.stringify(templateJson),
-          isActive: this.isActive,
-          version: null,
-          description: this.description || '',
-          pdfFilename: this.pdfFilename || '',
-          accessGroupId: String(this.accessGroupId || '').trim() || null
-        }
-      });
+      const dto = {
+        name: String(this.templateName || '').trim(),
+        objectApiName: String(this.objectApiName || '').trim(),
+        templateJson: JSON.stringify(templateJson),
+        isActive: this.isActive,
+        description: this.description || '',
+        pdfFilename: this.pdfFilename || ''
+      };
+      if (this._templateId) {
+        dto.id = this._templateId;
+      }
+      const accessGroupId = String(this.accessGroupId || '').trim();
+      if (accessGroupId) {
+        dto.accessGroupId = accessGroupId;
+      }
+
+      const saved = JSON.parse(await saveTemplateJson({ dtoJson: JSON.stringify(dto) }));
 
       this._applyTemplateDto(saved);
       await this._refreshVersionOptions();

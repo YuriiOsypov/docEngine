@@ -114,6 +114,92 @@ private class DocEngineTemplateControllerTest {
   }
 
   @IsTest
+  static void createTemplateEntryPointCreatesRow() {
+    Test.startTest();
+    Id templateId = DocEngineTemplateController.createTemplate('Aura Create', 'Account', 'From createTemplate');
+    Test.stopTest();
+
+    System.assertNotEquals(null, templateId);
+    DocEngine_Template__c row = [
+      SELECT Name, Object_API_Name__c, Description__c, Current_Version__c
+      FROM DocEngine_Template__c
+      WHERE Id = :templateId
+    ];
+    System.assertEquals('Aura Create', row.Name);
+    System.assertEquals('Account', row.Object_API_Name__c);
+    System.assertEquals('From createTemplate', row.Description__c);
+    System.assertNotEquals(null, row.Current_Version__c);
+  }
+
+  @IsTest
+  static void saveTemplateJsonRoundTrip() {
+    String payload =
+      '{"name":"Json Save","objectApiName":"Account","templateJson":"{\\"kind\\":\\"template\\",\\"version\\":1,\\"blocks\\":[],\\"fieldSchemas\\":{}}","isActive":true}';
+
+    Test.startTest();
+    String resultJson = DocEngineTemplateController.saveTemplateJson(payload);
+    Test.stopTest();
+
+    System.assert(String.isNotBlank(resultJson));
+    Map<String, Object> saved = (Map<String, Object>) JSON.deserializeUntyped(resultJson);
+    System.assertNotEquals(null, saved.get('id'));
+    System.assertEquals('Json Save', saved.get('name'));
+  }
+
+  @IsTest
+  static void saveTemplateAsAdminPermSetUser() {
+    Profile p = [
+      SELECT Id
+      FROM Profile
+      WHERE Name = 'Standard User'
+      LIMIT 1
+    ];
+    PermissionSet ps = [
+      SELECT Id
+      FROM PermissionSet
+      WHERE Name = 'DocEngine_Admin'
+      LIMIT 1
+    ];
+    User u = new User(
+      Alias = 'deadm',
+      Email = 'docengine.admin@example.com',
+      EmailEncodingKey = 'UTF-8',
+      LastName = 'DocEngineAdmin',
+      LanguageLocaleKey = 'en_US',
+      LocaleSidKey = 'en_US',
+      ProfileId = p.Id,
+      TimeZoneSidKey = 'America/Los_Angeles',
+      UserName = 'docengine.admin.' + String.valueOf(Crypto.getRandomInteger()) + '@example.com'
+    );
+    System.runAs(new User(Id = UserInfo.getUserId())) {
+      insert u;
+      insert new PermissionSetAssignment(AssigneeId = u.Id, PermissionSetId = ps.Id);
+    }
+
+    DocEngineTemplateController.TemplateDTO dto = new DocEngineTemplateController.TemplateDTO();
+    dto.name = 'PermSet User Template';
+    dto.objectApiName = 'Account';
+    dto.templateJson = '{"kind":"template","version":1,"blocks":[],"fieldSchemas":{},"fieldMapping":{"kind":"fieldMapping","version":1,"rules":[]}}';
+    dto.isActive = true;
+
+    DocEngineTemplateController.TemplateDTO saved;
+    System.runAs(u) {
+      Test.startTest();
+      saved = DocEngineTemplateController.saveTemplate(dto);
+      Test.stopTest();
+    }
+
+    System.assertNotEquals(null, saved.id);
+    DocEngine_Template__c row = [
+      SELECT Object_API_Name__c, Current_Version__c
+      FROM DocEngine_Template__c
+      WHERE Id = :saved.id
+    ];
+    System.assertEquals('Account', row.Object_API_Name__c);
+    System.assertNotEquals(null, row.Current_Version__c);
+  }
+
+  @IsTest
   static void saveAndGetPersistsAccessGroupId() {
     Group g;
     System.runAs(new User(Id = UserInfo.getUserId())) {

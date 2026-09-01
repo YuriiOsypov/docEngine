@@ -52,10 +52,25 @@ Optional overrides: `c__templateId`, `c__fill=0`, `c__export=html`, `c__preview=
 
 ### Suggested setup after deploy
 
-1. Assign `DocEngine_Admin` (and/or `DocEngine_User`).
-2. Open **DocEngine Templates** tab → New → set Object API Name (e.g. `Account`) → add `docEngineTemplateBuilder` to the record page → design & Save template.
-3. Open an Account (or matching object) record page → add `docEngineFiller` → pick template → Load → fill → Save.
-4. Or use **Generate Document** Quick Action (see Record button above).
+**Managed package install** runs `DocEnginePostInstall` automatically: org settings, `DocEngine_Admin` for the installer, and a starter Account template + `Account_Generate_Document` button config.
+
+**Unmanaged / source deploy** — run once in Developer Console → Execute Anonymous:
+
+```apex
+DocEnginePostInstall.runFirstTimeSetup();
+```
+
+Then:
+
+1. Assign **DocEngine End User** permission set group to fillers (or **DocEngine Administrator** for designers).
+2. Open **DocEngine** app → edit **Getting Started (Account)** or create templates.
+3. Account **Page Layout** → add **Generate Document** to Mobile & Lightning Actions (one-time per object).
+4. Optionally add `docEngineFiller` to record pages for in-page fill.
+
+Previously manual steps (now automated on install / `runFirstTimeSetup`):
+
+- Assign `DocEngine_Admin` to installer
+- Create first Account template and button config for **Generate Document**
 
 ## Data model (P2)
 
@@ -85,8 +100,13 @@ See [integrations/salesforce/PDF.md](../../../integrations/salesforce/PDF.md) (B
 
 ## Permission sets
 
-- `DocEngine_Admin` — templates + documents (CRUD)
-- `DocEngine_User` — read templates, create/edit documents
+- `DocEngine_Admin` — templates + documents (CRUD), Files attach, org settings
+- `DocEngine_User` — read templates, create/edit documents, Files attach
+
+Permission set groups (easier bulk assignment):
+
+- `DocEngine_Administrator` — contains `DocEngine_Admin`
+- `DocEngine_End_User` — contains `DocEngine_User`
 
 ## Deploy
 

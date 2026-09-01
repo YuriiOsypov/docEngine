@@ -33,6 +33,15 @@
         <enabled>true</enabled>
     </classAccesses>
     <description>Full access to DocEngine templates and document instances (design + fill).</description>
+    <customSettingAccesses>
+        <enabled>true</enabled>
+        <name>DocEngine_Settings__c</name>
+    </customSettingAccesses>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Settings__c.Use_External_PDF__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>DocEngine_Template__c.Template_JSON__c</field>
@@ -135,6 +144,24 @@
     </fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
     <label>DocEngine Admin</label>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>false</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>ContentDocument</object>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>false</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>ContentVersion</object>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
     <objectPermissions>
         <allowCreate>true</allowCreate>
         <allowDelete>true</allowDelete>

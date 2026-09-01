@@ -3,6 +3,11 @@
  * Each save creates an immutable DocEngine_Template_Version__c row and points Current_Version__c at it.
  */
 public with sharing class DocEngineTemplateController {
+  @TestVisible
+  private static final String EMPTY_TEMPLATE_JSON =
+    '{"kind":"template","version":1,"fieldSchemas":{},"blocks":[],' +
+    '"fieldMapping":{"kind":"fieldMapping","version":1,"rules":[]}}';
+
   public class TemplateDTO {
     @AuraEnabled public Id id { get; set; }
     @AuraEnabled public String name { get; set; }
@@ -92,7 +97,6 @@ public with sharing class DocEngineTemplateController {
         Access_Group_Id__c
       FROM DocEngine_Template__c
       WHERE Id = :templateId
-      WITH SECURITY_ENFORCED
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -126,7 +130,6 @@ public with sharing class DocEngineTemplateController {
         Template__r.Version__c
       FROM DocEngine_Template_Version__c
       WHERE Id = :versionId
-      WITH SECURITY_ENFORCED
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -163,7 +166,6 @@ public with sharing class DocEngineTemplateController {
       SELECT Id, Current_Version__c
       FROM DocEngine_Template__c
       WHERE Id = :templateId
-      WITH SECURITY_ENFORCED
       LIMIT 1
     ];
     Id currentId = heads.isEmpty() ? null : heads[0].Current_Version__c;
@@ -173,7 +175,6 @@ public with sharing class DocEngineTemplateController {
       SELECT Id, Version__c, CreatedDate, CreatedBy.Name
       FROM DocEngine_Template_Version__c
       WHERE Template__c = :templateId
-      WITH SECURITY_ENFORCED
       ORDER BY Version__c DESC
       LIMIT 200
     ]) {
@@ -202,7 +203,6 @@ public with sharing class DocEngineTemplateController {
       SELECT Id, Name, Description__c, Version__c, Access_Group_Id__c
       FROM DocEngine_Template__c
       WHERE Object_API_Name__c = :objectApiName AND Is_Active__c = TRUE
-      WITH SECURITY_ENFORCED
       ORDER BY Name
     ];
     List<TemplateSummary> out = new List<TemplateSummary>();
@@ -218,6 +218,29 @@ public with sharing class DocEngineTemplateController {
       out.add(s);
     }
     return out;
+  }
+
+  /**
+   * New-template screen entry point — primitive params avoid Aura DTO deserialization
+   * issues with null Id / nested types in managed-package subscriber orgs.
+   */
+  @AuraEnabled
+  public static Id createTemplate(String name, String objectApiName, String description) {
+    TemplateDTO dto = new TemplateDTO();
+    dto.name = name;
+    dto.objectApiName = objectApiName;
+    dto.description = description;
+    dto.templateJson = EMPTY_TEMPLATE_JSON;
+    dto.isActive = true;
+    return saveTemplate(dto).id;
+  }
+
+  /**
+   * Builder save entry point — JSON in/out avoids Aura TemplateDTO mapping failures.
+   */
+  @AuraEnabled
+  public static String saveTemplateJson(String dtoJson) {
+    return JSON.serialize(saveTemplate(parseTemplateDto(dtoJson)));
   }
 
   /**
@@ -239,50 +262,90 @@ public with sharing class DocEngineTemplateController {
       throw new AuraHandledException('templateJson is required.');
     }
 
-    DocEngine_Template__c row = dto.id != null
-      ? [
-          SELECT Id, Version__c, Current_Version__c
-          FROM DocEngine_Template__c
-          WHERE Id = :dto.id
-          WITH SECURITY_ENFORCED
-          LIMIT 1
-        ]
-      : new DocEngine_Template__c();
+    DocEngine_Template__c row;
+    if (dto.id != null) {
+      List<DocEngine_Template__c> existing = [
+        SELECT Id, Version__c, Current_Version__c
+        FROM DocEngine_Template__c
+        WHERE Id = :dto.id
+        LIMIT 1
+      ];
+      if (existing.isEmpty()) {
+        throw new AuraHandledException('Template not found.');
+      }
+      row = existing[0];
+    } else {
+      row = new DocEngine_Template__c();
+    }
 
-    row.Name = dto.name.trim();
-    row.Object_API_Name__c = dto.objectApiName.trim();
-    row.Template_JSON__c = dto.templateJson;
-    row.Is_Active__c = dto.isActive == null ? true : dto.isActive;
-    row.Description__c = dto.description;
-    row.PDF_Filename__c = dto.pdfFilename;
-    row.Access_Group_Id__c = normalizeAccessGroupId(dto.accessGroupId);
+    assertTemplateSaveAllowed(row.Id);
+
+    dto.accessGroupId = normalizeAccessGroupId(dto.accessGroupId);
 
     Decimal nextVersion = nextVersionNumber(row.Id, row.Version__c);
-    row.Version__c = nextVersion;
 
-    SObjectAccessDecision decision = Security.stripInaccessible(
-      AccessType.UPSERTABLE,
-      new List<DocEngine_Template__c>{ row }
-    );
-    List<DocEngine_Template__c> safe = (List<DocEngine_Template__c>) decision.getRecords();
-    upsert safe;
-    Id templateId = safe[0].Id;
+    try {
+      DocEngineTemplateSaveService.SaveResult saved = DocEngineTemplateSaveService.save(
+        dto,
+        row,
+        nextVersion
+      );
+      return toDtoFromSave(dto, saved.templateId, saved.version, saved.versionNumber, saved.head);
+    } catch (AuraHandledException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new AuraHandledException(formatExceptionMessage(e));
+    }
+  }
 
-    DocEngine_Template_Version__c ver = insertVersion(templateId, nextVersion, dto.templateJson);
+  @TestVisible
+  private static TemplateDTO parseTemplateDto(String dtoJson) {
+    if (String.isBlank(dtoJson)) {
+      throw new AuraHandledException('Template payload is required.');
+    }
+    Map<String, Object> raw = (Map<String, Object>) JSON.deserializeUntyped(dtoJson);
+    TemplateDTO dto = new TemplateDTO();
+    dto.name = (String) raw.get('name');
+    dto.objectApiName = (String) raw.get('objectApiName');
+    dto.templateJson = (String) raw.get('templateJson');
+    Object isActive = raw.get('isActive');
+    dto.isActive = isActive == null ? true : (Boolean) isActive;
+    dto.description = (String) raw.get('description');
+    dto.pdfFilename = (String) raw.get('pdfFilename');
+    Object idVal = raw.get('id');
+    if (idVal != null && String.isNotBlank(String.valueOf(idVal))) {
+      dto.id = (Id) String.valueOf(idVal);
+    }
+    Object accessGroupId = raw.get('accessGroupId');
+    if (accessGroupId != null && String.isNotBlank(String.valueOf(accessGroupId))) {
+      dto.accessGroupId = String.valueOf(accessGroupId);
+    }
+    return dto;
+  }
 
-    DocEngine_Template__c headPatch = new DocEngine_Template__c(
-      Id = templateId,
-      Current_Version__c = ver.Id,
-      Version__c = nextVersion,
-      Template_JSON__c = dto.templateJson
-    );
-    SObjectAccessDecision headDecision = Security.stripInaccessible(
-      AccessType.UPDATABLE,
-      new List<DocEngine_Template__c>{ headPatch }
-    );
-    update headDecision.getRecords();
+  @TestVisible
+  private static void assertTemplateSaveAllowed(Id templateId) {
+    Schema.DescribeSObjectResult describe = DocEngine_Template__c.SObjectType.getDescribe();
+    if (templateId == null) {
+      if (!describe.isCreateable()) {
+        throw new AuraHandledException('You do not have permission to create templates.');
+      }
+      return;
+    }
+    if (!describe.isUpdateable()) {
+      throw new AuraHandledException('You do not have permission to update templates.');
+    }
+  }
 
-    return getTemplate(templateId);
+  @TestVisible
+  private static String formatExceptionMessage(Exception e) {
+    if (e instanceof DmlException) {
+      DmlException dml = (DmlException) e;
+      if (dml.getNumDml() > 0 && String.isNotBlank(dml.getDmlMessage(0))) {
+        return dml.getDmlMessage(0);
+      }
+    }
+    return String.isNotBlank(e.getMessage()) ? e.getMessage() : e.getTypeName();
   }
 
   /**
@@ -324,6 +387,28 @@ public with sharing class DocEngineTemplateController {
   @TestVisible
   private static String versionKey(Id templateId, Decimal versionNumber) {
     return DocEngineTemplateVersionService.versionKey(templateId, versionNumber);
+  }
+
+  @TestVisible
+  private static TemplateDTO toDtoFromSave(
+    TemplateDTO dto,
+    Id templateId,
+    DocEngine_Template_Version__c ver,
+    Decimal versionNumber,
+    DocEngine_Template__c head
+  ) {
+    TemplateDTO out = new TemplateDTO();
+    out.id = templateId;
+    out.name = dto.name.trim();
+    out.objectApiName = dto.objectApiName.trim();
+    out.templateJson = dto.templateJson;
+    out.isActive = head != null && head.Is_Active__c != null ? head.Is_Active__c : true;
+    out.version = versionNumber;
+    out.versionId = ver != null ? ver.Id : null;
+    out.description = dto.description;
+    out.pdfFilename = dto.pdfFilename;
+    out.accessGroupId = head != null ? head.Access_Group_Id__c : dto.accessGroupId;
+    return out;
   }
 
   private static TemplateDTO toDto(DocEngine_Template__c row) {

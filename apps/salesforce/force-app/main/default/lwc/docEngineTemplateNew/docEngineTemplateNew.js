@@ -3,20 +3,7 @@ import { NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { CloseActionScreenEvent } from 'lightning/actions';
 import listSourceObjects from '@salesforce/apex/DocEngineObjectDescribeController.listSourceObjects';
-import saveTemplate from '@salesforce/apex/DocEngineTemplateController.saveTemplate';
-
-const EMPTY_TEMPLATE_JSON = JSON.stringify({
-  kind: 'template',
-  version: 1,
-  time: Date.now(),
-  fieldSchemas: {},
-  blocks: [],
-  fieldMapping: {
-    kind: 'fieldMapping',
-    version: 1,
-    rules: []
-  }
-});
+import createTemplate from '@salesforce/apex/DocEngineTemplateController.createTemplate';
 
 export default class DocEngineTemplateNew extends NavigationMixin(LightningElement) {
   templateName = '';
@@ -67,17 +54,10 @@ export default class DocEngineTemplateNew extends NavigationMixin(LightningEleme
     }
     this.saving = true;
     try {
-      const saved = await saveTemplate({
-        dto: {
-          id: null,
-          name: this.templateName.trim(),
-          objectApiName: this.sourceObject,
-          templateJson: EMPTY_TEMPLATE_JSON,
-          isActive: true,
-          version: 1,
-          description: this.description,
-          pdfFilename: ''
-        }
+      const templateId = await createTemplate({
+        name: this.templateName.trim(),
+        objectApiName: this.sourceObject,
+        description: this.description || ''
       });
 
       this.dispatchEvent(
@@ -93,7 +73,7 @@ export default class DocEngineTemplateNew extends NavigationMixin(LightningEleme
       this[NavigationMixin.Navigate]({
         type: 'standard__recordPage',
         attributes: {
-          recordId: saved.id,
+          recordId: templateId,
           objectApiName: 'DocEngine_Template__c',
           actionName: 'view'
         }

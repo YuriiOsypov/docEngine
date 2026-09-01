@@ -58,10 +58,14 @@ sf scanner run --target apps/salesforce/force-app --format table
 
 ## Review materials to prepare
 
-1. Solution overview (design vs fill, object model) — [ARCHITECTURE.md](./ARCHITECTURE.md)
-2. External system diagram (org → Named Credential → DocEngine.pro `/api/v1/render/pdf`)
-3. Test org credentials for reviewers
-4. Instructions: assign perm sets, configure Named Credential, place LWCs on pages
+Upload-ready drafts live in [security-review/](./security-review/README.md):
+
+1. [01-solution-architecture-and-usage.md](./security-review/01-solution-architecture-and-usage.md)
+2. [02-sample-api-callouts.md](./security-review/02-sample-api-callouts.md)
+3. [03-false-positives.md](./security-review/03-false-positives.md)
+4. [04-test-instructions.md](./security-review/04-test-instructions.md) — fill in test org credentials before export
+
+Also: [ARCHITECTURE.md](./ARCHITECTURE.md), Partner Security Portal Checkmarx PDF, Code Analyzer `.txt` (see security-review README).
 
 ## Known follow-ups (disclose if needed)
 

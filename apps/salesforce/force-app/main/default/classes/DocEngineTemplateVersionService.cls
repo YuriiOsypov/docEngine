@@ -67,7 +67,7 @@ public without sharing class DocEngineTemplateVersionService {
       if (!existing.isEmpty()) {
         return existing[0];
       }
-      throw e;
+      throw new AuraHandledException(formatDmlMessage(e));
     }
   }
 
@@ -87,5 +87,15 @@ public without sharing class DocEngineTemplateVersionService {
 
   public static String versionKey(Id templateId, Decimal versionNumber) {
     return String.valueOf(templateId) + '_' + String.valueOf(versionNumber.intValue());
+  }
+
+  private static String formatDmlMessage(DmlException e) {
+    if (e == null) {
+      return 'Database error.';
+    }
+    if (e.getNumDml() > 0 && String.isNotBlank(e.getDmlMessage(0))) {
+      return e.getDmlMessage(0);
+    }
+    return String.isNotBlank(e.getMessage()) ? e.getMessage() : 'Database error.';
   }
 }
