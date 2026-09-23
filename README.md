@@ -4,6 +4,8 @@ Document template design, fill, and export — as an embeddable TypeScript libra
 
 DocEngine lets you design structured document templates (sections, fields, catalogs), fill them with data, and export to JSON, HTML, or PDF. The same core powers browser apps, Salesforce Lightning, and automation workflows.
 
+**[Documentation](https://docengine.pro/docs)** · **[Playground](https://docengine.pro/playground)**
+
 <p align="center">
   <img src="./apps/n8n-nodes-docengine/nodes/DocEngine/docengine.svg" alt="DocEngine" width="72" />
 </p>
@@ -215,6 +217,8 @@ The [`n8n-nodes-docengine`](./apps/n8n-nodes-docengine) package generates HTML/P
 
 ## Documentation
 
+- [Docs](https://docengine.pro/docs) — fields, mapping, storage, and the API
+- [Playground](https://docengine.pro/playground) — try the editor in the browser
 - [Editor README](./packages/editor/README.md) — install & API overview
 - [Editor specifications](./packages/editor/SPECIFICATIONS.md) — data contracts & extension points
 - [Salesforce integration](./integrations/salesforce/README.md) — deploy, packaging, PDF, LWS
