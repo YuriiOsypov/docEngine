@@ -5061,7 +5061,7 @@ body:has(.page > .design-shell:not(.design-shell--active)) {
   background: var(--me-surface-100);
   border: none;
   border-radius: var(--me-radius-md);
-  height: min(80vh, 960px);
+  height: min(90vh, 960px);
   min-height: 540px;
 }
 

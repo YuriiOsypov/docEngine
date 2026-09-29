@@ -49,7 +49,7 @@ public with sharing class DocEngineListController {
 
   private static List<ListItem> resolvePicklist(String objectApiName, String fieldApiName, String query) {
     Schema.SObjectType t = Schema.getGlobalDescribe().get(objectApiName);
-    if (t == null) {
+    if (t == null || !t.getDescribe().isAccessible()) {
       return new List<ListItem>();
     }
     Schema.SObjectField f = t.getDescribe().fields.getMap().get(fieldApiName);
@@ -57,6 +57,9 @@ public with sharing class DocEngineListController {
       return new List<ListItem>();
     }
     Schema.DescribeFieldResult d = f.getDescribe();
+    if (!d.isAccessible()) {
+      return new List<ListItem>();
+    }
     if (d.getType() != Schema.DisplayType.PICKLIST && d.getType() != Schema.DisplayType.MULTIPICKLIST) {
       return new List<ListItem>();
     }
@@ -94,10 +97,17 @@ public with sharing class DocEngineListController {
         'Unknown source collection "' + objectApiName + '". Re-select the collection in field properties.'
       );
     }
-    Map<String, Schema.SObjectField> fields = t.getDescribe().fields.getMap();
-    if (!fields.containsKey('Name') || !fields.containsKey('Id')) {
+    Schema.DescribeSObjectResult objectDescribe = t.getDescribe();
+    Map<String, Schema.SObjectField> fields = objectDescribe.fields.getMap();
+    if (
+      !objectDescribe.isAccessible() ||
+      !fields.containsKey('Name') ||
+      !fields.containsKey('Id') ||
+      !fields.get('Name').getDescribe().isAccessible() ||
+      !fields.get('Id').getDescribe().isAccessible()
+    ) {
       throw new AuraHandledException(
-        'Object "' + objectApiName + '" has no searchable Name field.'
+        'Object "' + objectApiName + '" or its Name field is not accessible.'
       );
     }
 
@@ -111,15 +121,30 @@ public with sharing class DocEngineListController {
       String soqlAsc =
         'SELECT Id, Name FROM ' +
         safeObject +
-        ' WHERE Name LIKE :prefixExpr WITH SECURITY_ENFORCED ORDER BY Name ASC LIMIT 50';
+        ' WHERE Name LIKE :prefixExpr ORDER BY Name ASC LIMIT 50';
       String soqlDesc =
         'SELECT Id, Name FROM ' +
         safeObject +
-        ' WHERE Name LIKE :prefixExpr WITH SECURITY_ENFORCED ORDER BY Name DESC LIMIT 50';
-      for (SObject row : Database.query(soqlAsc)) {
+        ' WHERE Name LIKE :prefixExpr ORDER BY Name DESC LIMIT 50';
+      Map<String, Object> prefixBinds = new Map<String, Object>{
+        'prefixExpr' => prefixExpr
+      };
+      for (
+        SObject row : Database.queryWithBinds(
+          soqlAsc,
+          prefixBinds,
+          AccessLevel.USER_MODE
+        )
+      ) {
         byId.put(row.Id, toNameItem(row));
       }
-      for (SObject row : Database.query(soqlDesc)) {
+      for (
+        SObject row : Database.queryWithBinds(
+          soqlDesc,
+          prefixBinds,
+          AccessLevel.USER_MODE
+        )
+      ) {
         byId.put(row.Id, toNameItem(row));
       }
       if (!byId.isEmpty()) {
@@ -146,8 +171,14 @@ public with sharing class DocEngineListController {
     String soql =
       'SELECT Id, Name FROM ' +
       safeObject +
-      ' WHERE Name LIKE :likeExpr WITH SECURITY_ENFORCED ORDER BY Name LIMIT 50';
-    for (SObject row : Database.query(soql)) {
+      ' WHERE Name LIKE :likeExpr ORDER BY Name LIMIT 50';
+    for (
+      SObject row : Database.queryWithBinds(
+        soql,
+        new Map<String, Object>{ 'likeExpr' => likeExpr },
+        AccessLevel.USER_MODE
+      )
+    ) {
       byId.put(row.Id, toNameItem(row));
     }
     return sortItemsByLabel(byId.values());

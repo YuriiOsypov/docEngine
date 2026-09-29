@@ -127,7 +127,7 @@ public with sharing class DocEnginePdfController {
         Template__r.Name
       FROM DocEngine_Document__c
       WHERE Id = :docInstanceId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
 
@@ -158,38 +158,72 @@ public with sharing class DocEnginePdfController {
 
   @TestVisible
   private static String storePreviewAndGetUrl(Blob pdfBlob) {
+    if (pdfBlob == null || pdfBlob.size() == 0) {
+      throw new AuraHandledException('PDF preview data is required.');
+    }
+    if (pdfBlob.size() > 4500000) {
+      throw new AuraHandledException('PDF preview is too large (max ~4.5 MB).');
+    }
+    if (!Schema.sObjectType.ContentVersion.isCreateable()) {
+      throw new AuraHandledException('Insufficient access to create a PDF preview File.');
+    }
+    if (!Schema.sObjectType.ContentDocumentLink.isCreateable()) {
+      throw new AuraHandledException('Insufficient access to link a PDF preview File.');
+    }
+    Map<String, Schema.SObjectField> fields =
+      Schema.sObjectType.ContentVersion.fields.getMap();
+    for (
+      String fieldName : new Set<String>{
+        'Title',
+        'PathOnClient',
+        'VersionData',
+        'FirstPublishLocationId'
+      }
+    ) {
+      if (
+        !fields.containsKey(fieldName) ||
+        !fields.get(fieldName).getDescribe().isCreateable()
+      ) {
+        throw new AuraHandledException(
+          'Insufficient field access to create a PDF preview File.'
+        );
+      }
+    }
+    Map<String, Schema.SObjectField> linkFields =
+      Schema.sObjectType.ContentDocumentLink.fields.getMap();
+    for (
+      String fieldName : new Set<String>{
+        'ContentDocumentId',
+        'LinkedEntityId',
+        'ShareType',
+        'Visibility'
+      }
+    ) {
+      if (
+        !linkFields.containsKey(fieldName) ||
+        !linkFields.get(fieldName).getDescribe().isCreateable()
+      ) {
+        throw new AuraHandledException(
+          'Insufficient field access to link a PDF preview File.'
+        );
+      }
+    }
+
     ContentVersion cv = new ContentVersion();
     cv.Title = 'DocEngine Preview';
     cv.PathOnClient = 'docengine-preview.pdf';
     cv.VersionData = pdfBlob;
     cv.FirstPublishLocationId = UserInfo.getUserId();
-    insert cv;
-
-    ContentDistribution dist = new ContentDistribution();
-    dist.Name = 'DocEngine Preview ' + String.valueOf(Datetime.now().getTime());
-    dist.ContentVersionId = cv.Id;
-    dist.PreferencesAllowViewInBrowser = true;
-    dist.PreferencesLinkLatestVersion = true;
-    dist.PreferencesAllowOriginalDownload = true;
-    dist.PreferencesPasswordRequired = false;
-    dist.PreferencesNotifyOnVisit = false;
-    insert dist;
-
-    dist = [
-      SELECT ContentDownloadUrl, DistributionPublicUrl
-      FROM ContentDistribution
-      WHERE Id = :dist.Id
-      WITH SECURITY_ENFORCED
-      LIMIT 1
-    ];
-
-    if (String.isNotBlank(dist.ContentDownloadUrl)) {
-      return dist.ContentDownloadUrl;
-    }
-    if (String.isNotBlank(dist.DistributionPublicUrl)) {
-      return dist.DistributionPublicUrl;
-    }
-    return '/sfc/servlet.shepherd/version/download/' + cv.Id;
+    SObjectAccessDecision decision = Security.stripInaccessible(
+      AccessType.CREATABLE,
+      new List<ContentVersion>{ cv }
+    );
+    List<ContentVersion> safeVersions =
+      (List<ContentVersion>) decision.getRecords();
+    Database.insert(safeVersions, AccessLevel.USER_MODE);
+    return System.URL.getOrgDomainUrl().toExternalForm() +
+      '/sfc/servlet.shepherd/version/download/' +
+      safeVersions[0].Id;
   }
 
   private static String resolveFilename(DocEngine_Document__c instance) {

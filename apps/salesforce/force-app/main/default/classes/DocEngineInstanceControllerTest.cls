@@ -33,12 +33,30 @@ private class DocEngineInstanceControllerTest {
     System.assertNotEquals(null, saved.id);
     System.assertEquals('Draft', saved.status);
     System.assertNotEquals(null, saved.templateVersionId);
-    System.assertEquals(1, saved.templateVersion);
     System.assert(saved.documentJson.contains('"kind":"field"') || saved.documentJson.contains('field'));
+
+    // JSON entry point used by LWCs (avoids Aura nested-DTO GACKs).
+    String jsonSavedRaw = DocEngineInstanceController.saveInstanceJson(
+      JSON.serialize(
+        new Map<String, Object>{
+          'id' => saved.id,
+          'templateId' => t.Id,
+          'templateVersionId' => saved.templateVersionId,
+          'recordId' => a.Id,
+          'objectApiName' => 'Account',
+          'documentJson' => '{"kind":"field","version":2,"time":2,"sections":{}}',
+          'status' => 'Draft'
+        }
+      )
+    );
+    Map<String, Object> jsonSaved = (Map<String, Object>) JSON.deserializeUntyped(jsonSavedRaw);
+    System.assertEquals(String.valueOf(saved.id), String.valueOf(jsonSaved.get('id')));
+    System.assertEquals('Draft', (String) jsonSaved.get('status'));
 
     DocEngineInstanceController.InstanceDTO loaded = DocEngineInstanceController.getInstance(saved.id);
     System.assertEquals(saved.id, loaded.id);
     System.assertEquals(saved.templateVersionId, loaded.templateVersionId);
+    System.assertEquals(1, loaded.templateVersion);
     System.assert(String.isNotBlank(loaded.templateJson));
 
     // Re-save must keep the same pinned version.
@@ -219,6 +237,19 @@ private class DocEngineInstanceControllerTest {
     System.assertNotEquals(null, result.contentDocumentId);
     System.assertNotEquals(null, result.contentVersionId);
     System.assertEquals('letter.html', result.filename);
+    ContentDistribution distribution = [
+      SELECT PreferencesAllowOriginalDownload, PreferencesExpires, ExpiryDate
+      FROM ContentDistribution
+      WHERE ContentVersionId = :result.contentVersionId
+      LIMIT 1
+    ];
+    System.assertEquals(
+      false,
+      distribution.PreferencesAllowOriginalDownload,
+      'public share must disable original download'
+    );
+    System.assertEquals(true, distribution.PreferencesExpires);
+    System.assertNotEquals(null, distribution.ExpiryDate);
     List<ContentDocumentLink> links = [
       SELECT Id
       FROM ContentDocumentLink
@@ -350,12 +381,22 @@ private class DocEngineInstanceControllerTest {
       Status__c = 'Draft'
     );
     insert inst;
+    DocEngineInstanceController.FileSaveResult file = DocEngineInstanceController.saveHtml(
+      inst.Id,
+      EncodingUtil.base64Encode(Blob.valueOf('<html></html>')),
+      'delete-me.html'
+    );
 
     Test.startTest();
     DocEngineInstanceController.deleteInstance(inst.Id);
     Test.stopTest();
 
     System.assertEquals(0, [SELECT COUNT() FROM DocEngine_Document__c WHERE Id = :inst.Id]);
+    System.assertEquals(
+      0,
+      [SELECT COUNT() FROM ContentDocument WHERE Id = :file.contentDocumentId],
+      'authorized attached file should be deleted transactionally'
+    );
   }
 
   @IsTest
@@ -438,8 +479,20 @@ private class DocEngineInstanceControllerTest {
     insert inst;
 
     String b64 = EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4'));
-    DocEngineInstanceController.PdfSaveResult result = DocEngineInstanceController.savePdf(inst.Id, b64, 'x');
+    DocEngineInstanceController.PdfSaveResult result = DocEngineInstanceController.savePdf(
+      inst.Id,
+      b64,
+      '../x'
+    );
     System.assertNotEquals(null, result.contentDocumentId);
+    ContentVersion savedVersion = [
+      SELECT PathOnClient
+      FROM ContentVersion
+      WHERE Id = :result.contentVersionId
+    ];
+    System.assertEquals(false, savedVersion.PathOnClient.contains('/'));
+    System.assertEquals(false, savedVersion.PathOnClient.contains('\\'));
+    System.assert(savedVersion.PathOnClient.endsWith('.pdf'));
   }
 
   @IsTest
@@ -461,6 +514,15 @@ private class DocEngineInstanceControllerTest {
     System.assertNotEquals(null, result.contentVersionId);
     System.assertNotEquals(null, result.contentDocumentId);
     System.assert(String.isNotBlank(result.url), 'Expected image URL');
+    System.assert(
+      result.url.contains('/sfc/servlet.shepherd/version/download/'),
+      'Expected an authenticated Salesforce download URL'
+    );
+    System.assertEquals(
+      0,
+      [SELECT COUNT() FROM ContentDistribution],
+      'ordinary image upload must not create a public distribution'
+    );
   }
 
   @IsTest
@@ -481,7 +543,8 @@ private class DocEngineInstanceControllerTest {
       a.Id
     );
     DocEngineInstanceController.ImageUploadResult resolved = DocEngineInstanceController.resolveFieldImage(
-      String.valueOf(uploaded.contentVersionId)
+      String.valueOf(uploaded.contentVersionId),
+      String.valueOf(a.Id)
     );
     Test.stopTest();
 
@@ -490,6 +553,94 @@ private class DocEngineInstanceControllerTest {
     System.assertEquals('png', items[0].fileExtension);
     System.assertNotEquals(null, resolved.contentVersionId);
     System.assert(String.isNotBlank(resolved.url), 'Expected resolved image URL');
+    System.assertEquals(
+      0,
+      [SELECT COUNT() FROM ContentDistribution],
+      'resolving an existing image must not create a public distribution'
+    );
+  }
+
+  @IsTest
+  static void resolveFieldImageRejectsUnrelatedRecord() {
+    Account linked = new Account(Name = 'Linked');
+    Account unrelated = new Account(Name = 'Unrelated');
+    insert new List<Account>{ linked, unrelated };
+    String png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    DocEngineInstanceController.ImageUploadResult uploaded =
+      DocEngineInstanceController.uploadFieldImage(linked.Id, png, 'logo.png');
+
+    Boolean threw = false;
+    try {
+      DocEngineInstanceController.resolveFieldImage(
+        String.valueOf(uploaded.contentVersionId),
+        String.valueOf(unrelated.Id)
+      );
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'an unrelated record must not authorize image resolution');
+  }
+
+  @IsTest
+  static void sendShareEmailRejectsUnrelatedFile() {
+    DocEngine_Template__c t = makeTemplate();
+    Account a = new Account(Name = 'Acme');
+    Account other = new Account(Name = 'Other');
+    insert new List<Account>{ a, other };
+    DocEngine_Document__c inst = new DocEngine_Document__c(
+      Template__c = t.Id,
+      Record_Id__c = a.Id,
+      Object_API_Name__c = 'Account',
+      Document_JSON__c = '{}',
+      Status__c = 'Completed'
+    );
+    insert inst;
+    ContentVersion unrelated = new ContentVersion(
+      Title = 'unrelated',
+      PathOnClient = 'unrelated.txt',
+      VersionData = Blob.valueOf('not this document'),
+      FirstPublishLocationId = other.Id
+    );
+    insert unrelated;
+
+    Boolean threw = false;
+    try {
+      DocEngineInstanceController.sendShareEmail(
+        unrelated.Id,
+        'buyer@example.com',
+        'Wrong file',
+        'Must not send.',
+        false,
+        inst.Id
+      );
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'an unrelated file must not be emailed');
+  }
+
+  @IsTest
+  static void saveFileRejectsInvalidBase64() {
+    DocEngine_Template__c t = makeTemplate();
+    Account a = new Account(Name = 'Acme');
+    insert a;
+    DocEngine_Document__c inst = new DocEngine_Document__c(
+      Template__c = t.Id,
+      Record_Id__c = a.Id,
+      Object_API_Name__c = 'Account',
+      Document_JSON__c = '{}',
+      Status__c = 'Draft'
+    );
+    insert inst;
+
+    Boolean threw = false;
+    try {
+      DocEngineInstanceController.savePdf(inst.Id, 'not-valid-base64!', '../unsafe.pdf');
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'invalid file data must be rejected');
   }
 
   @IsTest
@@ -513,5 +664,64 @@ private class DocEngineInstanceControllerTest {
       threw = true;
     }
     System.assert(threw, 'Expected oversized documentJson to fail');
+  }
+
+  @IsTest
+  static void rejectsVersionSubstitutionAndDocumentRetargeting() {
+    DocEngine_Template__c first = makeTemplate();
+    DocEngine_Template__c second = makeTemplate();
+    Id firstVersion = DocEngineTemplateVersionService.ensureCurrentVersionId(first.Id);
+    Id secondVersion = DocEngineTemplateVersionService.ensureCurrentVersionId(second.Id);
+    Account firstAccount = new Account(Name = 'First');
+    Account secondAccount = new Account(Name = 'Second');
+    insert new List<Account>{ firstAccount, secondAccount };
+
+    DocEngineInstanceController.InstanceDTO dto = new DocEngineInstanceController.InstanceDTO();
+    dto.templateId = first.Id;
+    dto.templateVersionId = secondVersion;
+    dto.recordId = firstAccount.Id;
+    dto.objectApiName = 'Account';
+    dto.documentJson = '{"kind":"field","sections":{}}';
+    Boolean threw = false;
+    try {
+      DocEngineInstanceController.saveInstance(dto);
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'A version from another template must be rejected');
+
+    dto.templateVersionId = firstVersion;
+    DocEngineInstanceController.InstanceDTO saved = DocEngineInstanceController.saveInstance(dto);
+    saved.documentJson = '{"kind":"field","sections":{"x":{}}}';
+    saved.recordId = secondAccount.Id;
+    threw = false;
+    try {
+      DocEngineInstanceController.saveInstance(saved);
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'An existing document source record is immutable');
+
+    saved.recordId = firstAccount.Id;
+    saved.templateVersionId = secondVersion;
+    threw = false;
+    try {
+      DocEngineInstanceController.saveInstance(saved);
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'An existing document version is immutable');
+
+    dto.id = null;
+    dto.templateVersionId = firstVersion;
+    dto.recordId = firstAccount.Id;
+    dto.objectApiName = 'Contact';
+    threw = false;
+    try {
+      DocEngineInstanceController.saveInstance(dto);
+    } catch (AuraHandledException e) {
+      threw = true;
+    }
+    System.assert(threw, 'Source Id/object mismatches must be rejected');
   }
 }

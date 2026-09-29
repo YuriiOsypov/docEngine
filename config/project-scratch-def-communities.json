@@ -1,0 +1,16 @@
+{
+  "orgName": "DocEngine Security Upgrade",
+  "edition": "Developer",
+  "features": ["EnableSetPasswordInApi", "Communities"],
+  "settings": {
+    "lightningExperienceSettings": {
+      "enableS1DesktopEnabled": true
+    },
+    "communitiesSettings": {
+      "enableNetworksEnabled": true
+    },
+    "securitySettings": {
+      "enableAdminLoginAsAnyUser": true
+    }
+  }
+}

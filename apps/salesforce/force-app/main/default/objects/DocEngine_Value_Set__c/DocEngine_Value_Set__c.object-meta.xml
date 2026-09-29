@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Reusable scenario value packs for a DocEngine template (unmapped field values only). Applied in fill mode after Salesforce merge.</description>
+    <enableActivities>false</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableFeeds>false</enableFeeds>
+    <enableHistory>true</enableHistory>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <label>DocEngine Value Set</label>
+    <nameField>
+        <label>Scenario Name</label>
+        <length>80</length>
+        <type>Text</type>
+    </nameField>
+    <pluralLabel>DocEngine Value Sets</pluralLabel>
+    <sharingModel>ControlledByParent</sharingModel>
+</CustomObject>

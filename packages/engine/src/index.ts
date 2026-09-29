@@ -41,6 +41,8 @@ export {
   applyFieldMapping,
   previewFieldMapping,
   normalizeFieldMappingSpec,
+  collectMappedSectionFieldKeys,
+  omitMappedFields,
   buildSourcePayloadTree,
   resolveSourcePath,
   resolveMappedSourceValue,

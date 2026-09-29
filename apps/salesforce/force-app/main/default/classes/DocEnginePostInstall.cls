@@ -17,6 +17,7 @@ global without sharing class DocEnginePostInstall implements InstallHandler {
     if (context != null && !context.isUpgrade()) {
       seedStarterAccountTemplate();
     }
+    syncTemplateShares();
   }
 
   /**
@@ -24,9 +25,23 @@ global without sharing class DocEnginePostInstall implements InstallHandler {
    * Seeds settings, starter Account template + button config, and assigns DocEngine_Admin to the current user.
    */
   global static void runFirstTimeSetup() {
+    // Explicit user-mode profile check is safe; InstallHandler must remain without sharing.
+    // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+    List<Profile> callerProfiles = [
+      SELECT PermissionsModifyAllData
+      FROM Profile
+      WHERE Id = :UserInfo.getProfileId()
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
+    if (callerProfiles.isEmpty() || callerProfiles[0].PermissionsModifyAllData != true) {
+      throw new SecurityException('Modify All Data is required to run DocEngine setup.');
+    }
     seedSettings();
     seedStarterAccountTemplate();
     assignAdminToUserId(UserInfo.getUserId());
+    syncTemplateShares();
   }
 
   @TestVisible
@@ -34,7 +49,10 @@ global without sharing class DocEnginePostInstall implements InstallHandler {
     DocEngine_Settings__c settings = DocEngine_Settings__c.getOrgDefaults();
     if (settings.Id == null) {
       settings.Use_External_PDF__c = false;
-      upsert settings;
+      // Install bootstrap must initialize package hierarchy settings in system mode.
+      // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+      Database.upsert(settings, AccessLevel.SYSTEM_MODE);
+      // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
     }
   }
 
@@ -51,30 +69,54 @@ global without sharing class DocEnginePostInstall implements InstallHandler {
     if (userId == null) {
       return;
     }
-    List<PermissionSet> permSets = [
-      SELECT Id
-      FROM PermissionSet
-      WHERE Name = :ADMIN_PERM_SET
-      LIMIT 1
-    ];
+    // Installer bootstrap intentionally reads package metadata in system mode.
+    // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+    List<PermissionSet> permSets = Database.queryWithBinds(
+      'SELECT Id FROM PermissionSet WHERE Name = :permissionSetName LIMIT 1',
+      new Map<String, Object>{ 'permissionSetName' => ADMIN_PERM_SET },
+      AccessLevel.SYSTEM_MODE
+    );
+    // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
     if (permSets.isEmpty()) {
       return;
     }
     Id permSetId = permSets[0].Id;
-    Integer existing = [
-      SELECT COUNT()
-      FROM PermissionSetAssignment
-      WHERE AssigneeId = :userId AND PermissionSetId = :permSetId
-    ];
+    // Install bootstrap must detect package permission assignment in system mode.
+    // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+    List<AggregateResult> assignmentCounts = Database.queryWithBinds(
+      'SELECT COUNT(Id) total FROM PermissionSetAssignment ' +
+        'WHERE AssigneeId = :assigneeId AND PermissionSetId = :permissionSetId',
+      new Map<String, Object>{
+        'assigneeId' => userId,
+        'permissionSetId' => permSetId
+      },
+      AccessLevel.SYSTEM_MODE
+    );
+    // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
+    Integer existing = (Integer) assignmentCounts[0].get('total');
     if (existing > 0) {
       return;
     }
-    insert new PermissionSetAssignment(AssigneeId = userId, PermissionSetId = permSetId);
+    // Installer-authorized permission assignment is a required system bootstrap operation.
+    // Code-analyzer-suppress(sfge:ApexFlsViolation,sfge:DatabaseOperationsMustUseWithSharing)
+    Database.insert(
+      new PermissionSetAssignment(AssigneeId = userId, PermissionSetId = permSetId),
+      AccessLevel.SYSTEM_MODE
+    );
+    // Code-analyzer-unsuppress(sfge:ApexFlsViolation,sfge:DatabaseOperationsMustUseWithSharing)
   }
 
   @TestVisible
   private static void seedStarterAccountTemplate() {
-    if ([SELECT COUNT() FROM DocEngine_Template__c LIMIT 1] > 0) {
+    // Install bootstrap must inspect all package templates in system mode.
+    // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+    List<AggregateResult> templateCounts = Database.queryWithBinds(
+      'SELECT COUNT(Id) total FROM DocEngine_Template__c',
+      new Map<String, Object>(),
+      AccessLevel.SYSTEM_MODE
+    );
+    // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
+    if ((Integer) templateCounts[0].get('total') > 0) {
       return;
     }
     DocEngine_Template__c template = new DocEngine_Template__c(
@@ -85,19 +127,51 @@ global without sharing class DocEnginePostInstall implements InstallHandler {
       Version__c = 1,
       Description__c = 'Sample template created on install. Edit or replace in the DocEngine app.'
     );
-    insert template;
+    // First-install seed data requires system access to package fields unavailable through subscriber FLS.
+    // Code-analyzer-suppress(sfge:ApexFlsViolation,sfge:DatabaseOperationsMustUseWithSharing)
+    Database.insert(template, AccessLevel.SYSTEM_MODE);
+    // Code-analyzer-unsuppress(sfge:ApexFlsViolation,sfge:DatabaseOperationsMustUseWithSharing)
 
-    if ([SELECT COUNT() FROM DocEngine_Button_Config__c LIMIT 1] > 0) {
+    // Install bootstrap must inspect all package button configurations in system mode.
+    // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+    List<AggregateResult> buttonCounts = Database.queryWithBinds(
+      'SELECT COUNT(Id) total FROM DocEngine_Button_Config__c',
+      new Map<String, Object>(),
+      AccessLevel.SYSTEM_MODE
+    );
+    // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
+    if ((Integer) buttonCounts[0].get('total') > 0) {
       return;
     }
-    insert new DocEngine_Button_Config__c(
-      Name = STARTER_BUTTON_NAME,
-      Developer_Name__c = STARTER_DEV_NAME,
-      Template__c = template.Id,
-      Fill_Mode__c = true,
-      Export_Mode__c = 'pdf',
-      Show_Preview__c = true,
-      Attach_To_Record__c = true
+    // First-install seed data requires system access to package fields unavailable through subscriber FLS.
+    // Code-analyzer-suppress(sfge:ApexFlsViolation,sfge:DatabaseOperationsMustUseWithSharing)
+    Database.insert(
+      new DocEngine_Button_Config__c(
+        Name = STARTER_BUTTON_NAME,
+        Developer_Name__c = STARTER_DEV_NAME,
+        Template__c = template.Id,
+        Fill_Mode__c = true,
+        Export_Mode__c = 'pdf',
+        Show_Preview__c = true,
+        Attach_To_Record__c = true
+      ),
+      AccessLevel.SYSTEM_MODE
     );
+    // Code-analyzer-unsuppress(sfge:ApexFlsViolation,sfge:DatabaseOperationsMustUseWithSharing)
+  }
+
+  @TestVisible
+  private static void syncTemplateShares() {
+    // Upgrade reconciliation intentionally covers every package template.
+    // Code-analyzer-suppress(sfge:DatabaseOperationsMustUseWithSharing)
+    List<DocEngine_Template__c> templates = Database.queryWithBinds(
+      'SELECT Id FROM DocEngine_Template__c',
+      new Map<String, Object>(),
+      AccessLevel.SYSTEM_MODE
+    );
+    // Code-analyzer-unsuppress(sfge:DatabaseOperationsMustUseWithSharing)
+    for (DocEngine_Template__c template : templates) {
+      DocEngineTemplateSharingService.syncTemplate(template.Id);
+    }
   }
 }

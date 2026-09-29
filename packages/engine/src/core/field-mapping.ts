@@ -1706,3 +1706,92 @@ export function normalizeFieldMappingSpec( spec: any) {
     rules: Array.isArray(spec.rules) ? spec.rules.map((rule: any) => ({ ...rule })) : [],
   };
 }
+
+/**
+ * Build a set of `section\0field` keys targeted by any mapping rule.
+ * Child / column / table rules mark the whole parent field as mapped.
+ */
+export function collectMappedSectionFieldKeys(mappingSpec: any): Set<string> {
+  const keys = new Set<string>();
+  const rules = Array.isArray(mappingSpec?.rules) ? mappingSpec.rules : [];
+  for (const rule of rules) {
+    const section = rule?.section;
+    const field = rule?.field;
+    if (typeof section !== 'string' || !section.trim()) continue;
+    if (typeof field !== 'string' || !field.trim()) continue;
+    keys.add(`${section}\0${field}`);
+  }
+  return keys;
+}
+
+function omitMappedFromFieldMap(
+  fieldMap: Record<string, unknown> | null | undefined,
+  sectionName: string,
+  mappedKeys: Set<string>,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {};
+  for (const [fieldName, value] of Object.entries(fieldMap ?? {})) {
+    if (mappedKeys.has(`${sectionName}\0${fieldName}`)) continue;
+    next[fieldName] = value;
+  }
+  return next;
+}
+
+/**
+ * Drop fields that have any mapping rule from a fields export.
+ * Used for scenario value packs (manual / unmapped fields only).
+ * Returns a deep clone; does not mutate the input.
+ */
+export function omitMappedFields(fieldsExport: any, mappingSpec: any) {
+  if (!fieldsExport || typeof fieldsExport !== 'object') {
+    return fieldsExport;
+  }
+
+  const mappedKeys = collectMappedSectionFieldKeys(mappingSpec);
+  const clone = JSON.parse(JSON.stringify(fieldsExport));
+  if (mappedKeys.size === 0) {
+    return clone;
+  }
+
+  const sections = clone.sections;
+  if (!sections || typeof sections !== 'object') {
+    return clone;
+  }
+
+  const nextSections: Record<string, unknown> = {};
+  for (const [sectionName, sectionValue] of Object.entries(sections)) {
+    // Repeatable sections: array of per-instance field maps.
+    if (
+      Array.isArray(sectionValue) &&
+      sectionValue.length > 0 &&
+      sectionValue.every(
+        (item) => item != null && typeof item === 'object' && !Array.isArray(item),
+      )
+    ) {
+      const filteredInstances = sectionValue
+        .map((instance) =>
+          omitMappedFromFieldMap(instance as Record<string, unknown>, sectionName, mappedKeys),
+        )
+        .filter((instance) => Object.keys(instance).length > 0);
+      if (filteredInstances.length > 0) {
+        nextSections[sectionName] = filteredInstances;
+      }
+      continue;
+    }
+    if (sectionValue != null && typeof sectionValue === 'object' && !Array.isArray(sectionValue)) {
+      const filtered = omitMappedFromFieldMap(
+        sectionValue as Record<string, unknown>,
+        sectionName,
+        mappedKeys,
+      );
+      if (Object.keys(filtered).length > 0) {
+        nextSections[sectionName] = filtered;
+      }
+      continue;
+    }
+    nextSections[sectionName] = sectionValue;
+  }
+
+  clone.sections = nextSections;
+  return clone;
+}

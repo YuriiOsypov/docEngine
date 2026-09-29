@@ -4,6 +4,7 @@
     <columns>NAME</columns>
     <columns>Object_API_Name__c</columns>
     <columns>Is_Active__c</columns>
+    <columns>Public_Form_Enabled__c</columns>
     <columns>Version__c</columns>
     <columns>PDF_Filename__c</columns>
     <columns>LAST_UPDATE</columns>

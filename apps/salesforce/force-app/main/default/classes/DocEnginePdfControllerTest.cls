@@ -71,6 +71,25 @@ private class DocEnginePdfControllerTest {
   }
 
   @IsTest
+  static void salesforcePreviewUsesAuthenticatedFileUrl() {
+    Test.startTest();
+    String url = DocEnginePdfController.storePreviewAndGetUrl(
+      Blob.valueOf('%PDF-1.4 preview')
+    );
+    Test.stopTest();
+
+    System.assert(
+      url.contains('/sfc/servlet.shepherd/version/download/'),
+      'preview should use an authenticated Salesforce File URL'
+    );
+    System.assertEquals(
+      0,
+      [SELECT COUNT() FROM ContentDistribution],
+      'normal PDF preview must not create a public distribution'
+    );
+  }
+
+  @IsTest
   static void externalProviderRequiresCalloutClass() {
     upsertOrgSetting(true);
     System.assertEquals('External', DocEnginePdfController.getPdfProvider());

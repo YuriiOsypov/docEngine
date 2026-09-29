@@ -10,12 +10,12 @@
             <sorted>false</sorted>
             <value>
                 <fullName>none</fullName>
-                <default>true</default>
-                <label>None</label>
+                <default>false</default>
+                <label>None (PDF)</label>
             </value>
             <value>
                 <fullName>pdf</fullName>
-                <default>false</default>
+                <default>true</default>
                 <label>PDF</label>
             </value>
             <value>

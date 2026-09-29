@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Template__c</fullName>
+    <deleteConstraint>Restrict</deleteConstraint>
+    <description>Template published as this public form.</description>
+    <label>Template</label>
+    <referenceTo>DocEngine_Template__c</referenceTo>
+    <relationshipLabel>Form Links</relationshipLabel>
+    <relationshipName>Form_Links</relationshipName>
+    <required>true</required>
+    <type>Lookup</type>
+</CustomField>

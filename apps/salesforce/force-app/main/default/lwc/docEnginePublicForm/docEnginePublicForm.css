@@ -1,0 +1,76 @@
+:host {
+  display: block;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 2rem;
+  font-family: var(--lwc-fontFamily, 'Salesforce Sans', Arial, sans-serif);
+  color: #181818;
+}
+
+.public-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header {
+  margin-bottom: 0.25rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.subtitle {
+  margin: 0.35rem 0 0;
+  color: #5c5c5c;
+  font-size: 0.9375rem;
+}
+
+.state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.state--error .title {
+  color: #ba0517;
+}
+
+.state--thanks .title {
+  color: #2e844a;
+}
+
+.doc-editor-root {
+  --me-primary: #0176d3;
+  --me-primary-hover: #014486;
+  --me-primary-contrast: #fff;
+  --me-surface-0: #fff;
+  --me-surface-50: #f3f3f3;
+  --me-border: #c9c9c9;
+  --me-text: #181818;
+  --me-font-family: var(--lwc-fontFamily, 'Salesforce Sans', Arial, sans-serif);
+  --me-radius-sm: 0.25rem;
+  --me-radius-md: 0.25rem;
+  min-height: 280px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.35rem;
+  padding: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.status {
+  margin: 0;
+  color: #5c5c5c;
+  font-size: 0.875rem;
+}

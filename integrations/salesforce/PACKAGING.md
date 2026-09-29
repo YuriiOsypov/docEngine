@@ -1,53 +1,54 @@
-# Packaging (2GP) — DocEngine
+# Packaging (1GP) — DocEngine
 
-## Namespace (required for managed package)
+DocEngine currently ships only as a first-generation managed package (1GP).
+The canonical source is `apps/salesforce/force-app`; the release org owns the
+`logicomapp` namespace.
 
-1. In a **Developer Edition** or Partner Dev Hub org, create a namespace (e.g. `docengine`).
-2. Link the namespace to your Dev Hub.
-3. Set it in `sfdx-project.json`:
+## Release identifiers
 
-```json
-"namespace": "docengine"
-```
-
-Until a namespace is registered, keep `"namespace": ""` and use **unmanaged** deploys (`sf project deploy start`) for internal orgs.
-
-## Create the 2GP package (once)
-
-```bash
-# Authenticate Dev Hub
-sf org login web --set-default-dev-hub --alias DevHub
-
-# Create managed package (after namespace is set)
-sf package create \
-  --name DocEngine \
-  --package-type Managed \
-  --path apps/salesforce/force-app \
-  --description "DocEngine document templates and fill"
-```
-
-This writes a `packageAliases` entry into `sfdx-project.json`.
-
-## Build & promote a version
+- Release org alias: `OrgFarmDocEngine`
+- Metadata package ID: `033gK000000IZ8zQAG`
+- Namespace: `logicomapp`
+- Current released version: `DocEngine 1.17` (`04tgK000000MFRpQAO`)
+- Prior security beta: `DocEngine 1.17 Security Beta` (`04tgK000000JRirQAG`)
+- Install/upgrade requires Experience Cloud once (`NetworksEnabledOnce` /
+  `Communities` feature) because Public Form site URL helpers query `Network` /
+  `Domain`
 
 ```bash
 npm run build:sf
 
-sf package version create \
-  --package DocEngine \
-  --installation-key-bypass \
-  --wait 30 \
-  --code-coverage
+# Deploy and test the exact source that will be uploaded.
+sf project deploy start \
+  --source-dir apps/salesforce/force-app \
+  --target-org OrgFarmDocEngine
 
-sf package version promote --package "DocEngine@0.1.0-1" --no-prompt
+sf apex run test \
+  --target-org OrgFarmDocEngine \
+  --code-coverage \
+  --result-format human \
+  --wait 30
+
+# Create a beta first; omit --managed-released.
+sf package1 version create \
+  --package-id 033gK000000IZ8zQAG \
+  --name "DocEngine X.Y Beta" \
+  --version X.Y \
+  --target-org OrgFarmDocEngine \
+  --wait 30
+
+# After beta install/upgrade verification, upload the immutable release.
+sf package1 version create \
+  --package-id 033gK000000IZ8zQAG \
+  --name "DocEngine X.Y" \
+  --version X.Y \
+  --managed-released \
+  --target-org OrgFarmDocEngine \
+  --wait 30
 ```
 
-Install in a subscriber / scratch org:
-
-```bash
-sf package install --package "DocEngine@0.1.0-1" --wait 20 --publish-wait 20
-sf org assign permset --name DocEngine_Admin
-```
+Run the Partner Source Scanner against the exact released `04t` package version.
+Do not create a 2GP `Package2` or use `sf package version create`.
 
 ## Post-install / PDF connector
 
@@ -74,7 +75,13 @@ See [PDF_PACKAGE.md](./PDF_PACKAGE.md) and [PDF.md](./PDF.md).
 ## Scratch org for development
 
 ```bash
-sf org create scratch --definition-file config/project-scratch-def.json --alias DocEngineScratch --duration-days 7 --set-default
+# Package install/upgrade validation needs Communities enabled.
+sf org create scratch \
+  --definition-file config/project-scratch-def-communities.json \
+  --alias DocEngineScratch \
+  --duration-days 7 \
+  --no-namespace \
+  --set-default
 sf project deploy start --source-dir apps/salesforce/force-app
 sf project deploy start --source-dir unpackaged/post-install
 sf org assign permset --name DocEngine_Admin

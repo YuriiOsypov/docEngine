@@ -45,6 +45,8 @@ export {
   createMappingRuleFromDrop,
   resolveFieldMappingTarget,
   evaluateSectionVisibility,
+  omitMappedFields,
+  collectMappedSectionFieldKeys,
 } from '@docengine/engine';
 
 export {

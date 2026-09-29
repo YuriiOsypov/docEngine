@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Allow_Pdf_Attach__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>When true, public submit generates and attaches PDF/HTML. Default off — Document JSON is enough for public forms.</description>
+    <label>Allow PDF Attach</label>
+    <type>Checkbox</type>
+</CustomField>

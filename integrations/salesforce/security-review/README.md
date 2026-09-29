@@ -21,7 +21,10 @@ Export each `.md` file to PDF before upload (Word, Google Docs, or VS Code Markd
 ### Partner Security Portal (Checkmarx)
 
 1. Open [Salesforce Partner Security Portal](https://security.secure.force.com/security/tools/forcecom/scanner).
-2. Upload managed package version or source zip of `apps/salesforce/force-app`.
+2. Scan the exact 1GP package version (`04t`) built from
+   `apps/salesforce/force-app`. Current released version:
+   `04tgK000000MFRpQAO` (`DocEngine 1.17`). Use a source zip only for
+   pre-release diagnostics.
 3. Include `apps/salesforce/force-app-pdf` if submitting the PDF add-on.
 4. Download report as PDF → upload as **Security scanner reports**.
 
@@ -42,7 +45,7 @@ Upload the `.txt` output as **Salesforce Code Analyzer** report.
 
 ## Pre-submission checklist
 
-- [ ] Fill test org credentials in `04-test-instructions.md`
+- [ ] Provide test org credentials through the Partner Security Portal (never commit them)
 - [ ] Export `01`–`04` to PDF
 - [ ] Run Checkmarx → upload PDF
 - [ ] Run Code Analyzer → upload `.txt`

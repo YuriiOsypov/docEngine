@@ -1,0 +1,33 @@
+<template>
+  <lightning-card title="Submitted document" icon-name="standard:document">
+    <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+      <p class="slds-text-body_small slds-m-bottom_small">
+        <template lwc:if={status}>Status: {status}</template>
+        <template lwc:if={source}> · Source: {source}</template>
+      </p>
+      <div class="slds-grid slds-gutters_small slds-wrap">
+        <div class="slds-col">
+          <lightning-button
+            variant="brand"
+            label="Open HTML preview"
+            title="Open Document preview (HTML + View as PDF) — not fill mode"
+            onclick={handleOpen}
+            disabled={openDisabled}
+          ></lightning-button>
+        </div>
+        <template lwc:if={hasFile}>
+          <div class="slds-col">
+            <lightning-button
+              variant="neutral"
+              label="Open attached PDF / file"
+              onclick={handleOpenFile}
+            ></lightning-button>
+          </div>
+        </template>
+      </div>
+      <p class="slds-text-body_small slds-m-top_small slds-text-color_weak">
+        Opens Document preview directly (HTML + View as PDF). Does not enter fill mode.
+      </p>
+    </div>
+  </lightning-card>
+</template>

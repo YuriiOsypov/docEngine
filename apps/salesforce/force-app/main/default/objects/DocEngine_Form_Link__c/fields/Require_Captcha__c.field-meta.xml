@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Require_Captcha__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Reserved for a future CAPTCHA provider. Links with this legacy flag enabled are rejected.</description>
+    <label>Require Captcha</label>
+    <type>Checkbox</type>
+</CustomField>

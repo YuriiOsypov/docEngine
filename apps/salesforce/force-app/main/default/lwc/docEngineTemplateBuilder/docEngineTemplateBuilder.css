@@ -1,5 +1,11 @@
 :host {
   display: block;
+  overflow: visible;
+}
+
+/* Same as slds-p-around_medium without top padding (card body already has spacing). */
+.builder-body {
+  padding: 0 var(--slds-g-spacing-4, 1rem) var(--slds-g-spacing-4, 1rem);
 }
 
 .doc-editor-root {
@@ -91,22 +97,32 @@
   display: none;
 }
 
+/* Single inline row — no overflow scroll (breaks combobox dropdown positioning). */
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns:
+    minmax(8rem, 1.2fr)
+    minmax(8rem, 1.2fr)
+    minmax(6.5rem, 0.75fr)
+    5.75rem
+    minmax(10rem, 1.5fr)
+    minmax(8.5rem, 0.9fr)
+    10rem
+    minmax(9.5rem, 1fr);
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
   align-items: end;
+  margin-bottom: 0.75rem;
+  overflow: visible;
 }
 
-@media (max-width: 64rem) {
-  .meta-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.meta-grid .meta-field--name,
+.meta-grid .meta-field--desc,
+.meta-grid .meta-field--object {
+  min-width: 0;
 }
 
-@media (max-width: 48rem) {
-  .meta-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+.meta-grid .meta-field--picklist,
+.meta-grid .meta-field--group,
+.meta-grid .meta-field--version {
+  overflow: visible;
 }

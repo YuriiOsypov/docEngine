@@ -1,30 +1,33 @@
 <template>
   <lightning-card title="Create New Template" icon-name="standard:draft">
     <div class="slds-p-around_medium">
-      <lightning-input
-        label="Template Name"
-        value={templateName}
-        onchange={handleNameChange}
-        required
-        class="slds-m-bottom_small"
-      ></lightning-input>
-
-      <lightning-textarea
-        label="Template Description"
-        value={description}
-        onchange={handleDescriptionChange}
-        class="slds-m-bottom_small"
-      ></lightning-textarea>
-
-      <lightning-combobox
-        label="Data Source"
-        placeholder="Search Salesforce objects…"
-        value={sourceObject}
-        options={objectOptions}
-        onchange={handleSourceChange}
-        required
-        class="slds-m-bottom_medium"
-      ></lightning-combobox>
+      <div class="slds-grid slds-gutters_small slds-wrap slds-m-bottom_medium form-row">
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+          <lightning-input
+            label="Template Name"
+            value={templateName}
+            onchange={handleNameChange}
+            required
+          ></lightning-input>
+        </div>
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+          <lightning-input
+            label="Template Description"
+            value={description}
+            onchange={handleDescriptionChange}
+          ></lightning-input>
+        </div>
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+          <lightning-combobox
+            label="Data Source"
+            placeholder="Search Salesforce objects…"
+            value={sourceObject}
+            options={objectOptions}
+            onchange={handleSourceChange}
+            required
+          ></lightning-combobox>
+        </div>
+      </div>
 
       <div class="slds-grid slds-grid_align-end">
         <lightning-button-group>

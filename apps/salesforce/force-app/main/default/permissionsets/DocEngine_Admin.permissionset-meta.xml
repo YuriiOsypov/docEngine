@@ -32,14 +32,35 @@
         <apexClass>DocEngineObjectDescribeController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <classAccesses>
+        <apexClass>DocEnginePublicFormController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocEngineFormLinkController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocEngineValueSetController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <description>Full access to DocEngine templates and document instances (design + fill).</description>
     <customSettingAccesses>
         <enabled>true</enabled>
         <name>DocEngine_Settings__c</name>
     </customSettingAccesses>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>Manage_DocEngine</name>
+    </customPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>DocEngine_Settings__c.Use_External_PDF__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Settings__c.Public_Form_Site_Base_URL__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -69,7 +90,27 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocEngine_Template__c.Hide_Empty__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Template__c.Output_Format__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocEngine_Template__c.Access_Group_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Template__c.Public_Form_Enabled__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Template__c.Public_Form_Mode__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -109,6 +150,16 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocEngine_Document__c.Form_Link__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Document__c.Source__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocEngine_Document__c.Content_Document_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -140,6 +191,66 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>DocEngine_Button_Config__c.Attach_To_Record__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Is_Active__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Expires_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Max_Submissions__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Submission_Count__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Site_Path__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Owner_User__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Record_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Allow_Pdf_Attach__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Form_Link__c.Require_Captcha__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Value_Set__c.Values_JSON__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Value_Set__c.Is_Active__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocEngine_Value_Set__c.Description__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
@@ -198,6 +309,24 @@
         <object>DocEngine_Button_Config__c</object>
         <viewAllRecords>true</viewAllRecords>
     </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <object>DocEngine_Form_Link__c</object>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <object>DocEngine_Value_Set__c</object>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
     <tabSettings>
         <tab>DocEngine_Template__c</tab>
         <visibility>Visible</visibility>
@@ -208,6 +337,14 @@
     </tabSettings>
     <tabSettings>
         <tab>DocEngine_Button_Config__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
+        <tab>DocEngine_Form_Link__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
+        <tab>DocEngine_Value_Set__c</tab>
         <visibility>Visible</visibility>
     </tabSettings>
 </PermissionSet>

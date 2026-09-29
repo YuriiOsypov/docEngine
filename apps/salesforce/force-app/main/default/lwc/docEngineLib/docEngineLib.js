@@ -181,7 +181,10 @@ export function createSalesforceImageUpload(recordId) {
       })).filter((item) => item.id);
     };
     config.resolveExistingImage = async (id) => {
-      const result = await resolveFieldImage({ contentVersionId: id });
+      const result = await resolveFieldImage({
+        contentVersionId: id,
+        sourceRecordId: parentId
+      });
       if (!result || !result.url) {
         throw new Error('Could not resolve Salesforce File URL');
       }
@@ -197,6 +200,7 @@ export function createSalesforceImageUpload(recordId) {
 
 /**
  * Replace embedded data:image URLs in an exportFields payload with File URLs.
+ * Covers ImageValue `{ url }` objects and Signature plain-string data URLs.
  * Safe no-op when none are present. Mutates a deep clone.
  * @param {object} values
  * @param {string|null|undefined} recordId
@@ -204,47 +208,104 @@ export function createSalesforceImageUpload(recordId) {
 export async function replaceEmbeddedImageDataUrls(values, recordId) {
   if (!values || typeof values !== 'object') return values;
   const clone = JSON.parse(JSON.stringify(values));
+  /** @type {Map<string, Promise<string>>} */
+  const inflight = new Map();
 
   async function persistUrl(dataUrl) {
-    const mimeMatch = String(dataUrl).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
-    const mime = (mimeMatch && mimeMatch[1]) || 'image/png';
-    let ext = 'png';
-    if (/jpeg|jpg/i.test(mime)) ext = 'jpg';
-    else if (/gif/i.test(mime)) ext = 'gif';
-    else if (/webp/i.test(mime)) ext = 'webp';
-    else if (/svg/i.test(mime)) ext = 'svg';
-    const result = await uploadFieldImage({
-      recordId: recordId || null,
-      base64Data: dataUrl,
-      filename: `field-image.${ext}`
-    });
-    if (!result || !result.url) {
-      throw new Error('Could not persist embedded image to Files');
+    const key = String(dataUrl);
+    if (inflight.has(key)) return inflight.get(key);
+    const work = (async () => {
+      const mimeMatch = key.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
+      const mime = (mimeMatch && mimeMatch[1]) || 'image/png';
+      let ext = 'png';
+      if (/jpeg|jpg/i.test(mime)) ext = 'jpg';
+      else if (/gif/i.test(mime)) ext = 'gif';
+      else if (/webp/i.test(mime)) ext = 'webp';
+      else if (/svg/i.test(mime)) ext = 'svg';
+      // Send raw base64 only — smaller Apex payload than a full data URL.
+      const comma = key.indexOf(',');
+      const rawBase64 = comma >= 0 ? key.slice(comma + 1) : key;
+      const result = await uploadFieldImage({
+        recordId: recordId || null,
+        base64Data: rawBase64,
+        filename: `field-image.${ext}`
+      });
+      if (!result || !result.url) {
+        throw new Error('Could not persist embedded image to Files');
+      }
+      return result.url;
+    })();
+    inflight.set(key, work);
+    return work;
+  }
+
+  async function replaceInString(text) {
+    if (typeof text !== 'string' || text.indexOf('data:image') < 0) return text;
+    if (DATA_IMAGE_URL_RE.test(text)) {
+      return persistUrl(text);
     }
-    return result.url;
+    // HTML (and similar) may embed data URLs mid-string.
+    const embeddedRe = /data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=\s]+/gi;
+    const matches = text.match(embeddedRe);
+    if (!matches || !matches.length) return text;
+    let out = text;
+    for (let i = 0; i < matches.length; i += 1) {
+      const raw = matches[i].replace(/\s+/g, '');
+      if (!DATA_IMAGE_URL_RE.test(raw)) continue;
+      const url = await persistUrl(raw);
+      out = out.split(matches[i]).join(url);
+    }
+    return out;
   }
 
   async function walk(node) {
-    if (!node || typeof node !== 'object') return;
+    if (node == null) return;
     if (Array.isArray(node)) {
-      for (const item of node) {
-        await walk(item);
+      for (let i = 0; i < node.length; i += 1) {
+        const item = node[i];
+        if (typeof item === 'string') {
+          node[i] = await replaceInString(item);
+        } else {
+          await walk(item);
+        }
       }
       return;
     }
-    if (typeof node.url === 'string' && DATA_IMAGE_URL_RE.test(node.url)) {
-      node.url = await persistUrl(node.url);
+    if (typeof node !== 'object') return;
+    if (typeof node.url === 'string' && node.url.indexOf('data:image') >= 0) {
+      node.url = await replaceInString(node.url);
       delete node.embedded;
       delete node.stub;
     }
     const keys = Object.keys(node);
     for (let i = 0; i < keys.length; i += 1) {
-      await walk(node[keys[i]]);
+      const key = keys[i];
+      if (key === 'url') continue;
+      const child = node[key];
+      if (typeof child === 'string') {
+        node[key] = await replaceInString(child);
+      } else {
+        await walk(child);
+      }
     }
   }
 
   await walk(clone);
   return clone;
+}
+
+/** Long Text Area / Aura-safe ceiling used before calling saveInstance. */
+export const DOCUMENT_JSON_MAX_CHARS = 120000;
+
+export function assertDocumentJsonSize(documentJson) {
+  const len = documentJson == null ? 0 : String(documentJson).length;
+  if (len > DOCUMENT_JSON_MAX_CHARS) {
+    throw new Error(
+      `Document JSON is too large (${len} chars; max ${DOCUMENT_JSON_MAX_CHARS}). ` +
+        'Remove embedded images/signatures or wait for Files upload to finish, then save again.'
+    );
+  }
+  return len;
 }
 
 function withPdfHint(message) {

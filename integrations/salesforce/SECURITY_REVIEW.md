@@ -12,8 +12,8 @@ Use this before submitting to [Salesforce Security Review](https://security.secu
 ## CRUD / FLS
 
 - [x] Controllers use `with sharing`
-- [x] Queries use `WITH SECURITY_ENFORCED` where applicable
-- [x] DML uses `Security.stripInaccessible` on upsert paths
+- [ ] Standard/subscriber queries use user mode; documented package-internal 1GP selectors use explicit authorization
+- [ ] Standard-object DML uses user mode; documented package-required-field writes use narrow allowlisted services
 - [ ] Retest as a **standard user** with only `DocEngine_User` (no Modify All)
 
 ## Injection & SOQL
@@ -38,8 +38,8 @@ Use this before submitting to [Salesforce Security Review](https://security.secu
 
 ## Package hygiene
 
-- [ ] Namespace registered and set in `sfdx-project.json`
-- [ ] `npm run build:sf` before every package version create
+- [x] 1GP namespace `logicomapp` registered in release org `OrgFarmDocEngine`
+- [ ] `npm run build:sf` before every `sf package1 version create`
 - [ ] Static Resource `DocEngineBundle` &lt; 5 MB
 - [ ] No debug `System.debug` with PII in packaged code
 - [ ] Post-install script is no-op / safe (`DocEnginePostInstall`)
@@ -63,7 +63,7 @@ Upload-ready drafts live in [security-review/](./security-review/README.md):
 1. [01-solution-architecture-and-usage.md](./security-review/01-solution-architecture-and-usage.md)
 2. [02-sample-api-callouts.md](./security-review/02-sample-api-callouts.md)
 3. [03-false-positives.md](./security-review/03-false-positives.md)
-4. [04-test-instructions.md](./security-review/04-test-instructions.md) — fill in test org credentials before export
+4. [04-test-instructions.md](./security-review/04-test-instructions.md) — provide test credentials only through the Partner Portal
 
 Also: [ARCHITECTURE.md](./ARCHITECTURE.md), Partner Security Portal Checkmarx PDF, Code Analyzer `.txt` (see security-review README).
 

@@ -865,7 +865,10 @@ export interface DocEditorInstance {
   exportFields(options?: FieldsExportOptions): Promise<FieldsExport>;
   /** @deprecated Use exportFields() */
   exportDocument(options?: FieldsExportOptions): Promise<FieldsExport>;
-  load(data: DocExport | TemplateExport | FieldsExport | DocumentExport): Promise<void>;
+  load(
+    data: DocExport | TemplateExport | FieldsExport | DocumentExport,
+    options?: { omitMappedFields?: boolean },
+  ): Promise<void>;
   undo(): Promise<boolean>;
   redo(): Promise<boolean>;
   canUndo(): boolean;
@@ -990,6 +993,13 @@ export function previewFieldMapping(
 export function normalizeFieldMappingSpec(
   spec: FieldMappingSpec | null | undefined,
 ): FieldMappingSpec;
+export function collectMappedSectionFieldKeys(
+  mappingSpec: FieldMappingSpec | { rules?: FieldMappingRule[] } | null | undefined,
+): Set<string>;
+export function omitMappedFields(
+  fieldsExport: FieldsExport | Record<string, unknown> | null | undefined,
+  mappingSpec: FieldMappingSpec | { rules?: FieldMappingRule[] } | null | undefined,
+): FieldsExport | Record<string, unknown> | null | undefined;
 
 export function buildSourcePayloadTree(
   payload: unknown,
@@ -1498,6 +1508,11 @@ export interface PdfExportOptions extends PreviewExportOptions {
 export interface FieldsExportOptions {
   /** When true, omit empty fields, table rows, and repeaters from exported values. Default false. */
   hideEmptyValues?: boolean;
+  /**
+   * When true, drop fields that have any field-mapping rule (scenario packs).
+   * Uses the document's current fieldMapping.rules. Default false.
+   */
+  omitMappedFields?: boolean;
 }
 
 /** @deprecated Use FieldsExportOptions */

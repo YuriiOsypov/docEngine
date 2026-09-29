@@ -38,7 +38,7 @@ public with sharing class DocEngineMergeController {
         Current_Version__r.Template_JSON__c
       FROM DocEngine_Template__c
       WHERE Id = :templateId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
 
@@ -54,7 +54,16 @@ public with sharing class DocEngineMergeController {
       throw new AuraHandledException('Unknown object: ' + objectApiName);
     }
     Schema.DescribeSObjectResult describe = sobjectType.getDescribe();
+    if (!describe.isAccessible()) {
+      throw new AuraHandledException('Object is not accessible: ' + objectApiName);
+    }
     Map<String, Schema.SObjectField> fieldMap = describe.fields.getMap();
+    if (
+      !fieldMap.containsKey('Id') ||
+      !fieldMap.get('Id').getDescribe().isAccessible()
+    ) {
+      throw new AuraHandledException('Object Id field is not accessible: ' + objectApiName);
+    }
     Map<String, Schema.ChildRelationship> childByName = childRelationshipsByName(describe);
 
     Set<String> fieldPaths = collectSourceFieldPaths(
@@ -77,19 +86,26 @@ public with sharing class DocEngineMergeController {
 
       String head = parts[0];
       if (childByName.containsKey(head)) {
-        ensureChildSelect(childFieldSelects, head, childByName.get(head));
+        Schema.ChildRelationship childRelationship = childByName.get(head);
+        if (!isAccessibleChildRelationship(childRelationship)) {
+          continue;
+        }
+        ensureChildSelect(childFieldSelects, head, childRelationship);
         if (parts.size() == 1) {
           continue;
         }
         String childSelect = String.join(slice(parts, 1), '.');
-        if (isSafeSelectPath(childByName.get(head).getChildSObject().getDescribe(), childSelect)) {
+        if (isSafeSelectPath(childRelationship.getChildSObject().getDescribe(), childSelect)) {
           childFieldSelects.get(head).add(childSelect);
         }
         continue;
       }
 
       if (parts.size() == 1) {
-        if (fieldMap.containsKey(head)) {
+        if (
+          fieldMap.containsKey(head) &&
+          fieldMap.get(head).getDescribe().isAccessible()
+        ) {
           rootSelects.add(head);
         }
         continue;
@@ -127,9 +143,13 @@ public with sharing class DocEngineMergeController {
       String.join(selectable, ', ') +
       ' FROM ' +
       String.escapeSingleQuotes(objectApiName) +
-      ' WHERE Id = :recordId WITH SECURITY_ENFORCED LIMIT 1';
+      ' WHERE Id = :recordId LIMIT 1';
 
-    List<SObject> rows = Database.query(soql);
+    List<SObject> rows = Database.queryWithBinds(
+      soql,
+      new Map<String, Object>{ 'recordId' => recordId },
+      AccessLevel.USER_MODE
+    );
     if (rows.isEmpty()) {
       throw new AuraHandledException('Record not found.');
     }
@@ -171,11 +191,22 @@ public with sharing class DocEngineMergeController {
     if (!SAFE_IDENT.matcher(fieldApiName).matches()) {
       return false;
     }
-    Map<String, Schema.SObjectField> fields = cr.getChildSObject().getDescribe().fields.getMap();
+    Schema.DescribeSObjectResult childDescribe = cr.getChildSObject().getDescribe();
+    if (!childDescribe.isAccessible()) {
+      return false;
+    }
+    Map<String, Schema.SObjectField> fields = childDescribe.fields.getMap();
     if (!fields.containsKey(fieldApiName)) {
       return false;
     }
     return fields.get(fieldApiName).getDescribe().isAccessible();
+  }
+
+  private static Boolean isAccessibleChildRelationship(Schema.ChildRelationship cr) {
+    return cr != null &&
+      cr.getField() != null &&
+      cr.getField().getDescribe().isAccessible() &&
+      isSafeChildField(cr, 'Id');
   }
 
   /**
@@ -221,9 +252,13 @@ public with sharing class DocEngineMergeController {
     for (Schema.SObjectField f : current.fields.getMap().values()) {
       Schema.DescribeFieldResult fd = f.getDescribe();
       if (fd.getRelationshipName() == relationshipName) {
+        if (!fd.isAccessible()) {
+          return null;
+        }
         List<Schema.SObjectType> refs = fd.getReferenceTo();
         if (refs != null && !refs.isEmpty()) {
-          return refs[0].getDescribe();
+          Schema.DescribeSObjectResult referenced = refs[0].getDescribe();
+          return referenced.isAccessible() ? referenced : null;
         }
       }
     }
@@ -243,7 +278,7 @@ public with sharing class DocEngineMergeController {
         SELECT Id, Template_JSON__c, Template__c
         FROM DocEngine_Template_Version__c
         WHERE Id = :templateVersionId
-        WITH SECURITY_ENFORCED
+        WITH USER_MODE
         LIMIT 1
       ];
       if (versions.isEmpty()) {
@@ -402,11 +437,7 @@ public with sharing class DocEngineMergeController {
     Map<String, Object> payload = new Map<String, Object>();
 
     // Always expose Id when queried
-    try {
-      payload.put('Id', row.get('Id'));
-    } catch (Exception e) {
-      // ignore
-    }
+    payload.put('Id', row.get('Id'));
 
     for (String path : rootSelects) {
       putPathValue(payload, path, getPathValue(row, path));

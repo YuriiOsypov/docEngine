@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Owner_User__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <description>Optional owner for notifications / created-record attribution.</description>
+    <label>Owner User</label>
+    <referenceTo>User</referenceTo>
+    <relationshipName>DocEngine_Form_Links</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

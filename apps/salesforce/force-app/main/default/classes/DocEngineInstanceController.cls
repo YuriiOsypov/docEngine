@@ -71,39 +71,49 @@ public with sharing class DocEngineInstanceController {
   private static final Set<String> IMAGE_EXTENSIONS = new Set<String>{
     'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'
   };
+  private static final Integer MAX_FILE_BYTES = 4500000;
+  private static final Integer MAX_EMAIL_ATTACHMENT_BYTES = 3500000;
+  private static final Integer MAX_FILENAME_LENGTH = 255;
+  private static final Integer SHARE_EXPIRY_DAYS = 7;
 
   @AuraEnabled(cacheable=true)
   public static InstanceDTO getInstance(Id instanceId) {
-    if (instanceId == null) {
-      throw new AuraHandledException('instanceId is required.');
+    try {
+      if (instanceId == null) {
+        throw auraError('instanceId is required.');
+      }
+      List<DocEngine_Document__c> rows = [
+        SELECT
+          Id,
+          Name,
+          Template__c,
+          Template__r.Access_Group_Id__c,
+          Template_Version__c,
+          Template_Version__r.Template_JSON__c,
+          Template_Version__r.Version__c,
+          Record_Id__c,
+          Object_API_Name__c,
+          Document_JSON__c,
+          Status__c,
+          Completed_Date__c
+        FROM DocEngine_Document__c
+        WHERE Id = :instanceId
+        WITH USER_MODE
+        LIMIT 1
+      ];
+      if (rows.isEmpty()) {
+        throw auraError('Document instance not found.');
+      }
+      String groupId = rows[0].Template__r != null
+        ? rows[0].Template__r.Access_Group_Id__c
+        : null;
+      DocEngineAccess.assertGroupAccess(groupId);
+      return toDto(rows[0]);
+    } catch (AuraHandledException ahe) {
+      throw ahe;
+    } catch (Exception e) {
+      throw auraError(e);
     }
-    List<DocEngine_Document__c> rows = [
-      SELECT
-        Id,
-        Name,
-        Template__c,
-        Template__r.Access_Group_Id__c,
-        Template_Version__c,
-        Template_Version__r.Template_JSON__c,
-        Template_Version__r.Version__c,
-        Record_Id__c,
-        Object_API_Name__c,
-        Document_JSON__c,
-        Status__c,
-        Completed_Date__c
-      FROM DocEngine_Document__c
-      WHERE Id = :instanceId
-      WITH SECURITY_ENFORCED
-      LIMIT 1
-    ];
-    if (rows.isEmpty()) {
-      throw new AuraHandledException('Document instance not found.');
-    }
-    String groupId = rows[0].Template__r != null
-      ? rows[0].Template__r.Access_Group_Id__c
-      : null;
-    DocEngineAccess.assertGroupAccess(groupId);
-    return toDto(rows[0]);
   }
 
   /**
@@ -127,7 +137,7 @@ public with sharing class DocEngineInstanceController {
         Content_Document_Id__c
       FROM DocEngine_Document__c
       WHERE Record_Id__c = :recordId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       ORDER BY LastModifiedDate DESC
     ];
     List<InstanceSummary> out = new List<InstanceSummary>();
@@ -166,38 +176,103 @@ public with sharing class DocEngineInstanceController {
       SELECT Id, Content_Document_Id__c
       FROM DocEngine_Document__c
       WHERE Id = :instanceId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
       throw new AuraHandledException('Document instance not found.');
     }
-    deleteLinkedContentDocument(rows[0].Content_Document_Id__c);
+    Id contentDocumentId = resolveExistingContentDocumentId(rows[0].Content_Document_Id__c);
+    if (contentDocumentId != null) {
+      List<ContentDocumentLink> instanceLinks = [
+        SELECT Id
+        FROM ContentDocumentLink
+        WHERE
+          ContentDocumentId = :contentDocumentId
+          AND LinkedEntityId = :instanceId
+        WITH USER_MODE
+        LIMIT 1
+      ];
+      if (instanceLinks.isEmpty()) {
+        throw new AuraHandledException(
+          'The attached Salesforce File is not linked to this document instance.'
+        );
+      }
+      if (!Schema.sObjectType.ContentDocument.isDeletable()) {
+        throw new AuraHandledException(
+          'Insufficient access to delete the attached Salesforce File.'
+        );
+      }
+    }
     // USER_MODE enforces CRUD + sharing for the running user (not only UI).
     Database.delete(rows, AccessLevel.USER_MODE);
+    // Keep both deletes in one transaction: a denied file delete rolls back the instance delete.
+    if (contentDocumentId != null) {
+      Database.delete(
+        new List<ContentDocument>{ new ContentDocument(Id = contentDocumentId) },
+        AccessLevel.USER_MODE
+      );
+    }
+  }
+
+  /**
+   * LWC entry point — JSON in/out avoids Aura InstanceDTO mapping failures in
+   * managed-package subscriber orgs (null Id / nested types → cryptic GACK).
+   * Same pattern as DocEngineTemplateController.saveTemplateJson.
+   */
+  @AuraEnabled
+  public static String saveInstanceJson(String dtoJson) {
+    try {
+      InstanceDTO saved = saveInstanceImpl(parseInstanceDto(dtoJson));
+      Map<String, Object> out = new Map<String, Object>();
+      out.put('id', saved.id);
+      out.put('name', saved.name);
+      out.put('templateId', saved.templateId);
+      out.put('templateVersionId', saved.templateVersionId);
+      out.put('recordId', saved.recordId);
+      out.put('objectApiName', saved.objectApiName);
+      out.put('status', saved.status);
+      out.put('completedDate', saved.completedDate);
+      // Do not echo documentJson — keeps the Aura response small.
+      return JSON.serialize(out);
+    } catch (AuraHandledException ahe) {
+      throw ahe;
+    } catch (Exception e) {
+      throw auraError(e);
+    }
   }
 
   @AuraEnabled
   public static InstanceDTO saveInstance(InstanceDTO dto) {
+    try {
+      return saveInstanceImpl(dto);
+    } catch (AuraHandledException ahe) {
+      throw ahe;
+    } catch (Exception e) {
+      throw auraError(e);
+    }
+  }
+
+  private static InstanceDTO saveInstanceImpl(InstanceDTO dto) {
     if (dto == null) {
-      throw new AuraHandledException('Instance payload is required.');
+      throw auraError('Instance payload is required.');
     }
     if (dto.templateId == null) {
-      throw new AuraHandledException('templateId is required.');
+      throw auraError('templateId is required.');
     }
     if (String.isBlank(dto.recordId)) {
-      throw new AuraHandledException('recordId is required.');
+      throw auraError('recordId is required.');
     }
     if (String.isBlank(dto.objectApiName)) {
-      throw new AuraHandledException('objectApiName is required.');
+      throw auraError('objectApiName is required.');
     }
     if (String.isBlank(dto.documentJson)) {
-      throw new AuraHandledException('documentJson is required.');
+      throw auraError('documentJson is required.');
     }
     // Long Text Area max — embedded data:image URLs blow this limit quickly.
     Integer jsonLen = dto.documentJson.length();
     if (jsonLen > 131072) {
-      throw new AuraHandledException(
+      throw auraError(
         'Document JSON is too large (' +
           String.valueOf(jsonLen) +
           ' chars; max 131072). Re-upload images so they are stored as Files, not embedded data URLs.'
@@ -209,28 +284,69 @@ public with sharing class DocEngineInstanceController {
       DocEngineAccess.assertDocumentAccess(dto.id);
     }
 
+    DocEngine_Template__c template = [
+      SELECT Id, Object_API_Name__c
+      FROM DocEngine_Template__c
+      WHERE Id = :dto.templateId
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    String objectApiName = dto.objectApiName.trim();
+    if (
+      String.isBlank(template.Object_API_Name__c) ||
+      !template.Object_API_Name__c.equalsIgnoreCase(objectApiName)
+    ) {
+      throw auraError('Document object must match the template object.');
+    }
+    Id sourceRecordId = assertSourceRecordReadable(dto.recordId, objectApiName);
+
     DocEngine_Document__c row = dto.id != null
       ? [
-          SELECT Id, Status__c, Completed_Date__c, Template_Version__c
+          SELECT
+            Id,
+            Template__c,
+            Template_Version__c,
+            Record_Id__c,
+            Object_API_Name__c,
+            Status__c,
+            Completed_Date__c
           FROM DocEngine_Document__c
           WHERE Id = :dto.id
-          WITH SECURITY_ENFORCED
+          WITH USER_MODE
           LIMIT 1
         ]
       : new DocEngine_Document__c();
 
-    row.Template__c = dto.templateId;
-    row.Record_Id__c = dto.recordId.trim();
-    row.Object_API_Name__c = dto.objectApiName.trim();
+    if (dto.id != null) {
+      if (
+        row.Template__c != dto.templateId ||
+        !sameRecordId(row.Record_Id__c, sourceRecordId) ||
+        String.isBlank(row.Object_API_Name__c) ||
+        !row.Object_API_Name__c.equalsIgnoreCase(objectApiName) ||
+        (dto.templateVersionId != null && row.Template_Version__c != dto.templateVersionId)
+      ) {
+        throw auraError(
+          'Existing documents cannot change template, template version, object, or source record.'
+        );
+      }
+    } else {
+      row.Template__c = dto.templateId;
+      row.Record_Id__c = String.valueOf(sourceRecordId);
+      row.Object_API_Name__c = template.Object_API_Name__c;
+    }
     row.Document_JSON__c = dto.documentJson;
 
     // Pin template version on first save; never retarget on later drafts/completes.
     if (row.Template_Version__c == null) {
-      if (dto.templateVersionId != null) {
-        row.Template_Version__c = dto.templateVersionId;
-      } else {
-        row.Template_Version__c = DocEngineTemplateController.ensureCurrentVersionId(dto.templateId);
-      }
+      row.Template_Version__c = DocEngineTemplateVersionService.resolveVersionId(
+        dto.templateId,
+        dto.templateVersionId
+      );
+    } else {
+      DocEngineTemplateVersionService.resolveVersionId(
+        dto.templateId,
+        row.Template_Version__c
+      );
     }
 
     String status = String.isBlank(dto.status) ? 'Draft' : dto.status.trim();
@@ -247,8 +363,36 @@ public with sharing class DocEngineInstanceController {
       new List<DocEngine_Document__c>{ row }
     );
     List<DocEngine_Document__c> safe = (List<DocEngine_Document__c>) decision.getRecords();
-    upsert safe;
-    return getInstance(safe[0].Id);
+    if (safe == null || safe.isEmpty()) {
+      throw auraError(
+        'Insufficient access to save document instances. Assign the DocEngine User or DocEngine Admin permission set.'
+      );
+    }
+    try {
+      Database.upsert(safe, AccessLevel.USER_MODE);
+    } catch (DmlException e) {
+      throw auraError(e.getNumDml() > 0 ? e.getDmlMessage(0) : e.getMessage());
+    }
+    if (safe[0].Id == null) {
+      throw auraError('Document save did not return an Id.');
+    }
+
+    // Return a lightweight DTO — callers only need id/status after save.
+    // Avoid getInstance() here: a user-mode re-query failure used to
+    // surface as a cryptic Aura "internal server error" after a successful upsert.
+    InstanceDTO out = new InstanceDTO();
+    out.id = safe[0].Id;
+    out.name = dto.name;
+    out.templateId = dto.templateId;
+    out.templateVersionId = row.Template_Version__c != null
+      ? row.Template_Version__c
+      : dto.templateVersionId;
+    out.recordId = row.Record_Id__c;
+    out.objectApiName = row.Object_API_Name__c;
+    out.documentJson = dto.documentJson;
+    out.status = status;
+    out.completedDate = row.Completed_Date__c != null ? row.Completed_Date__c : dto.completedDate;
+    return out;
   }
 
   /**
@@ -262,8 +406,22 @@ public with sharing class DocEngineInstanceController {
     String base64Data,
     String filename
   ) {
+    try {
+      return uploadFieldImageImpl(recordId, base64Data, filename);
+    } catch (AuraHandledException ahe) {
+      throw ahe;
+    } catch (Exception e) {
+      throw auraError(e);
+    }
+  }
+
+  private static ImageUploadResult uploadFieldImageImpl(
+    String recordId,
+    String base64Data,
+    String filename
+  ) {
     if (String.isBlank(base64Data)) {
-      throw new AuraHandledException('base64Data is required.');
+      throw auraError('base64Data is required.');
     }
     String raw = base64Data.trim();
     Integer comma = raw.indexOf(',');
@@ -274,19 +432,17 @@ public with sharing class DocEngineInstanceController {
     try {
       body = EncodingUtil.base64Decode(raw);
     } catch (Exception e) {
-      throw new AuraHandledException('Invalid image data.');
+      throw auraError('Invalid image data.');
     }
     if (body == null || body.size() == 0) {
-      throw new AuraHandledException('Image data is empty.');
+      throw auraError('Image data is empty.');
     }
     // Keep headroom under synchronous Apex heap for base64 round-trips.
     if (body.size() > 3500000) {
-      throw new AuraHandledException('Image is too large (max ~3.5 MB). Use a smaller file.');
+      throw auraError('Image is too large (max ~3.5 MB). Use a smaller file.');
     }
 
-    if (String.isBlank(filename)) {
-      filename = 'image.png';
-    }
+    filename = normalizeFilename(filename, 'image.png', null);
     String lower = filename.toLowerCase();
     if (
       !(
@@ -298,7 +454,7 @@ public with sharing class DocEngineInstanceController {
         lower.endsWith('.svg')
       )
     ) {
-      filename = filename + '.png';
+      filename = normalizeFilename(filename + '.png', 'image.png', '.png');
     }
 
     ContentVersion cv = new ContentVersion();
@@ -310,7 +466,6 @@ public with sharing class DocEngineInstanceController {
     cv.Title = title.left(255);
     cv.PathOnClient = filename;
     cv.VersionData = body;
-    cv.IsMajorVersion = true;
 
     Id parentId = null;
     if (String.isNotBlank(recordId)) {
@@ -321,22 +476,32 @@ public with sharing class DocEngineInstanceController {
       }
     }
     if (parentId != null) {
+      assertSourceRecordReadable(parentId);
       cv.FirstPublishLocationId = parentId;
     }
-    insert cv;
+    assertContentVersionCreateAccess(parentId != null, false);
+    try {
+      List<ContentVersion> safeVersions = sanitizeContentVersions(
+        new List<ContentVersion>{ cv }
+      );
+      Database.insert(safeVersions, AccessLevel.USER_MODE);
+      cv = safeVersions[0];
+    } catch (DmlException e) {
+      throw auraError(e.getNumDml() > 0 ? e.getDmlMessage(0) : e.getMessage());
+    }
 
     cv = [
       SELECT Id, ContentDocumentId
       FROM ContentVersion
       WHERE Id = :cv.Id
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
 
     ImageUploadResult out = new ImageUploadResult();
     out.contentVersionId = cv.Id;
     out.contentDocumentId = cv.ContentDocumentId;
-    out.url = resolveImagePublicUrl(cv.Id, title);
+    out.url = authenticatedVersionDownloadUrl(cv.Id);
     return out;
   }
 
@@ -360,7 +525,7 @@ public with sharing class DocEngineInstanceController {
       SELECT ContentDocumentId
       FROM ContentDocumentLink
       WHERE LinkedEntityId = :parentId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
     ];
     if (links.isEmpty()) {
       return new List<RecordImageItem>();
@@ -375,7 +540,7 @@ public with sharing class DocEngineInstanceController {
       SELECT Id, ContentDocumentId, Title, FileExtension, ContentModifiedDate
       FROM ContentVersion
       WHERE ContentDocumentId IN :docIds AND IsLatest = TRUE
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       ORDER BY ContentModifiedDate DESC
       LIMIT 200
     ];
@@ -407,7 +572,10 @@ public with sharing class DocEngineInstanceController {
    * Resolve an existing ContentVersion to a URL suitable for &lt;img src&gt; (no re-upload).
    */
   @AuraEnabled
-  public static ImageUploadResult resolveFieldImage(String contentVersionId) {
+  public static ImageUploadResult resolveFieldImage(
+    String contentVersionId,
+    String sourceRecordId
+  ) {
     if (String.isBlank(contentVersionId)) {
       throw new AuraHandledException('contentVersionId is required.');
     }
@@ -422,64 +590,30 @@ public with sharing class DocEngineInstanceController {
       SELECT Id, ContentDocumentId, Title, FileExtension
       FROM ContentVersion
       WHERE Id = :versionId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
       throw new AuraHandledException('ContentVersion not found.');
     }
     ContentVersion cv = rows[0];
+    assertFileLinkedToAuthorizedRecord(cv.ContentDocumentId, sourceRecordId);
     String ext = String.isBlank(cv.FileExtension) ? '' : cv.FileExtension.toLowerCase();
     if (!IMAGE_EXTENSIONS.contains(ext)) {
       throw new AuraHandledException('Selected file is not an image.');
     }
 
-    String title = String.isNotBlank(cv.Title) ? cv.Title : 'image';
     ImageUploadResult out = new ImageUploadResult();
     out.contentVersionId = cv.Id;
     out.contentDocumentId = cv.ContentDocumentId;
-    out.url = resolveImagePublicUrl(cv.Id, title);
+    out.url = authenticatedVersionDownloadUrl(cv.Id);
     return out;
   }
 
-  /**
-   * Prefer Content Delivery download URL; fall back to authenticated shepherd download.
-   */
-  private static String resolveImagePublicUrl(Id contentVersionId, String title) {
-    String url;
-    try {
-      ContentDistribution cd = new ContentDistribution();
-      String name = String.isBlank(title) ? 'image' : title;
-      cd.Name = name.left(100);
-      cd.ContentVersionId = contentVersionId;
-      cd.PreferencesAllowViewInBrowser = true;
-      cd.PreferencesLinkLatestVersion = true;
-      cd.PreferencesNotifyOnVisit = false;
-      cd.PreferencesPasswordRequired = false;
-      cd.PreferencesAllowOriginalDownload = true;
-      insert cd;
-
-      ContentDistribution created = [
-        SELECT ContentDownloadUrl, DistributionPublicUrl
-        FROM ContentDistribution
-        WHERE Id = :cd.Id
-        WITH SECURITY_ENFORCED
-        LIMIT 1
-      ];
-      url = String.isNotBlank(created.ContentDownloadUrl)
-        ? created.ContentDownloadUrl
-        : created.DistributionPublicUrl;
-    } catch (Exception e) {
-      url = null;
-    }
-
-    if (String.isBlank(url)) {
-      url =
-        System.URL.getOrgDomainUrl().toExternalForm() +
-        '/sfc/servlet.shepherd/version/download/' +
-        String.valueOf(contentVersionId);
-    }
-    return url;
+  private static String authenticatedVersionDownloadUrl(Id contentVersionId) {
+    return System.URL.getOrgDomainUrl().toExternalForm() +
+      '/sfc/servlet.shepherd/version/download/' +
+      String.valueOf(contentVersionId);
   }
 
   /**
@@ -492,7 +626,7 @@ public with sharing class DocEngineInstanceController {
     }
     FileSaveResult file = saveFileFromBlob(
       docInstanceId,
-      EncodingUtil.base64Decode(base64Data),
+      decodeFileData(base64Data),
       filename,
       'pdf'
     );
@@ -523,7 +657,7 @@ public with sharing class DocEngineInstanceController {
     }
     return saveFileFromBlob(
       docInstanceId,
-      EncodingUtil.base64Decode(base64Data),
+      decodeFileData(base64Data),
       filename,
       'html'
     );
@@ -547,9 +681,18 @@ public with sharing class DocEngineInstanceController {
     if (kind != 'pdf' && kind != 'html') {
       kind = 'html';
     }
+    String shareExtension = kind == 'pdf' ? '.pdf' : '.html';
+    filename = normalizeFilename(filename, 'document' + shareExtension, null);
+    if (!filename.toLowerCase().endsWith(shareExtension)) {
+      filename = normalizeFilename(
+        filename + shareExtension,
+        'document' + shareExtension,
+        shareExtension
+      );
+    }
     FileSaveResult file = saveFileFromBlob(
       docInstanceId,
-      EncodingUtil.base64Decode(base64Data),
+      decodeFileData(base64Data),
       filename,
       kind
     );
@@ -557,40 +700,61 @@ public with sharing class DocEngineInstanceController {
     SharePrepareResult out = new SharePrepareResult();
     out.contentVersionId = file.contentVersionId;
     out.contentDocumentId = file.contentDocumentId;
-    out.filename = String.isBlank(filename)
-      ? ('document.' + kind)
-      : filename;
+    out.filename = filename;
 
-    try {
-      ContentDistribution cd = new ContentDistribution();
-      String title = out.filename;
-      Integer dot = title.lastIndexOf('.');
-      if (dot > 0) {
-        title = title.substring(0, dot);
-      }
-      cd.Name = title.left(100);
-      cd.ContentVersionId = file.contentVersionId;
-      cd.PreferencesAllowViewInBrowser = true;
-      cd.PreferencesLinkLatestVersion = true;
-      cd.PreferencesNotifyOnVisit = false;
-      cd.PreferencesPasswordRequired = false;
-      cd.PreferencesAllowOriginalDownload = true;
-      insert cd;
-
-      ContentDistribution created = [
-        SELECT Id, DistributionPublicUrl, ContentDownloadUrl
-        FROM ContentDistribution
-        WHERE Id = :cd.Id
-        WITH SECURITY_ENFORCED
-        LIMIT 1
-      ];
-      out.publicUrl = String.isNotBlank(created.DistributionPublicUrl)
-        ? created.DistributionPublicUrl
-        : created.ContentDownloadUrl;
-    } catch (Exception e) {
-      // Content Deliveries may be disabled — file is still on the record.
-      out.publicUrl = null;
+    if (!Schema.sObjectType.ContentDistribution.isCreateable()) {
+      throw new AuraHandledException(
+        'Insufficient access to create a public Salesforce File link.'
+      );
     }
+    assertCreateableFields(
+      Schema.sObjectType.ContentDistribution,
+      new Set<String>{
+        'Name',
+        'ContentVersionId',
+        'PreferencesAllowViewInBrowser',
+        'PreferencesLinkLatestVersion',
+        'PreferencesNotifyOnVisit',
+        'PreferencesPasswordRequired',
+        'PreferencesAllowOriginalDownload'
+      },
+      'public Salesforce File link'
+    );
+
+    ContentDistribution cd = new ContentDistribution();
+    String title = out.filename;
+    Integer dot = title.lastIndexOf('.');
+    if (dot > 0) {
+      title = title.substring(0, dot);
+    }
+    cd.Name = title.left(100);
+    cd.ContentVersionId = file.contentVersionId;
+    cd.PreferencesAllowViewInBrowser = true;
+    cd.PreferencesLinkLatestVersion = true;
+    cd.PreferencesNotifyOnVisit = false;
+    cd.PreferencesPasswordRequired = false;
+    cd.PreferencesAllowOriginalDownload = false;
+    setDistributionExpiryIfSupported(cd);
+
+    SObjectAccessDecision distributionDecision = Security.stripInaccessible(
+      AccessType.CREATABLE,
+      new List<ContentDistribution>{ cd }
+    );
+    List<ContentDistribution> safeDistributions =
+      (List<ContentDistribution>) distributionDecision.getRecords();
+    Database.insert(safeDistributions, AccessLevel.USER_MODE);
+    Id distributionId = safeDistributions[0].Id;
+
+    ContentDistribution created = [
+      SELECT Id, DistributionPublicUrl, ContentDownloadUrl
+      FROM ContentDistribution
+      WHERE Id = :distributionId
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    out.publicUrl = String.isNotBlank(created.DistributionPublicUrl)
+      ? created.DistributionPublicUrl
+      : created.ContentDownloadUrl;
     return out;
   }
 
@@ -629,17 +793,56 @@ public with sharing class DocEngineInstanceController {
     if (recipients.size() > 10) {
       throw new AuraHandledException('Too many recipients (max 10).');
     }
+    if (createTask == true) {
+      assertTaskCreateAccess();
+    }
 
+    if (docInstanceId == null) {
+      throw new AuraHandledException('docInstanceId is required.');
+    }
+    DocEngineAccess.assertDocumentAccess(docInstanceId);
+    DocEngine_Document__c instance = [
+      SELECT Id, Record_Id__c, Content_Document_Id__c
+      FROM DocEngine_Document__c
+      WHERE Id = :docInstanceId
+      WITH USER_MODE
+      LIMIT 1
+    ];
+
+    ContentVersion cvMetadata = [
+      SELECT Id, ContentDocumentId, Title, PathOnClient, FileExtension, ContentSize
+      FROM ContentVersion
+      WHERE Id = :contentVersionId
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    if (!isAuthorizedShareFile(cvMetadata.ContentDocumentId, instance)) {
+      throw new AuraHandledException(
+        'The selected file is not attached to this document or its source record.'
+      );
+    }
+    if (
+      cvMetadata.ContentSize != null &&
+      cvMetadata.ContentSize > MAX_EMAIL_ATTACHMENT_BYTES
+    ) {
+      throw new AuraHandledException(
+        'File is too large to email (max ~3.5 MB). Share a public link instead.'
+      );
+    }
     ContentVersion cv = [
       SELECT Id, Title, PathOnClient, VersionData, FileExtension
       FROM ContentVersion
       WHERE Id = :contentVersionId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
 
     Messaging.EmailFileAttachment attachment = new Messaging.EmailFileAttachment();
-    String fileName = String.isNotBlank(cv.PathOnClient) ? cv.PathOnClient : (cv.Title + '.bin');
+    String fileName = normalizeFilename(
+      String.isNotBlank(cv.PathOnClient) ? cv.PathOnClient : (cv.Title + '.bin'),
+      'document.bin',
+      null
+    );
     attachment.setFileName(fileName);
     attachment.setBody(cv.VersionData);
     String ext = String.isBlank(cv.FileExtension) ? '' : cv.FileExtension.toLowerCase();
@@ -649,7 +852,7 @@ public with sharing class DocEngineInstanceController {
       attachment.setContentType('text/html');
     }
 
-    String resolvedSubject = String.isBlank(subject) ? fileName : subject;
+    String resolvedSubject = (String.isBlank(subject) ? fileName : subject.trim()).left(255);
     String resolvedBody = String.isBlank(body)
       ? 'Please find the attached document.'
       : body;
@@ -706,7 +909,7 @@ public with sharing class DocEngineInstanceController {
       SELECT Id, Record_Id__c
       FROM DocEngine_Document__c
       WHERE Id = :docInstanceId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     if (String.isBlank(instance.Record_Id__c)) {
@@ -725,9 +928,7 @@ public with sharing class DocEngineInstanceController {
     if (!parentDescribe.fields.getMap().containsKey('LastActivityDate')) {
       return;
     }
-    if (!Schema.sObjectType.Task.isCreateable()) {
-      throw new AuraHandledException('Insufficient access to create a Task.');
-    }
+    assertTaskCreateAccess();
 
     Task t = new Task();
     t.Subject = ('Email: ' + subject).left(255);
@@ -746,7 +947,8 @@ public with sharing class DocEngineInstanceController {
       AccessType.CREATABLE,
       new List<Task>{ t }
     );
-    insert decision.getRecords();
+    List<Task> safeTasks = (List<Task>) decision.getRecords();
+    Database.insert(safeTasks, AccessLevel.USER_MODE);
   }
 
   /**
@@ -768,20 +970,21 @@ public with sharing class DocEngineInstanceController {
     if (fileBlob == null || fileBlob.size() == 0) {
       throw new AuraHandledException('File data is required.');
     }
+    if (fileBlob.size() > MAX_FILE_BYTES) {
+      throw new AuraHandledException('File is too large (max ~4.5 MB).');
+    }
     String kind = String.isBlank(fileKind) ? 'pdf' : fileKind.trim().toLowerCase();
     String ext = kind == 'html' ? '.html' : '.pdf';
-    if (String.isBlank(filename)) {
-      filename = 'document' + ext;
-    }
+    filename = normalizeFilename(filename, 'document' + ext, null);
     if (!filename.toLowerCase().endsWith(ext)) {
-      filename = filename + ext;
+      filename = normalizeFilename(filename + ext, 'document' + ext, ext);
     }
 
     DocEngine_Document__c instance = [
       SELECT Id, Record_Id__c, Name, Content_Document_Id__c
       FROM DocEngine_Document__c
       WHERE Id = :docInstanceId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
 
@@ -801,13 +1004,18 @@ public with sharing class DocEngineInstanceController {
     } else {
       cv.FirstPublishLocationId = instance.Id;
     }
-    insert cv;
+    assertContentVersionCreateAccess(existingDocId == null, existingDocId != null);
+    List<ContentVersion> safeVersions = sanitizeContentVersions(
+      new List<ContentVersion>{ cv }
+    );
+    Database.insert(safeVersions, AccessLevel.USER_MODE);
+    cv = safeVersions[0];
 
     cv = [
       SELECT Id, ContentDocumentId
       FROM ContentVersion
       WHERE Id = :cv.Id
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
 
@@ -820,20 +1028,28 @@ public with sharing class DocEngineInstanceController {
         parentId = null;
       }
       if (parentId != null) {
+        assertSourceRecordReadable(parentId);
         List<ContentDocumentLink> existing = [
           SELECT Id
           FROM ContentDocumentLink
           WHERE ContentDocumentId = :cv.ContentDocumentId AND LinkedEntityId = :parentId
-          WITH SECURITY_ENFORCED
+          WITH USER_MODE
           LIMIT 1
         ];
         if (existing.isEmpty()) {
+          assertContentDocumentLinkCreateAccess();
           ContentDocumentLink link = new ContentDocumentLink();
           link.ContentDocumentId = cv.ContentDocumentId;
           link.LinkedEntityId = parentId;
           link.ShareType = 'V';
           link.Visibility = 'AllUsers';
-          insert link;
+          SObjectAccessDecision linkDecision = Security.stripInaccessible(
+            AccessType.CREATABLE,
+            new List<ContentDocumentLink>{ link }
+          );
+          List<ContentDocumentLink> safeLinks =
+            (List<ContentDocumentLink>) linkDecision.getRecords();
+          Database.insert(safeLinks, AccessLevel.USER_MODE);
         }
       }
     }
@@ -848,7 +1064,7 @@ public with sharing class DocEngineInstanceController {
         AccessType.UPDATABLE,
         new List<DocEngine_Document__c>{ patch }
       );
-      update decision.getRecords();
+      Database.update(decision.getRecords(), AccessLevel.USER_MODE);
     }
 
     FileSaveResult result = new FileSaveResult();
@@ -871,21 +1087,285 @@ public with sharing class DocEngineInstanceController {
       SELECT Id
       FROM ContentDocument
       WHERE Id = :docId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     return docs.isEmpty() ? null : docs[0].Id;
   }
 
-  private static void deleteLinkedContentDocument(String rawId) {
-    Id docId = resolveExistingContentDocumentId(rawId);
-    if (docId == null) {
-      return;
+  private static void assertFileLinkedToAuthorizedRecord(
+    Id contentDocumentId,
+    String sourceRecordId
+  ) {
+    Id sourceId;
+    if (String.isNotBlank(sourceRecordId)) {
+      try {
+        sourceId = Id.valueOf(sourceRecordId.trim());
+      } catch (Exception e) {
+        throw new AuraHandledException('Invalid sourceRecordId.');
+      }
+    }
+
+    List<ContentDocumentLink> links = [
+      SELECT LinkedEntityId
+      FROM ContentDocumentLink
+      WHERE ContentDocumentId = :contentDocumentId
+      WITH USER_MODE
+    ];
+    Set<Id> documentInstanceIds = new Set<Id>();
+    for (ContentDocumentLink link : links) {
+      if (sourceId != null && link.LinkedEntityId == sourceId) {
+        return;
+      }
+      if (
+        link.LinkedEntityId != null &&
+        link.LinkedEntityId.getSObjectType() == DocEngine_Document__c.SObjectType
+      ) {
+        documentInstanceIds.add(link.LinkedEntityId);
+      }
+    }
+    if (!documentInstanceIds.isEmpty()) {
+      List<DocEngine_Document__c> documents = [
+        SELECT Template__r.Access_Group_Id__c
+        FROM DocEngine_Document__c
+        WHERE Id IN :documentInstanceIds
+        WITH USER_MODE
+      ];
+      for (DocEngine_Document__c document : documents) {
+        String groupId = document.Template__r == null
+          ? null
+          : document.Template__r.Access_Group_Id__c;
+        if (DocEngineAccess.canAccessByGroup(groupId)) {
+          return;
+        }
+      }
+    }
+    throw new AuraHandledException(
+      'The selected file is not linked to the supplied source record or an accessible DocEngine document.'
+    );
+  }
+
+  private static Boolean isAuthorizedShareFile(
+    Id contentDocumentId,
+    DocEngine_Document__c instance
+  ) {
+    if (
+      String.isNotBlank(instance.Content_Document_Id__c) &&
+      instance.Content_Document_Id__c.trim() == String.valueOf(contentDocumentId)
+    ) {
+      return true;
+    }
+    Set<Id> authorizedParents = new Set<Id>{ instance.Id };
+    if (String.isNotBlank(instance.Record_Id__c)) {
+      try {
+        authorizedParents.add(Id.valueOf(instance.Record_Id__c.trim()));
+      // A malformed legacy source Id is denied by excluding it from authorizedParents.
+      // Code-analyzer-suppress(pmd:EmptyCatchBlock)
+      } catch (Exception e) {
+        // Intentionally empty: fail closed; only successfully parsed Ids authorize access.
+      }
+      // Code-analyzer-unsuppress(pmd:EmptyCatchBlock)
+    }
+    List<ContentDocumentLink> links = [
+      SELECT Id
+      FROM ContentDocumentLink
+      WHERE
+        ContentDocumentId = :contentDocumentId
+        AND LinkedEntityId IN :authorizedParents
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    return !links.isEmpty();
+  }
+
+  private static Blob decodeFileData(String base64Data) {
+    try {
+      Blob decoded = EncodingUtil.base64Decode(base64Data.trim());
+      if (decoded == null || decoded.size() == 0) {
+        throw new AuraHandledException('File data is required.');
+      }
+      return decoded;
+    } catch (AuraHandledException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new AuraHandledException('Invalid base64 file data.');
+    }
+  }
+
+  private static String normalizeFilename(
+    String filename,
+    String fallback,
+    String requiredSuffix
+  ) {
+    String safe = String.isBlank(filename) ? fallback : filename.trim();
+    safe = safe.replace('\\', '_').replace('/', '_');
+    safe = safe.replaceAll('[\\x00-\\x1F\\x7F]', '_');
+    if (String.isBlank(safe) || safe == '.' || safe == '..') {
+      safe = fallback;
+    }
+    if (safe.length() > MAX_FILENAME_LENGTH) {
+      Integer suffixLength = String.isBlank(requiredSuffix) ? 0 : requiredSuffix.length();
+      safe = safe.left(MAX_FILENAME_LENGTH - suffixLength);
+      if (suffixLength > 0 && !safe.toLowerCase().endsWith(requiredSuffix)) {
+        safe += requiredSuffix;
+      }
+    }
+    return safe;
+  }
+
+  private static void assertContentVersionCreateAccess(
+    Boolean needsFirstPublishLocation,
+    Boolean needsContentDocument
+  ) {
+    if (!Schema.sObjectType.ContentVersion.isCreateable()) {
+      throw new AuraHandledException('Insufficient access to create Salesforce Files.');
+    }
+    Set<String> fields = new Set<String>{ 'Title', 'PathOnClient', 'VersionData' };
+    if (needsFirstPublishLocation) {
+      fields.add('FirstPublishLocationId');
+      assertContentDocumentLinkCreateAccess();
+    }
+    if (needsContentDocument) {
+      fields.add('ContentDocumentId');
+    }
+    assertCreateableFields(
+      Schema.sObjectType.ContentVersion,
+      fields,
+      'Salesforce File'
+    );
+  }
+
+  private static void assertContentDocumentLinkCreateAccess() {
+    if (!Schema.sObjectType.ContentDocumentLink.isCreateable()) {
+      throw new AuraHandledException(
+        'Insufficient access to link the Salesforce File.'
+      );
+    }
+    assertCreateableFields(
+      Schema.sObjectType.ContentDocumentLink,
+      new Set<String>{
+        'ContentDocumentId',
+        'LinkedEntityId',
+        'ShareType',
+        'Visibility'
+      },
+      'Salesforce File link'
+    );
+  }
+
+  /**
+   * Proves both Id/object consistency and running-user row visibility before a
+   * document or Salesforce File is associated with a source record.
+   */
+  @TestVisible
+  private static Id assertSourceRecordReadable(String recordId, String objectApiName) {
+    Id sourceId;
+    try {
+      sourceId = Id.valueOf(recordId == null ? null : recordId.trim());
+    } catch (Exception e) {
+      throw new AuraHandledException('Invalid source record Id.');
+    }
+    if (sourceId == null || String.isBlank(objectApiName)) {
+      throw new AuraHandledException('Source record and object are required.');
+    }
+    String actualObject = sourceId.getSObjectType().getDescribe().getName();
+    if (!actualObject.equalsIgnoreCase(objectApiName.trim())) {
+      throw new AuraHandledException('Source record Id does not match the configured object.');
+    }
+    assertSourceRecordReadable(sourceId);
+    return sourceId;
+  }
+
+  private static void assertSourceRecordReadable(Id sourceId) {
+    if (sourceId == null) {
+      throw new AuraHandledException('Invalid source record Id.');
+    }
+    Schema.DescribeSObjectResult describe = sourceId.getSObjectType().getDescribe();
+    if (!describe.isAccessible()) {
+      throw new AuraHandledException('You do not have read access to the source record.');
+    }
+    List<SObject> rows = Database.queryWithBinds(
+      'SELECT Id FROM ' + describe.getName() + ' WHERE Id = :sourceId LIMIT 1',
+      new Map<String, Object>{ 'sourceId' => sourceId },
+      AccessLevel.USER_MODE
+    );
+    if (rows.isEmpty()) {
+      throw new AuraHandledException('Source record not found or is not accessible.');
+    }
+  }
+
+  private static Boolean sameRecordId(String storedId, Id requestedId) {
+    if (String.isBlank(storedId) || requestedId == null) {
+      return false;
     }
     try {
-      delete new ContentDocument(Id = docId);
+      return Id.valueOf(storedId.trim()) == requestedId;
     } catch (Exception e) {
-      // File may already be gone or user lacks ContentDocument delete — ignore.
+      return false;
+    }
+  }
+
+  private static void assertTaskCreateAccess() {
+    if (!Schema.sObjectType.Task.isCreateable()) {
+      throw new AuraHandledException('Insufficient access to create a Task.');
+    }
+    assertCreateableFields(
+      Schema.sObjectType.Task,
+      new Set<String>{
+        'Subject',
+        'Description',
+        'Status',
+        'Priority',
+        'ActivityDate',
+        'WhatId',
+        'OwnerId'
+      },
+      'Task'
+    );
+  }
+
+  private static List<ContentVersion> sanitizeContentVersions(
+    List<ContentVersion> versions
+  ) {
+    SObjectAccessDecision decision = Security.stripInaccessible(
+      AccessType.CREATABLE,
+      versions
+    );
+    return (List<ContentVersion>) decision.getRecords();
+  }
+
+  private static void assertCreateableFields(
+    Schema.DescribeSObjectResult objectDescribe,
+    Set<String> fieldNames,
+    String label
+  ) {
+    Map<String, Schema.SObjectField> fields = objectDescribe.fields.getMap();
+    for (String fieldName : fieldNames) {
+      if (
+        !fields.containsKey(fieldName) ||
+        !fields.get(fieldName).getDescribe().isCreateable()
+      ) {
+        throw new AuraHandledException(
+          'Insufficient field access to create ' + label + '.'
+        );
+      }
+    }
+  }
+
+  private static void setDistributionExpiryIfSupported(ContentDistribution distribution) {
+    Map<String, Schema.SObjectField> fields =
+      Schema.sObjectType.ContentDistribution.fields.getMap();
+    if (
+      fields.containsKey('PreferencesExpires') &&
+      fields.get('PreferencesExpires').getDescribe().isCreateable()
+    ) {
+      distribution.put('PreferencesExpires', true);
+    }
+    if (
+      fields.containsKey('ExpiryDate') &&
+      fields.get('ExpiryDate').getDescribe().isCreateable()
+    ) {
+      distribution.put('ExpiryDate', Datetime.now().addDays(SHARE_EXPIRY_DAYS));
     }
   }
 
@@ -913,5 +1393,83 @@ public with sharing class DocEngineInstanceController {
     dto.status = row.Status__c;
     dto.completedDate = row.Completed_Date__c;
     return dto;
+  }
+
+  @TestVisible
+  private static InstanceDTO parseInstanceDto(String dtoJson) {
+    if (String.isBlank(dtoJson)) {
+      throw auraError('Instance payload is required.');
+    }
+    Map<String, Object> raw;
+    try {
+      raw = (Map<String, Object>) JSON.deserializeUntyped(dtoJson);
+    } catch (Exception e) {
+      throw auraError('Invalid instance payload JSON.');
+    }
+    if (raw == null) {
+      throw auraError('Instance payload is required.');
+    }
+    InstanceDTO dto = new InstanceDTO();
+    dto.name = (String) raw.get('name');
+    dto.recordId = raw.get('recordId') == null ? null : String.valueOf(raw.get('recordId'));
+    dto.objectApiName = (String) raw.get('objectApiName');
+    dto.documentJson = (String) raw.get('documentJson');
+    dto.status = (String) raw.get('status');
+    dto.id = toId(raw.get('id'));
+    dto.templateId = toId(raw.get('templateId'));
+    dto.templateVersionId = toId(raw.get('templateVersionId'));
+    Object completed = raw.get('completedDate');
+    if (completed != null && String.isNotBlank(String.valueOf(completed))) {
+      try {
+        dto.completedDate = Datetime.valueOfGmt(String.valueOf(completed).replace('T', ' ').replace('Z', ''));
+      } catch (Exception e) {
+        try {
+          dto.completedDate = (Datetime) JSON.deserialize(
+            '"' + String.valueOf(completed) + '"',
+            Datetime.class
+          );
+        } catch (Exception e2) {
+          dto.completedDate = null;
+        }
+      }
+    }
+    return dto;
+  }
+
+  private static Id toId(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String s = String.valueOf(value).trim();
+    if (String.isBlank(s) || s == 'null' || s == 'undefined') {
+      return null;
+    }
+    try {
+      return Id.valueOf(s);
+    } catch (Exception e) {
+      throw auraError('Invalid Id value: ' + s);
+    }
+  }
+
+  /**
+   * AuraHandledException must call setMessage or Lightning often shows a generic
+   * "An internal server error has occurred" instead of the real message.
+   */
+  private static AuraHandledException auraError(String message) {
+    String msg = String.isBlank(message) ? 'DocEngine request failed.' : message;
+    AuraHandledException e = new AuraHandledException(msg);
+    e.setMessage(msg);
+    return e;
+  }
+
+  private static AuraHandledException auraError(Exception e) {
+    if (e == null) {
+      return auraError('DocEngine request failed.');
+    }
+    String msg = e.getMessage();
+    if (String.isBlank(msg)) {
+      msg = e.getTypeName();
+    }
+    return auraError(msg);
   }
 }

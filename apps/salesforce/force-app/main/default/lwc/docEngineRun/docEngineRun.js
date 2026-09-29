@@ -18,9 +18,9 @@ function asBool(value, fallback = true) {
 }
 
 function asExportMode(value) {
-  const s = String(value || 'none').trim().toLowerCase();
-  if (s === 'pdf' || s === 'html' || s === 'none') return s;
-  return 'none';
+  const s = String(value == null ? 'pdf' : value).trim().toLowerCase();
+  if (s === 'html') return 'html';
+  return 'pdf';
 }
 
 function recordIdFromUrl() {
@@ -49,7 +49,7 @@ export default class DocEngineRun extends LightningElement {
   @api configName;
   @api templateId;
   @api fillMode = 'true';
-  @api exportMode = 'none';
+  @api exportMode = 'pdf';
   @api showPreview = 'true';
   @api hideEmpty = 'false';
   @api attachToRecord = 'false';
@@ -67,7 +67,7 @@ export default class DocEngineRun extends LightningElement {
   _resolved = false;
   _objectApiName = '';
   _fillMode = true;
-  _exportMode = 'none';
+  _exportMode = 'pdf';
   _showPreview = true;
   _hideEmpty = false;
   _attachToRecord = false;
@@ -232,7 +232,7 @@ export default class DocEngineRun extends LightningElement {
         this._fillMode = asBool(cfg.fillMode, true);
       }
       if (this._stateValue('export') == null) {
-        this._exportMode = asExportMode(cfg.exportMode || 'none');
+        this._exportMode = asExportMode(cfg.exportMode || 'pdf');
       }
       if (this._stateValue('preview') == null) {
         this._showPreview = asBool(cfg.showPreview, true);
@@ -287,7 +287,7 @@ export default class DocEngineRun extends LightningElement {
     } else if (cfg && cfg.exportMode) {
       this._exportMode = asExportMode(cfg.exportMode);
     } else {
-      this._exportMode = asExportMode(this.exportMode || 'none');
+      this._exportMode = asExportMode(this.exportMode || 'pdf');
     }
     this._showPreview = this._resolveBool(
       'preview',

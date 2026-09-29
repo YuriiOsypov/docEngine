@@ -69,6 +69,7 @@ import {
   normalizeFieldMappingSpec,
   evaluateSectionVisibility,
   registerFormulaFunction,
+  omitMappedFields,
 } from '@docengine/engine';
 
 import {
@@ -3152,20 +3153,41 @@ export function createEditor(options: any = {}) {
 
     getDocument,
     exportDoc: async () => buildDocExport(await getDocument()),
-    exportFields: async (options: any) => buildFieldsExport(await getDocument(), options),
+    exportFields: async (exportOptions: any = {}) => {
+      const doc = await getDocument();
+      let exported = buildFieldsExport(doc, exportOptions);
+      if (exportOptions?.omitMappedFields === true) {
+        exported = omitMappedFields(exported, documentFieldMapping ?? doc.fieldMapping);
+      }
+      return exported;
+    },
     exportTemplate: async () => buildTemplateExport(await getDocument()),
     /** @deprecated Use exportFields() */
-    exportDocument: async (options: any) => buildFieldsExport(await getDocument(), options),
+    exportDocument: async (exportOptions: any = {}) => {
+      const doc = await getDocument();
+      let exported = buildFieldsExport(doc, exportOptions);
+      if (exportOptions?.omitMappedFields === true) {
+        exported = omitMappedFields(exported, documentFieldMapping ?? doc.fieldMapping);
+      }
+      return exported;
+    },
 
-    async load(data: any) {
+    async load(data: any, loadOptions: any = {}) {
       if (editor) await editor.save();
 
       if (isFieldsExport(data)) {
         const doc = await getDocument();
-        loadedDocumentSections = data.sections
-          ? JSON.parse(JSON.stringify(data.sections))
+        let fieldsPayload = data;
+        if (loadOptions?.omitMappedFields === true) {
+          fieldsPayload = omitMappedFields(
+            data,
+            documentFieldMapping ?? doc.fieldMapping,
+          );
+        }
+        loadedDocumentSections = fieldsPayload.sections
+          ? JSON.parse(JSON.stringify(fieldsPayload.sections))
           : null;
-        const values = normalizeDocumentValues(data, doc.blocks, doc.fieldSchemas);
+        const values = normalizeDocumentValues(fieldsPayload, doc.blocks, doc.fieldSchemas);
         const { blocks, fieldSchemas: nextFieldSchemas } = applyDocumentValues(
           doc.blocks,
           values,
@@ -3174,7 +3196,7 @@ export function createEditor(options: any = {}) {
         const resume = documentHistory.suspend();
         try {
           initEditor({
-            time: data.time ?? Date.now(),
+            time: fieldsPayload.time ?? Date.now(),
             fieldSchemas: nextFieldSchemas,
             blocks,
             pageSetup: documentPageSetup,

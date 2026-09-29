@@ -33,11 +33,18 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   description = '';
   accessGroupId = '';
   accessGroupOptions = [{ label: 'None — all users with access', value: '' }];
+  hideEmpty = false;
+  outputFormat = 'pdf';
+  outputFormatOptions = [
+    { label: 'PDF', value: 'pdf' },
+    { label: 'HTML', value: 'html' }
+  ];
   isActive = true;
   version = null;
   versionId = null;
   versionOptions = [];
-  statusMessage = '';
+  /** Id → full detail string for version picker help text */
+  _versionDetailById = {};
   editorBusy = false;
   fillingMode = false;
 
@@ -88,6 +95,15 @@ export default class DocEngineTemplateBuilder extends LightningElement {
       return `Viewing v${this.version}. Save always creates a new version.`;
     }
     return 'Save creates a new version.';
+  }
+
+  get versionPickerHelp() {
+    const detail =
+      this.versionId && this._versionDetailById[this.versionId]
+        ? this._versionDetailById[this.versionId]
+        : '';
+    const parts = [detail, this.saveHint].filter(Boolean);
+    return parts.join(' ');
   }
 
   get modeHint() {
@@ -154,9 +170,6 @@ export default class DocEngineTemplateBuilder extends LightningElement {
       }
 
       this._editorInitialized = true;
-      this.statusMessage = this._templateId
-        ? `Editing “${this.templateName}” v${this.version || 1}`
-        : 'New template — save to create DocEngine_Template__c';
     } catch (err) {
       this._showError('Failed to load template builder', err);
     } finally {
@@ -171,6 +184,8 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     this.pdfFilename = dto.pdfFilename || '';
     this.description = dto.description || '';
     this.accessGroupId = dto.accessGroupId || '';
+    this.hideEmpty = dto.hideEmpty === true;
+    this.outputFormat = dto.outputFormat === 'html' ? 'html' : 'pdf';
     this.isActive = dto.isActive !== false;
     this.version = dto.version;
     this.versionId = dto.versionId || null;
@@ -181,25 +196,57 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   async _refreshVersionOptions() {
     if (!this._templateId) {
       this.versionOptions = [];
+      this._versionDetailById = {};
       return;
     }
     try {
       const rows = await listVersions({ templateId: this._templateId });
+      const detailById = {};
       this.versionOptions = (rows || []).map((v) => {
-        const ver = v.version != null ? v.version : '?';
-        const current = v.isCurrent ? ' (current)' : '';
-        const by = v.createdByName ? ` — ${v.createdByName}` : '';
-        const created = v.createdDate
-          ? ` — Created ${this._formatVersionCreatedDate(v.createdDate)}`
-          : '';
+        detailById[v.id] = this._formatVersionDetail(v);
         return {
-          label: `v${ver}${current}${by}${created}`,
+          label: this._formatVersionOptionLabel(v),
           value: v.id
         };
       });
+      this._versionDetailById = detailById;
     } catch (err) {
       this.versionOptions = [];
+      this._versionDetailById = {};
       this._showError('Failed to load versions', err);
+    }
+  }
+
+  _formatVersionOptionLabel(v) {
+    const ver = v.version != null ? v.version : '?';
+    const current = v.isCurrent ? ' (current)' : '';
+    const when = v.createdDate ? ` · ${this._formatVersionCreatedDateShort(v.createdDate)}` : '';
+    return `v${ver}${current}${when}`;
+  }
+
+  _formatVersionDetail(v) {
+    const ver = v.version != null ? v.version : '?';
+    const by = v.createdByName ? v.createdByName : 'Unknown user';
+    const created = v.createdDate
+      ? this._formatVersionCreatedDate(v.createdDate)
+      : 'Unknown date';
+    return `v${ver}: ${by}, ${created}.`;
+  }
+
+  _formatVersionCreatedDateShort(value) {
+    try {
+      const d = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(d.getTime())) {
+        return String(value);
+      }
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return String(value);
     }
   }
 
@@ -238,7 +285,6 @@ export default class DocEngineTemplateBuilder extends LightningElement {
       } else if (typeof this._editor.setFieldMapping === 'function') {
         this._editor.setFieldMapping(null);
       }
-      this.statusMessage = `Loaded v${dto.version} — Save will create a new version`;
       this._showToast('Version loaded', `Editing v${dto.version}. Save creates a new version.`, 'info');
     } catch (err) {
       this._showError('Failed to load version', err);
@@ -277,6 +323,14 @@ export default class DocEngineTemplateBuilder extends LightningElement {
 
   handleAccessGroupIdChange(event) {
     this.accessGroupId = event.detail.value || '';
+  }
+
+  handleHideEmptyChange(event) {
+    this.hideEmpty = event.detail.checked === true;
+  }
+
+  handleOutputFormatChange(event) {
+    this.outputFormat = event.detail.value === 'html' ? 'html' : 'pdf';
   }
 
   handleActiveChange(event) {
@@ -357,6 +411,30 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     }
   }
 
+  async handleExportScenarioValues() {
+    if (!this._editor) return;
+    try {
+      this.editorBusy = true;
+      const data =
+        typeof this._editor.exportFields === 'function'
+          ? await this._editor.exportFields({ omitMappedFields: true })
+          : null;
+      if (!data) {
+        throw new Error('exportFields is not available on the editor.');
+      }
+      this._downloadJson(data, this._fileBase() + '-scenario-values.json');
+      this._showToast(
+        'Exported',
+        'Scenario values downloaded (mapped fields excluded).',
+        'success'
+      );
+    } catch (err) {
+      this._showError('Export scenario values failed', err);
+    } finally {
+      this.editorBusy = false;
+    }
+  }
+
   handleImportFullDocumentClick() {
     this._openFilePicker('full');
   }
@@ -416,8 +494,13 @@ export default class DocEngineTemplateBuilder extends LightningElement {
         if (!data.values && !data.sections) {
           throw new Error('Values file has no values or sections.');
         }
-        await this._editor.load(data);
-        this._showToast('Imported', 'Values applied to the document.', 'success');
+        // Scenario / value packs must not overwrite Salesforce-mapped fields.
+        await this._editor.load(data, { omitMappedFields: true });
+        this._showToast(
+          'Imported',
+          'Values applied (mapped fields left for merge).',
+          'success'
+        );
       }
     } catch (err) {
       this._showError('Import failed', err);
@@ -539,7 +622,9 @@ export default class DocEngineTemplateBuilder extends LightningElement {
         templateJson: JSON.stringify(templateJson),
         isActive: this.isActive,
         description: this.description || '',
-        pdfFilename: this.pdfFilename || ''
+        pdfFilename: this.pdfFilename || '',
+        hideEmpty: this.hideEmpty === true,
+        outputFormat: this.outputFormat === 'html' ? 'html' : 'pdf'
       };
       if (this._templateId) {
         dto.id = this._templateId;
@@ -553,7 +638,6 @@ export default class DocEngineTemplateBuilder extends LightningElement {
 
       this._applyTemplateDto(saved);
       await this._refreshVersionOptions();
-      this.statusMessage = `Saved v${saved.version || 1}`;
       this._showToast('Saved', `Template saved as v${saved.version || 1}.`, 'success');
     } catch (err) {
       this._showError('Save failed', err);

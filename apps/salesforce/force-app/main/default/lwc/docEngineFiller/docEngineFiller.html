@@ -56,6 +56,45 @@
           <div lwc:dom="manual" class="doc-editor-host__actions doc-actions"></div>
         </div>
 
+        <div class="scenario-toggle slds-m-bottom_x-small">
+          <lightning-input
+            type="checkbox"
+            label="Use scenario"
+            checked={scenarioPanelOpen}
+            onchange={handleScenarioPanelToggle}
+            disabled={editorBusy}
+          ></lightning-input>
+        </div>
+        <template if:true={scenarioPanelOpen}>
+          <div class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small slds-m-bottom_small scenario-row">
+            <div class="slds-col slds-grow">
+              <lightning-combobox
+                label="Scenario"
+                value={selectedValueSetId}
+                options={valueSetOptions}
+                placeholder={valueSetPlaceholder}
+                onchange={handleValueSetChange}
+                disabled={editorBusy}
+              ></lightning-combobox>
+            </div>
+            <div class="slds-col slds-grow-none">
+              <lightning-button-group>
+                <lightning-button
+                  label="Load scenario"
+                  onclick={handleLoadScenario}
+                  disabled={loadScenarioDisabled}
+                ></lightning-button>
+                <lightning-button
+                  label="Save as scenario"
+                  onclick={handleSaveScenario}
+                  disabled={editorBusy}
+                  title="Save current unmapped field values as a reusable scenario"
+                ></lightning-button>
+              </lightning-button-group>
+            </div>
+          </div>
+        </template>
+
         <div lwc:dom="manual" class="doc-editor-host__sticky sticky-chrome"></div>
         <div
           lwc:dom="manual"

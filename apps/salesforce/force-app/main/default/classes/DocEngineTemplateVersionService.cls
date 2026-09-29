@@ -2,17 +2,46 @@
  * System-context helpers for DocEngine_Template_Version__c.
  * Fill users are read-only on templates; this class creates/pins version snapshots.
  */
-public without sharing class DocEngineTemplateVersionService {
+public with sharing class DocEngineTemplateVersionService {
+  /**
+   * Resolves a client-selected version and proves that it belongs to the template.
+   * A null version pins the template's current snapshot.
+   */
+  public static Id resolveVersionId(Id templateId, Id templateVersionId) {
+    if (templateId == null) {
+      throw new AuraHandledException('templateId is required.');
+    }
+    Id resolvedVersionId = templateVersionId == null
+      ? ensureCurrentVersionId(templateId)
+      : templateVersionId;
+    List<DocEngine_Template_Version__c> versions = [
+      SELECT Id, Template__c
+      FROM DocEngine_Template_Version__c
+      WHERE Id = :resolvedVersionId
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    if (versions.isEmpty()) {
+      throw new AuraHandledException('Template version not found.');
+    }
+    if (versions[0].Template__c != templateId) {
+      throw new AuraHandledException('Template version does not belong to this template.');
+    }
+    return versions[0].Id;
+  }
+
   public static Id ensureCurrentVersionId(Id templateId) {
     if (templateId == null) {
       throw new AuraHandledException('templateId is required.');
     }
-    List<DocEngine_Template__c> rows = [
-      SELECT Id, Version__c, Template_JSON__c, Current_Version__c
-      FROM DocEngine_Template__c
-      WHERE Id = :templateId
-      LIMIT 1
-    ];
+    DocEngineAccess.assertTemplateAccess(templateId);
+    // Package-internal snapshot maintenance intentionally bypasses subscriber CRUD/FLS.
+    List<DocEngine_Template__c> rows = Database.queryWithBinds(
+      'SELECT Id, Version__c, Template_JSON__c, Current_Version__c ' +
+        'FROM DocEngine_Template__c WHERE Id = :templateId LIMIT 1',
+      new Map<String, Object>{ 'templateId' => templateId },
+      AccessLevel.SYSTEM_MODE
+    );
     if (rows.isEmpty()) {
       throw new AuraHandledException('Template not found.');
     }
@@ -27,12 +56,12 @@ public without sharing class DocEngineTemplateVersionService {
     }
 
     String key = versionKey(templateId, versionNumber);
-    List<DocEngine_Template_Version__c> existing = [
-      SELECT Id
-      FROM DocEngine_Template_Version__c
-      WHERE Version_Key__c = :key
-      LIMIT 1
-    ];
+    List<DocEngine_Template_Version__c> existing = Database.queryWithBinds(
+      'SELECT Id FROM DocEngine_Template_Version__c ' +
+        'WHERE Version_Key__c = :versionKey LIMIT 1',
+      new Map<String, Object>{ 'versionKey' => key },
+      AccessLevel.SYSTEM_MODE
+    );
     if (!existing.isEmpty()) {
       patchCurrentVersion(templateId, existing[0].Id, versionNumber, head.Template_JSON__c);
       return existing[0].Id;
@@ -48,22 +77,26 @@ public without sharing class DocEngineTemplateVersionService {
     Decimal versionNumber,
     String templateJson
   ) {
+    DocEngineAccess.assertTemplateAccess(templateId);
     DocEngine_Template_Version__c ver = new DocEngine_Template_Version__c();
     ver.Template__c = templateId;
     ver.Version__c = versionNumber;
     ver.Template_JSON__c = templateJson;
     ver.Version_Key__c = versionKey(templateId, versionNumber);
     try {
-      insert ver;
+      // Authorized snapshot creation maintains package-owned 1GP fields unavailable through subscriber FLS.
+      // Code-analyzer-suppress(pmd:ApexCRUDViolation)
+      Database.insert(ver, AccessLevel.SYSTEM_MODE);
+      // Code-analyzer-unsuppress(pmd:ApexCRUDViolation)
       return ver;
     } catch (DmlException e) {
       String key = versionKey(templateId, versionNumber);
-      List<DocEngine_Template_Version__c> existing = [
-        SELECT Id, Version__c, Template_JSON__c
-        FROM DocEngine_Template_Version__c
-        WHERE Version_Key__c = :key
-        LIMIT 1
-      ];
+      List<DocEngine_Template_Version__c> existing = Database.queryWithBinds(
+        'SELECT Id, Version__c, Template_JSON__c FROM DocEngine_Template_Version__c ' +
+          'WHERE Version_Key__c = :versionKey LIMIT 1',
+        new Map<String, Object>{ 'versionKey' => key },
+        AccessLevel.SYSTEM_MODE
+      );
       if (!existing.isEmpty()) {
         return existing[0];
       }
@@ -77,12 +110,18 @@ public without sharing class DocEngineTemplateVersionService {
     Decimal versionNumber,
     String templateJson
   ) {
-    update new DocEngine_Template__c(
-      Id = templateId,
-      Current_Version__c = versionId,
-      Version__c = versionNumber,
-      Template_JSON__c = templateJson
+    // Authorized snapshot pinning maintains package-owned 1GP fields unavailable through subscriber FLS.
+    // Code-analyzer-suppress(pmd:ApexCRUDViolation)
+    Database.update(
+      new DocEngine_Template__c(
+        Id = templateId,
+        Current_Version__c = versionId,
+        Version__c = versionNumber,
+        Template_JSON__c = templateJson
+      ),
+      AccessLevel.SYSTEM_MODE
     );
+    // Code-analyzer-unsuppress(pmd:ApexCRUDViolation)
   }
 
   public static String versionKey(Id templateId, Decimal versionNumber) {

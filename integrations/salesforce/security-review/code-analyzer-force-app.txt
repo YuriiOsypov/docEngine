@@ -1,0 +1,665 @@
+DocEngine Salesforce Code Analyzer Report
+Generated: 2026-09-17 11:33 UTC
+Tool: sf code-analyzer (Recommended + Security)
+Workspace/Target: apps/salesforce/force-app
+Java engines: PMD, CPD, SFGE enabled (no UninstantiableEngineError)
+
+=== Summary ===
+Total violations: 642
+  Critical (1): 1
+  High (2): 38
+  Moderate (3): 214
+  Low (4): 382
+  Info (5): 7
+
+=== Critical / High (upload narrative) ===
+Critical (1): pmd:AvoidGlobalInstallUninstallHandlers on DocEnginePostInstall — required InstallHandler; false positive for managed package post-install.
+High (38): 32 eslint:no-unused-vars; 5 pmd:EagerlyLoadedDescribeSObjectResult; 1 eslint:@lwc/lwc/no-inner-html (docEngineLib PDF outerHTML — false positive, not user HTML).
+Apex CRUD/FLS/with-sharing security rules: clean (0 ApexCRUDViolation / ApexFlsViolation / DatabaseOperationsMustUseWithSharing).
+SFGE: 0 path violations.
+
+=== All findings ===
+sev  engine      rule                                           file:line  message
+------------------------------------------------------------------------------------------------------------------------
+1    pmd         AvoidGlobalInstallUninstallHandlers            force-app/main/default/classes/DocEnginePostInstall.cls:6  Classes that extend InstallHandler should be public and not global
+2    eslint      @lwc/lwc/no-inner-html                         force-app/main/default/lwc/docEngineLib/docEngineLib.js:645  Using 'innerHTML/outputHTML/insertAdjacentHTML' is not allowed
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineFiller/docEngineFiller.js:1  'wire' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineFiller/docEngineFiller.js:320  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineFormLinks/docEngineFormLinks.js:212  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineInstanceList/docEngineInstanceList.js:258  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineInstanceList/docEngineInstanceList.js:295  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:74  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:88  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:109  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:130  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:463  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:781  '_catalogsIgnored' is assigned a value but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:898  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineLib/docEngineLib.js:912  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:474  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:517  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:530  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:598  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:648  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:667  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineModal/docEngineModal.js:774  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.js:111  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.js:194  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.js:208  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.js:223  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineRun/docEngineRun.js:30  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineRun/docEngineRun.js:246  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineRun/docEngineRun.js:274  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineTemplateAudit/docEngineTemplateAudit.js:31  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.js:248  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.js:266  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.js:666  'e' is defined but never used.
+2    eslint      no-unused-vars                                 force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.js:675  'e' is defined but never used.
+2    pmd         EagerlyLoadedDescribeSObjectResult             force-app/main/default/classes/DocEngineAccess.cls:141  DescribeSObjectResult could be being loaded eagerly with all child relationships.
+2    pmd         EagerlyLoadedDescribeSObjectResult             force-app/main/default/classes/DocEngineMergeController.cls:56  DescribeSObjectResult could be being loaded eagerly with all child relationships.
+2    pmd         EagerlyLoadedDescribeSObjectResult             force-app/main/default/classes/DocEngineTemplateController.cls:350  DescribeSObjectResult could be being loaded eagerly with all child relationships.
+2    pmd         EagerlyLoadedDescribeSObjectResult             force-app/main/default/classes/DocEngineWriteback.cls:98  DescribeSObjectResult could be being loaded eagerly with all child relationships.
+2    pmd         EagerlyLoadedDescribeSObjectResult             force-app/main/default/classes/DocEngineWriteback.cls:574  DescribeSObjectResult could be being loaded eagerly with all child relationships.
+3    eslint      @lwc/lwc/no-api-reassignments                  force-app/main/default/lwc/docEngineModal/docEngineModal.js:808  Invalid reassignment of public property "hideEmpty"
+3    eslint      @lwc/lwc/no-api-reassignments                  force-app/main/default/lwc/docEngineModal/docEngineModal.js:811  Invalid reassignment of public property "exportMode"
+3    eslint      @lwc/lwc/no-async-operation                    force-app/main/default/lwc/docEngineModal/docEngineModal.js:312  Restricted async operation "setTimeout"
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:6  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:7  The '--lwc-brandPrimaryActive' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-2' styling hook and set the fallback to '--lwc-b...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:9  The '--lwc-brandPrimaryActive' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-2' styling hook and set the fallback to '--lwc-b...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:11  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:12  The '--lwc-colorBackground' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-2 2. --slds-g-color-surface-container-2' styli...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:13  The '--lwc-colorBackgroundRowHover' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-container-2' styling hook and set the fall...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:14  The '--lwc-colorBackgroundShade' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-2' styling hook and set the fallback to '--lw...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:15  The '--lwc-colorBackgroundStencil' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-container-2' styling hook and set the fallb...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:16  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:18  The '--lwc-colorBorder' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-90' styling hook and set the fallback to '--lwc-c...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:19  The '--lwc-colorBorderInput' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-80' styling hook and set the fallback to '--...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:20  The '--lwc-colorBorderInput' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-80' styling hook and set the fallback to '--...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:21  The '--lwc-colorBorderSeparator' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-95' styling hook and set the fallback to...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:23  The '--lwc-colorTextDefault' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-on-surface-3' styling hook and set the fallback to '--lwc...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:24  The '--lwc-colorTextDefault' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-on-surface-3' styling hook and set the fallback to '--lwc...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:25  The '--lwc-colorTextLabel' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-info-1' styling hook and set the fallback to '--lwc-colorTe...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:27  The '--lwc-colorTextInputDisabled' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-30' styling hook and set the fallback ...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:29  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:30  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:31  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:33  The '--lwc-fontFamily' design token is deprecated. Replace it with the SLDS 2 '--slds-g-font-family-base' styling hook and set the fallback to '--lwc-fontFam...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:34  The '--lwc-borderRadiusMedium' design token is deprecated. Replace it with the SLDS 2 '--slds-g-radius-border-2' styling hook and set the fallback to '--lwc-...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:35  The '--lwc-borderRadiusMedium' design token is deprecated. Replace it with the SLDS 2 '--slds-g-radius-border-2' styling hook and set the fallback to '--lwc-...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:39  The '--lwc-colorBackgroundShade' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-2' styling hook and set the fallback to '--lw...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineModal/docEngineModal.css:44  The '--lwc-colorBackground' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-2 2. --slds-g-color-surface-container-2' styli...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineModal/docEngineModal.css:57  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineModal/docEngineModal.css:58  The '--lwc-colorBorder' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-90' styling hook and set the fallback to '--lwc-c...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:6  The '--lwc-fontFamily' design token is deprecated. Replace it with the SLDS 2 '--slds-g-font-family-base' styling hook and set the fallback to '--lwc-fontFam...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:54  The '--lwc-fontFamily' design token is deprecated. Replace it with the SLDS 2 '--slds-g-font-family-base' styling hook and set the fallback to '--lwc-fontFam...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:14  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:26  The '--lwc-colorBorder' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-90' styling hook and set the fallback to '--lwc-c...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:12  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:13  The '--lwc-brandPrimaryActive' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-2' styling hook and set the fallback to '--lwc-b...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:15  The '--lwc-brandPrimaryActive' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-2' styling hook and set the fallback to '--lwc-b...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:17  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:18  The '--lwc-colorBackground' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-2 2. --slds-g-color-surface-container-2' styli...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:19  The '--lwc-colorBackgroundRowHover' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-container-2' styling hook and set the fall...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:20  The '--lwc-colorBackgroundShade' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-2' styling hook and set the fallback to '--lw...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:21  The '--lwc-colorBackgroundStencil' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-container-2' styling hook and set the fallb...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:22  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:24  The '--lwc-colorBorder' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-90' styling hook and set the fallback to '--lwc-c...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:25  The '--lwc-colorBorderInput' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-80' styling hook and set the fallback to '--...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:26  The '--lwc-colorBorderInput' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-80' styling hook and set the fallback to '--...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:27  The '--lwc-colorBorderSeparator' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-95' styling hook and set the fallback to...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:29  The '--lwc-colorTextDefault' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-on-surface-3' styling hook and set the fallback to '--lwc...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:30  The '--lwc-colorTextDefault' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-on-surface-3' styling hook and set the fallback to '--lwc...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:31  The '--lwc-colorTextLabel' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-info-1' styling hook and set the fallback to '--lwc-colorTe...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:33  The '--lwc-colorTextInputDisabled' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-30' styling hook and set the fallback ...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:35  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:36  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:37  The '--lwc-brandPrimary' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-accent-1' styling hook and set the fallback to '--lwc-brandPr...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:39  The '--lwc-fontFamily' design token is deprecated. Replace it with the SLDS 2 '--slds-g-font-family-base' styling hook and set the fallback to '--lwc-fontFam...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:40  The '--lwc-borderRadiusMedium' design token is deprecated. Replace it with the SLDS 2 '--slds-g-radius-border-2' styling hook and set the fallback to '--lwc-...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:41  The '--lwc-borderRadiusMedium' design token is deprecated. Replace it with the SLDS 2 '--slds-g-radius-border-2' styling hook and set the fallback to '--lwc-...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:45  The '--lwc-colorBackgroundShade' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-surface-2' styling hook and set the fallback to '--lw...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:84  The '--lwc-colorBorder' design token is deprecated. Replace it with the SLDS 2 '--slds-g-color-neutral-base-90' styling hook and set the fallback to '--lwc-c...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:85  The '--lwc-borderRadiusMedium' design token is deprecated. Replace it with the SLDS 2 '--slds-g-radius-border-2' styling hook and set the fallback to '--lwc-...
+3    eslint      @salesforce-ux/slds/lwc-token-to-slds-hook     force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:86  The '--lwc-colorBackgroundAlt' design token is deprecated. Replace it with the SLDS 2 ' 1. --slds-g-color-surface-1 2. --slds-g-color-surface-container-1' st...
+3    eslint      no-useless-escape                              force-app/main/default/lwc/docEngineLib/docEngineLib.js:624  Unnecessary escape character: \-.
+3    eslint      no-useless-escape                              force-app/main/default/lwc/docEngineLib/docEngineLib.js:624  Unnecessary escape character: \/.
+3    eslint      no-useless-escape                              force-app/main/default/lwc/docEngineLib/docEngineLib.js:628  Unnecessary escape character: \-.
+3    eslint      no-useless-escape                              force-app/main/default/lwc/docEngineLib/docEngineLib.js:628  Unnecessary escape character: \/.
+3    pmd         ApexUnitTestClassShouldHaveAsserts             force-app/main/default/classes/DocEngineAccessTest.cls:12  Apex unit tests should System.assert() or assertEquals() or assertNotEquals()
+3    pmd         ApexUnitTestClassShouldHaveAsserts             force-app/main/default/classes/DocEngineAccessTest.cls:53  Apex unit tests should System.assert() or assertEquals() or assertNotEquals()
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineButtonController.cls:10  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineButtonController.cls:12  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineButtonController.cls:13  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineButtonController.cls:14  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineInstanceController.cls:773  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEnginePublicFormService.cls:98  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineTemplateController.cls:17  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineTemplateController.cls:24  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineTemplateController.cls:43  Avoid Boolean method parameters
+3    pmd         AvoidBooleanMethodParameters                   force-app/main/default/classes/DocEngineWriteback.cls:185  Avoid Boolean method parameters
+3    pmd         AvoidDeeplyNestedIfStmts                       force-app/main/default/classes/DocEngineInstanceController.cls:1039  Deeply nested if..then statements are hard to read
+3    pmd         AvoidDeeplyNestedIfStmts                       force-app/main/default/classes/DocEngineMergeController.cls:485  Deeply nested if..then statements are hard to read
+3    pmd         AvoidDeeplyNestedIfStmts                       force-app/main/default/classes/DocEnginePublicFormService.cls:275  Deeply nested if..then statements are hard to read
+3    pmd         AvoidGlobalModifier                            force-app/main/default/classes/DocEnginePostInstall.cls:6  Avoid using global modifier
+3    pmd         AvoidHardcodingId                              force-app/main/default/classes/DocEngineObjectDescribeController.cls:161  Hardcoding Ids is bound to break when changing environments.
+3    pmd         AvoidHardcodingId                              force-app/main/default/classes/DocEngineObjectDescribeController.cls:431  Hardcoding Ids is bound to break when changing environments.
+3    pmd         AvoidHardcodingId                              force-app/main/default/classes/DocEngineObjectDescribeController.cls:592  Hardcoding Ids is bound to break when changing environments.
+3    pmd         AvoidHardcodingId                              force-app/main/default/classes/DocEngineObjectDescribeController.cls:680  Hardcoding Ids is bound to break when changing environments.
+3    pmd         AvoidInvalidCrudContentDistribution            force-app/main/default/classes/DocEngineInstanceController.cls:705  Do not use Schema.DescribeSObjectResult methods to enforce CRUD check on ContentDistribution
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineFormLinkController.cls:5  The class 'DocEngineFormLinkController' has a total cognitive complexity of 84 (highest 20), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineFormLinkController.cls:44  The method 'createFormLink(FormLinkDTO)' has a cognitive complexity of 20, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineFormLinkController.cls:299  The method 'parseCreateRequest(String)' has a cognitive complexity of 15, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineFormLinkController.cls:437  The method 'suggestExperienceSiteBaseUrl()' has a cognitive complexity of 15, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineInstanceController.cls:5  The class 'DocEngineInstanceController' has a total cognitive complexity of 275 (highest 30), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineInstanceController.cls:256  The method 'saveInstanceImpl(InstanceDTO)' has a cognitive complexity of 30, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineInstanceController.cls:418  The method 'uploadFieldImageImpl(String, String, String)' has a cognitive complexity of 17, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineInstanceController.cls:768  The method 'sendShareEmail(Id, String, String, String, Boolean, Id)' has a cognitive complexity of 29, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineInstanceController.cls:960  The method 'saveFileFromBlob(Id, Blob, String, String)' has a cognitive complexity of 19, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineInstanceController.cls:1096  The method 'assertFileLinkedToAuthorizedRecord(Id, String)' has a cognitive complexity of 19, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineListController.cls:7  The class 'DocEngineListController' has a total cognitive complexity of 64 (highest 19), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineListController.cls:93  The method 'searchByName(String, String)' has a cognitive complexity of 19, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineMergeController.cls:10  The class 'DocEngineMergeController' has a total cognitive complexity of 248 (highest 37), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineMergeController.cls:18  The method 'buildPayload(Id, Id, Id)' has a cognitive complexity of 37, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineMergeController.cls:347  The method 'walkMappingForPaths(Object, Set<String>)' has a cognitive complexity of 18, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineMergeController.cls:464  The method 'sobjectBranchToMap(SObject, Set<String>)' has a cognitive complexity of 25, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineObjectDescribeController.cls:4  The class 'DocEngineObjectDescribeController' has a total cognitive complexity of 371 (highest 26), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineObjectDescribeController.cls:55  The method 'listSourceObjects(String)' has a cognitive complexity of 22, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineObjectDescribeController.cls:147  The method 'buildSourceSampleJson(String)' has a cognitive complexity of 26, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineObjectDescribeController.cls:429  The method 'buildChildRowSample(Schema.DescribeSObjectResult)' has a cognitive complexity of 16, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineObjectDescribeController.cls:581  The method 'buildRelatedSample(Schema.DescribeFieldResult)' has a cognitive complexity of 24, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEnginePdfController.cls:10  The class 'DocEnginePdfController' has a total cognitive complexity of 66 (highest 13), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEnginePublicFormService.cls:6  The class 'DocEnginePublicFormService' has a total cognitive complexity of 141 (highest 35), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEnginePublicFormService.cls:194  The method 'submit(String, String, String, String)' has a cognitive complexity of 35, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineTemplateController.cls:5  The class 'DocEngineTemplateController' has a total cognitive complexity of 115 (highest 10), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineWriteback.cls:6  The class 'DocEngineWriteback' has a total cognitive complexity of 400 (highest 27), current threshold is 50
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineWriteback.cls:84  The method 'apply(Object, Object, String, Boolean)' has a cognitive complexity of 27, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineWriteback.cls:375  The method 'lookupAnswer(Map<String, Object>, String, String)' has a cognitive complexity of 15, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineWriteback.cls:443  The method 'coerceValue(Object, Schema.DescribeFieldResult, String)' has a cognitive complexity of 26, current threshold is 15
+3    pmd         CognitiveComplexity                            force-app/main/default/classes/DocEngineWriteback.cls:556  The method 'buildPrefill(String, Id, String)' has a cognitive complexity of 21, current threshold is 15
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineFormLinkController.cls:5  The class 'DocEngineFormLinkController' has a total cyclomatic complexity of 118 (highest 30).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineFormLinkController.cls:44  The method 'createFormLink(FormLinkDTO)' has a cyclomatic complexity of 30.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineFormLinkController.cls:184  The method 'savePublicFormSiteBaseUrl(String)' has a cyclomatic complexity of 11.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineFormLinkController.cls:299  The method 'parseCreateRequest(String)' has a cyclomatic complexity of 17.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineFormLinkController.cls:344  The method 'validateTargetRecord(String, String)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineFormLinkController.cls:437  The method 'suggestExperienceSiteBaseUrl()' has a cyclomatic complexity of 14.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:5  The class 'DocEngineInstanceController' has a total cyclomatic complexity of 328 (highest 41).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:80  The method 'getInstance(Id)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:167  The method 'deleteInstance(Id)' has a cyclomatic complexity of 13.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:256  The method 'saveInstanceImpl(InstanceDTO)' has a cyclomatic complexity of 41.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:418  The method 'uploadFieldImageImpl(String, String, String)' has a cyclomatic complexity of 25.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:513  The method 'listRecordImages(String)' has a cyclomatic complexity of 11.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:575  The method 'resolveFieldImage(String, String)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:671  The method 'prepareShare(Id, String, String, String)' has a cyclomatic complexity of 12.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:768  The method 'sendShareEmail(Id, String, String, String, Boolean, Id)' has a cyclomatic complexity of 40.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:960  The method 'saveFileFromBlob(Id, Blob, String, String)' has a cyclomatic complexity of 18.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:1096  The method 'assertFileLinkedToAuthorizedRecord(Id, String)' has a cyclomatic complexity of 14.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineInstanceController.cls:1399  The method 'parseInstanceDto(String)' has a cyclomatic complexity of 12.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineListController.cls:50  The method 'resolvePicklist(String, String, String)' has a cyclomatic complexity of 13.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineListController.cls:93  The method 'searchByName(String, String)' has a cyclomatic complexity of 18.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineMergeController.cls:10  The class 'DocEngineMergeController' has a total cyclomatic complexity of 140 (highest 31).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineMergeController.cls:18  The method 'buildPayload(Id, Id, Id)' has a cyclomatic complexity of 31.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineMergeController.cls:379  The method 'addNormalizedPath(Set<String>, String)' has a cyclomatic complexity of 11.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineMergeController.cls:464  The method 'sobjectBranchToMap(SObject, Set<String>)' has a cyclomatic complexity of 13.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:4  The class 'DocEngineObjectDescribeController' has a total cyclomatic complexity of 158 (highest 24).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:55  The method 'listSourceObjects(String)' has a cyclomatic complexity of 24.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:147  The method 'buildSourceSampleJson(String)' has a cyclomatic complexity of 20.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:220  The method 'buildRelatedSampleJson(String, String)' has a cyclomatic complexity of 19.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:282  The method 'addChildRelationshipStubs(Schema.DescribeSObjectResult, Map<String, Object>)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:429  The method 'buildChildRowSample(Schema.DescribeSObjectResult)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:581  The method 'buildRelatedSample(Schema.DescribeFieldResult)' has a cyclomatic complexity of 17.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineObjectDescribeController.cls:652  The method 'sampleValueFor(Schema.DescribeFieldResult)' has a cyclomatic complexity of 14.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePdfController.cls:10  The class 'DocEnginePdfController' has a total cyclomatic complexity of 61 (highest 18).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePdfController.cls:160  The method 'storePreviewAndGetUrl(Blob)' has a cyclomatic complexity of 18.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePublicFormService.cls:6  The class 'DocEnginePublicFormService' has a total cyclomatic complexity of 106 (highest 25).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePublicFormService.cls:21  The method 'resolveLink(String, Boolean)' has a cyclomatic complexity of 20.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePublicFormService.cls:98  The method 'assertLinkUsable(DocEngine_Form_Link__c, Boolean)' has a cyclomatic complexity of 13.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePublicFormService.cls:194  The method 'submit(String, String, String, String)' has a cyclomatic complexity of 25.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePublicFormService.cls:315  The method 'validatePinnedRecordMapping(DocEngine_Form_Link__c)' has a cyclomatic complexity of 12.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEnginePublicFormService.cls:350  The method 'attachFileElevated(Id, Id, Blob, String, String)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineTemplateController.cls:5  The class 'DocEngineTemplateController' has a total cyclomatic complexity of 99 (highest 16).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineTemplateController.cls:268  The method 'saveTemplate(TemplateDTO)' has a cyclomatic complexity of 16.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineTemplateController.cls:349  The method 'assertTemplateSaveAllowed(Id)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineTemplateVersionService.cls:33  The method 'ensureCurrentVersionId(Id)' has a cyclomatic complexity of 10.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:6  The class 'DocEngineWriteback' has a total cyclomatic complexity of 182 (highest 24).
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:84  The method 'apply(Object, Object, String, Boolean)' has a cyclomatic complexity of 24.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:185  The method 'sanitizeElevatedForDml(Result, Boolean)' has a cyclomatic complexity of 16.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:276  The method 'addV1Rule(List<WriteRule>, Object)' has a cyclomatic complexity of 14.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:323  The method 'toWriteRule(String, String, String)' has a cyclomatic complexity of 17.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:375  The method 'lookupAnswer(Map<String, Object>, String, String)' has a cyclomatic complexity of 13.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:409  The method 'toScalar(Object)' has a cyclomatic complexity of 15.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:443  The method 'coerceValue(Object, Schema.DescribeFieldResult, String)' has a cyclomatic complexity of 23.
+3    pmd         CyclomaticComplexity                           force-app/main/default/classes/DocEngineWriteback.cls:556  The method 'buildPrefill(String, Id, String)' has a cyclomatic complexity of 17.
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineInstanceController.cls:671  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineInstanceController.cls:768  Avoid long parameter lists (6 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineInstanceController.cls:897  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineInstanceController.cls:960  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEnginePublicFormController.cls:21  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEnginePublicFormService.cls:194  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEnginePublicFormService.cls:350  Avoid long parameter lists (5 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineTemplateController.cls:437  Avoid long parameter lists (5 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineTemplateVersionService.cls:107  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         ExcessiveParameterList                         force-app/main/default/classes/DocEngineWriteback.cls:84  Avoid long parameter lists (4 parameters - threshold is 4).
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineInstanceController.cls:71  Field declaration for 'IMAGE_EXTENSIONS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineInstanceController.cls:74  Field declaration for 'MAX_FILE_BYTES' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineInstanceController.cls:75  Field declaration for 'MAX_EMAIL_ATTACHMENT_BYTES' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineInstanceController.cls:76  Field declaration for 'MAX_FILENAME_LENGTH' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineInstanceController.cls:77  Field declaration for 'SHARE_EXPIRY_DAYS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineObjectDescribeController.cls:132  Field declaration for 'MAX_ROOT_FIELDS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineObjectDescribeController.cls:133  Field declaration for 'MAX_PARENT_RELATIONSHIPS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineObjectDescribeController.cls:134  Field declaration for 'MAX_RELATED_FIELDS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineObjectDescribeController.cls:135  Field declaration for 'MAX_CHILD_RELATIONSHIPS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineObjectDescribeController.cls:136  Field declaration for 'MAX_CHILD_FIELDS' should be before method declarations in its class
+3    pmd         FieldDeclarationsShouldBeAtStart               force-app/main/default/classes/DocEngineObjectDescribeController.cls:139  Field declaration for 'LAZY_MARKER' should be before method declarations in its class
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineFormLinkController.cls:44  The method 'createFormLink(FormLinkDTO)' has a NCSS line count of 47 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineInstanceController.cls:5  The class 'DocEngineInstanceController' has a NCSS line count of 715 (limit: 500, highest: 61).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineInstanceController.cls:256  The method 'saveInstanceImpl(InstanceDTO)' has a NCSS line count of 61 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineInstanceController.cls:418  The method 'uploadFieldImageImpl(String,String,String)' has a NCSS line count of 47 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineInstanceController.cls:768  The method 'sendShareEmail(Id,String,String,String,Boolean,Id)' has a NCSS line count of 56 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineInstanceController.cls:960  The method 'saveFileFromBlob(Id,Blob,String,String)' has a NCSS line count of 59 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineInstanceControllerTest.cls:670  The method 'rejectsVersionSubstitutionAndDocumentRetargeting()' has a NCSS line count of 43 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineMergeController.cls:18  The method 'buildPayload(Id,Id,Id)' has a NCSS line count of 65 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineObjectDescribeController.cls:55  The method 'listSourceObjects(String)' has a NCSS line count of 40 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineObjectDescribeController.cls:147  The method 'buildSourceSampleJson(String)' has a NCSS line count of 41 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineObjectDescribeController.cls:581  The method 'buildRelatedSample(Schema.DescribeFieldResult)' has a NCSS line count of 42 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEnginePublicFormService.cls:194  The method 'submit(String,String,String,String)' has a NCSS line count of 63 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEnginePublicFormTest.cls:38  The method 'createGetSubmitAndRevoke()' has a NCSS line count of 52 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineWriteback.cls:84  The method 'apply(Object,Object,String,Boolean)' has a NCSS line count of 63 (limit: 40).
+3    pmd         NcssCount                                      force-app/main/default/classes/DocEngineWriteback.cls:556  The method 'buildPrefill(String,Id,String)' has a NCSS line count of 49 (limit: 40).
+3    pmd         OperationWithLimitsInLoop                      force-app/main/default/classes/DocEngineAccess.cls:111  Avoid operations in loops that may hit governor limits
+3    pmd         ProtectSensitiveData                           force-app/main/default/objects/DocEngine_Form_Link__c/fields/Token__c.field-meta.xml:1  Token__c is a potential auth token in a custom object: DocEngine_Form_Link__c
+3    pmd         ProtectSensitiveData                           force-app/main/default/objects/DocEngine_Settings__c/fields/Public_Form_Site_Base_URL__c.field-meta.xml:1  Public_Form_Site_Base_URL__c is a potential auth token in the object: DocEngine_Settings__c with public visibility
+3    pmd         ProtectSensitiveData                           force-app/main/default/objects/DocEngine_Template_Version__c/fields/Version_Key__c.field-meta.xml:1  Version_Key__c is a potential auth token in a custom object: DocEngine_Template_Version__c
+3    pmd         ProtectSensitiveData                           force-app/main/default/objects/DocEngine_Template__c/fields/Access_Group_Id__c.field-meta.xml:1  Access_Group_Id__c is a potential auth token in a custom object: DocEngine_Template__c
+3    pmd         ProtectSensitiveData                           force-app/main/default/objects/DocEngine_Template__c/fields/Public_Form_Enabled__c.field-meta.xml:1  Public_Form_Enabled__c is a potential auth token in a custom object: DocEngine_Template__c
+3    pmd         ProtectSensitiveData                           force-app/main/default/objects/DocEngine_Template__c/fields/Public_Form_Mode__c.field-meta.xml:1  Public_Form_Mode__c is a potential auth token in a custom object: DocEngine_Template__c
+3    pmd         TooManyFields                                  force-app/main/default/classes/DocEngineFormLinkController.cls:6  Too many fields
+3    pmd         UnusedLocalVariable                            force-app/main/default/classes/DocEngineListController.cls:154  Variable 'findTerm' defined but not used
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:43  Consider replacing the 2rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-9.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:47  Consider replacing the 320px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-15.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFiller/docEngineFiller.css:60  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-3.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFormLinks/docEngineFormLinks.css:13  There's no replacement styling hook for the 40rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFormLinks/docEngineFormLinks.css:17  There's no replacement styling hook for the 22rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFormLinks/docEngineFormLinks.css:21  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-font-scale-neg-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineFormLinks/docEngineFormLinks.css:26  There's no replacement styling hook for the 0.8em static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:6  There's no replacement styling hook for the 100% static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:17  Consider replacing the 4rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-11.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:25  Consider replacing the 1px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-border-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:26  Consider replacing the 1px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-border-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:28  There's no replacement styling hook for the -1px static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:45  Consider replacing the 16px static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:45  Consider replacing the 12px static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-3.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:45  Consider replacing the 24px static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-5.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:58  Consider replacing the 1px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-border-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:59  There's no replacement styling hook for the 2px static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:71  Consider replacing the 4rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-11.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineModal/docEngineModal.css:97  There's no replacement styling hook for the 100% static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:3  There's no replacement styling hook for the 52rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:5  Consider replacing the 1rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:5  There's no replacement styling hook for the 1.25rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:5  Consider replacing the 2rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-6.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:7  Consider replacing the #181818 static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-on-surface-2 2. --slds-g-color-neutral-b...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:17  Consider replacing the 0.25rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:22  Consider replacing the 1.5rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-font-scale-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:23  Consider replacing the 700 static value with an SLDS 2 styling hook that has a similar value: --slds-g-font-weight-7.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:24  Consider replacing the 1.25 static value with an SLDS 2 styling hook that has a similar value: --slds-g-font-line-height-2.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:28  There's no replacement styling hook for the 0.35rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:29  Consider replacing the #5c5c5c static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-on-surface-1 2. --slds-g-color-neutral-b...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:30  There's no replacement styling hook for the 0.9375rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:35  Consider replacing the 2.5rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-7.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:35  Consider replacing the 1rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:39  Consider replacing the #ba0517 static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-palette-red-40 2. --slds-g-color-palette...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:43  Consider replacing the #2e844a static value with an SLDS 2 styling hook that has a similar value: --slds-g-color-palette-green-50.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:57  There's no replacement styling hook for the 280px static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:58  Consider replacing the #fff static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-surface-1 2. --slds-g-color-surface-contain...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:59  Consider replacing the 1px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-border-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:59  Consider replacing the #e5e5e5 static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-border-1 2. --slds-g-color-border-invers...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:60  There's no replacement styling hook for the 0.35rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:61  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-3.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:69  Consider replacing the 0.5rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-2.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:74  Consider replacing the #5c5c5c static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-on-surface-1 2. --slds-g-color-neutral-b...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEnginePublicForm/docEnginePublicForm.css:75  Consider replacing the 0.875rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-font-scale-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineRun/docEngineRun.css:2  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-3.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineRun/docEngineRun.css:2  Consider replacing the 1rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineRun/docEngineRun.css:3  Consider replacing the 5rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-12.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineRun/docEngineRun.css:10  Consider replacing the 4rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-11.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineRun/docEngineRun.css:15  Consider replacing the 0.5rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-2.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:5  Consider replacing the rgba(0, 0, 0, 0.35) static value with an SLDS 2 styling hook that has a similar value:  1. --slds-g-color-neutral-base-0 2. --slds-g-c...
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:13  There's no replacement styling hook for the 100% static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:25  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-3.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:25  Consider replacing the 1rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:26  There's no replacement styling hook for the 1px static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:30  Consider replacing the 1rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-4.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:36  There's no replacement styling hook for the 100% static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:49  Consider replacing the 2rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-9.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:53  Consider replacing the 480px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-16.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:59  Consider replacing the 480px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-16.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:76  There's no replacement styling hook for the 8.5rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:83  There's no replacement styling hook for the 0.125rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:83  There's no replacement styling hook for the 0.375rem static value. Remove the static value.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:84  Consider replacing the 1px static value with an SLDS 2 styling hook that has a similar value: --slds-g-sizing-border-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:90  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-font-scale-neg-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:92  Consider replacing the 0.25rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-1.
+4    eslint      @salesforce-ux/slds/no-hardcoded-values-slds2  force-app/main/default/lwc/docEngineTemplateBuilder/docEngineTemplateBuilder.css:114  Consider replacing the 0.75rem static value with an SLDS 2 styling hook that has a similar value: --slds-g-spacing-3.
+4    eslint      @salesforce-ux/slds/no-slds-class-overrides    force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:20  Overriding slds-panel__header isn't supported. To differentiate SLDS and custom classes, create a CSS class in your namespace. Examples: myapp-input, myapp-b...
+4    eslint      @salesforce-ux/slds/no-slds-class-overrides    force-app/main/default/lwc/docEngineShareDialog/docEngineShareDialog.css:29  Overriding slds-panel__body isn't supported. To differentiate SLDS and custom classes, create a CSS class in your namespace. Examples: myapp-input, myapp-button
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineAccess.cls:39  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineAccess.cls:59  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineAccess.cls:68  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineAccess.cls:88  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineAccess.cls:102  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineAccess.cls:135  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:5  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:6  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:7  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:8  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:9  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:10  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:11  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:12  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:13  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:14  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:18  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:55  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:55  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:89  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineButtonController.cls:89  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:6  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:33  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:33  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:44  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:170  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:184  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:225  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:251  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:263  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineFormLinkController.cls:437  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:6  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:7  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:8  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:9  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:14  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:15  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:16  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:17  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:18  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:19  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:22  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:23  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:24  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:25  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:26  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:27  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:28  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:29  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:36  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:37  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:38  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:43  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:44  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:45  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:46  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:50  Missing ApexDoc main description
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:51  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:52  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:57  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:58  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:59  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:64  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:65  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:66  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:67  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:68  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:80  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:123  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:123  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:167  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:224  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:224  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:246  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:404  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:404  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:513  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:513  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:575  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:575  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:623  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:623  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:642  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:642  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:654  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:654  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:671  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:671  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:768  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:897  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:960  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:960  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:1261  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:1261  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:1458  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineInstanceController.cls:1458  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineListController.cls:8  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineListController.cls:14  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineListController.cls:28  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineListController.cls:28  Missing ApexDoc main description
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:18  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:18  Missing ApexDoc main description
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:18  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:217  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:217  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:272  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:272  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:306  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:306  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:332  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:332  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:407  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:407  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:464  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineMergeController.cls:464  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:5  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:10  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:25  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:31  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:46  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:55  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:55  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:147  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:147  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:220  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:220  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:282  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:468  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:468  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:487  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:487  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:534  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:581  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineObjectDescribeController.cls:581  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:18  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:29  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:38  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:49  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:49  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:58  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:58  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:78  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:78  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:97  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePdfController.cls:97  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePostInstall.cls:14  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormController.cls:7  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormController.cls:21  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:10  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:16  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:98  Missing ApexDoc main description
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:98  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:118  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:127  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:176  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:176  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:194  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:350  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:416  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:421  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEnginePublicFormService.cls:430  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:11  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:12  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:13  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:14  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:17  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:18  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:21  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:22  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:31  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:32  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:33  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:34  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:35  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:38  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:39  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:40  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:41  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:42  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:43  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:46  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:47  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:48  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:55  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:78  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:78  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:86  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:122  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:122  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:173  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:173  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:214  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:214  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:245  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:245  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:259  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:259  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:268  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:268  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:399  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateController.cls:399  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSaveService.cls:8  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSaveService.cls:9  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSaveService.cls:10  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSaveService.cls:11  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSaveService.cls:12  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSaveService.cls:15  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateSharingService.cls:6  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateVersionService.cls:10  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateVersionService.cls:10  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateVersionService.cls:33  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateVersionService.cls:75  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineTemplateVersionService.cls:127  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:23  Missing ApexDoc comment
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:43  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:43  Missing ApexDoc main description
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:57  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:57  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:71  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:71  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:84  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:84  Missing ApexDoc main description
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:84  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:185  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:185  Missing or mismatched ApexDoc @param
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:556  Missing ApexDoc @return
+4    pmd         ApexDoc                                        force-app/main/default/classes/DocEngineWriteback.cls:556  Missing or mismatched ApexDoc @param
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineAccessTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineAccessTest.cls:12  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineButtonControllerTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineButtonControllerTest.cls:39  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineButtonControllerTest.cls:71  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineButtonControllerTest.cls:87  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:17  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:73  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:117  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:182  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:214  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:262  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:297  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:338  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:372  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:468  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:499  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:529  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:564  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:586  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:624  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:647  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineInstanceControllerTest.cls:670  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineListControllerTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineListControllerTest.cls:17  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineListControllerTest.cls:29  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineListControllerTest.cls:43  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineListControllerTest.cls:70  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineListControllerTest.cls:80  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineMergeControllerTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineMergeControllerTest.cls:28  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineMergeControllerTest.cls:38  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineMergeControllerTest.cls:60  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineMergeControllerTest.cls:70  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineMergeControllerTest.cls:96  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:21  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:34  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:45  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:65  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:92  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:109  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:126  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:139  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:150  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineObjectDescribeControllerTest.cls:169  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:27  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:33  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:51  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:63  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:74  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:93  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePdfControllerTest.cls:115  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePostInstallTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePostInstallTest.cls:15  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePostInstallTest.cls:42  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePostInstallTest.cls:88  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:38  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:138  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:162  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:199  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:251  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:260  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:303  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:335  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEnginePublicFormTest.cls:367  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:49  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:78  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:101  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:109  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:123  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:141  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:236  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:254  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineTemplateControllerTest.cls:271  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:4  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:50  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:85  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:104  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:130  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:157  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:189  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:207  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:226  Apex unit test classes should have at least one System.runAs() call
+4    pmd         ApexUnitTestClassShouldHaveRunAs               force-app/main/default/classes/DocEngineWritebackTest.cls:246  Apex unit test classes should have at least one System.runAs() call
+4    pmd         AvoidDebugStatements                           force-app/main/default/classes/DocEngineFormLinkController.cls:452  Avoid debug statements since they impact on performance
+5    cpd         DetectCopyPasteForApex                         force-app/main/default/classes/DocEngineInstanceControllerTest.cls:297  Duplicate code detected for language 'apex'. Found 2 code locations containing the same block of code consisting of 106 tokens across 24 lines.
+5    cpd         DetectCopyPasteForApex                         force-app/main/default/classes/DocEngineMergeController.cls:464  Duplicate code detected for language 'apex'. Found 2 code locations containing the same block of code consisting of 115 tokens across 15 lines.
+5    cpd         DetectCopyPasteForJavascript                   force-app/main/default/lwc/docEngineFiller/docEngineFiller.js:360  Duplicate code detected for language 'javascript'. Found 2 code locations containing the same block of code consisting of 216 tokens across 30 lines.
+5    cpd         DetectCopyPasteForJavascript                   force-app/main/default/lwc/docEngineFiller/docEngineFiller.js:387  Duplicate code detected for language 'javascript'. Found 2 code locations containing the same block of code consisting of 112 tokens across 21 lines.
+5    cpd         DetectCopyPasteForJavascript                   force-app/main/default/lwc/docEngineInstanceList/docEngineInstanceList.js:7  Duplicate code detected for language 'javascript'. Found 2 code locations containing the same block of code consisting of 165 tokens across 21 lines.
+5    cpd         DetectCopyPasteForJavascript                   force-app/main/default/lwc/docEngineInstanceList/docEngineInstanceList.js:380  Duplicate code detected for language 'javascript'. Found 2 code locations containing the same block of code consisting of 133 tokens across 23 lines.
+5    cpd         DetectCopyPasteForJavascript                   force-app/main/default/lwc/docEngineModal/docEngineModal.js:581  Duplicate code detected for language 'javascript'. Found 2 code locations containing the same block of code consisting of 125 tokens across 21 lines.

@@ -1,17 +1,19 @@
 <template>
   <lightning-card title="Document template builder" icon-name="standard:draft">
-    <div class="slds-p-around_medium">
+    <div class="builder-body">
       <div class="meta-grid">
         <lightning-input
           label="Template name"
           value={templateName}
           onchange={handleNameChange}
           required
+          class="meta-field--name"
         ></lightning-input>
         <lightning-input
           label="Description"
           value={description}
           onchange={handleDescriptionChange}
+          class="meta-field--desc"
         ></lightning-input>
         <lightning-input
           label="Object API name"
@@ -20,12 +22,14 @@
           placeholder="Account"
           required
           disabled={objectApiNameLocked}
+          class="meta-field--object"
         ></lightning-input>
         <lightning-input
           type="toggle"
           label="Active"
           checked={isActive}
           onchange={handleActiveChange}
+          class="meta-field--toggle"
         ></lightning-input>
         <lightning-combobox
           label="Access Public Group"
@@ -34,7 +38,26 @@
           onchange={handleAccessGroupIdChange}
           placeholder="None — all users with access"
           field-level-help="Optional. Restrict fill access to members of this Public Group."
+          dropdown-alignment="auto"
+          class="meta-field--group"
         ></lightning-combobox>
+        <lightning-combobox
+          label="Output format"
+          value={outputFormat}
+          options={outputFormatOptions}
+          onchange={handleOutputFormatChange}
+          field-level-help="Finish attaches a PDF or HTML file for documents from this template."
+          dropdown-alignment="auto"
+          class="meta-field--picklist"
+        ></lightning-combobox>
+        <lightning-input
+          type="toggle"
+          label="Hide empty fields"
+          checked={hideEmpty}
+          onchange={handleHideEmptyChange}
+          field-level-help="When on, preview and export omit empty field values."
+          class="meta-field--toggle-wide"
+        ></lightning-input>
         <lightning-combobox
           label="Template version"
           value={versionId}
@@ -42,7 +65,9 @@
           onchange={handleVersionChange}
           placeholder="Current version"
           disabled={versionPickerDisabled}
-          field-level-help={saveHint}
+          field-level-help={versionPickerHelp}
+          dropdown-alignment="auto"
+          class="meta-field--version"
         ></lightning-combobox>
       </div>
 
@@ -114,14 +139,21 @@
             <lightning-button-icon
               icon-name="utility:download"
               alternative-text="Export values"
-              title="Export values"
+              title="Export values (all fields)"
               onclick={handleExportValues}
+              disabled={editorBusy}
+            ></lightning-button-icon>
+            <lightning-button-icon
+              icon-name="utility:filter"
+              alternative-text="Export scenario values"
+              title="Export scenario values (excludes mapped fields)"
+              onclick={handleExportScenarioValues}
               disabled={editorBusy}
             ></lightning-button-icon>
             <lightning-button-icon
               icon-name="utility:upload"
               alternative-text="Import values"
-              title="Import values"
+              title="Import values (mapped fields ignored)"
               onclick={handleImportValuesClick}
               disabled={editorBusy}
             ></lightning-button-icon>
@@ -157,10 +189,6 @@
         lwc:dom="manual"
         class="doc-editor-root doc-editor-host doc-editor-host__surface editor-root"
       ></div>
-
-      <template if:true={statusMessage}>
-        <p class="slds-m-top_small slds-text-body_small slds-text-color_weak">{statusMessage}</p>
-      </template>
     </div>
   </lightning-card>
 </template>

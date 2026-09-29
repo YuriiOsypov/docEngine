@@ -13,6 +13,26 @@ public with sharing class DocEngineAccess {
   private static Boolean cachedHasViewAllTemplates;
 
   /**
+   * Administrative configuration must not rely on object CRUD alone because
+   * subscriber profiles can grant CRUD independently of DocEngine.
+   */
+  public static void assertManageAccess() {
+    if (FeatureManagement.checkPermission('Manage_DocEngine')) {
+      return;
+    }
+    List<Profile> profiles = [
+      SELECT PermissionsModifyAllData
+      FROM Profile
+      WHERE Id = :UserInfo.getProfileId()
+      WITH USER_MODE
+      LIMIT 1
+    ];
+    if (profiles.isEmpty() || profiles[0].PermissionsModifyAllData != true) {
+      throw new AuraHandledException('DocEngine Admin permission is required.');
+    }
+  }
+
+  /**
    * Throws if the running user may not use the template (Public Group restriction).
    * Users with View All Records on DocEngine_Template__c bypass the group check.
    */
@@ -24,7 +44,7 @@ public with sharing class DocEngineAccess {
       SELECT Access_Group_Id__c
       FROM DocEngine_Template__c
       WHERE Id = :templateId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -53,7 +73,7 @@ public with sharing class DocEngineAccess {
       SELECT Template__r.Access_Group_Id__c
       FROM DocEngine_Document__c
       WHERE Id = :documentId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -92,6 +112,7 @@ public with sharing class DocEngineAccess {
         SELECT GroupId, Group.Type
         FROM GroupMember
         WHERE UserOrGroupId IN :frontier
+        WITH USER_MODE
       ];
       Set<Id> nextFrontier = new Set<Id>();
       for (GroupMember gm : members) {
@@ -127,6 +148,7 @@ public with sharing class DocEngineAccess {
           FROM ObjectPermissions
           WHERE SObjectType = :templateTypeName AND PermissionsViewAllRecords = true
         )
+      WITH USER_MODE
       LIMIT 1
     ];
     cachedHasViewAllTemplates = !assignments.isEmpty();

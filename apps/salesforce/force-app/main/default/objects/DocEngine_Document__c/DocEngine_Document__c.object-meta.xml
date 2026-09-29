@@ -18,5 +18,5 @@
         <type>AutoNumber</type>
     </nameField>
     <pluralLabel>DocEngine Documents</pluralLabel>
-    <sharingModel>ReadWrite</sharingModel>
+    <sharingModel>Private</sharingModel>
 </CustomObject>

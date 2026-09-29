@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListView xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Public_Form_Submissions</fullName>
+    <booleanFilter>1</booleanFilter>
+    <columns>NAME</columns>
+    <columns>Status__c</columns>
+    <columns>Template__c</columns>
+    <columns>Form_Link__c</columns>
+    <columns>Completed_Date__c</columns>
+    <columns>CREATED_DATE</columns>
+    <columns>CREATEDBY_USER</columns>
+    <filterScope>Everything</filterScope>
+    <filters>
+        <field>Source__c</field>
+        <operation>equals</operation>
+        <value>PublicForm</value>
+    </filters>
+    <label>Public Form Submissions</label>
+</ListView>

@@ -11,6 +11,30 @@
   overflow: hidden; /* no outer scroll — only .editor-root scrolls */
 }
 
+/* Preview-only: keep editor mounted (for .preview()) but never show fill chrome. */
+.doc-shell--preview-only {
+  height: auto;
+  min-height: 4rem;
+  max-height: none;
+  overflow: visible;
+}
+
+.doc-shell--preview-only .fill-chrome,
+.doc-shell--preview-only .scenario-row,
+.doc-shell--preview-only .editor-root {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* Fill mode: page format/orientation (+10%) from --doc-page-* set by the editor */
 .doc-shell.doc-shell--fill-page {
   max-width: min(100%, calc(var(--doc-page-width, 231mm) + 4rem));
@@ -57,6 +81,29 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.scenario-toggle {
+  flex: 0 0 auto;
+  padding: 0.15rem 0 0.25rem;
+}
+
+.scenario-toggle lightning-input {
+  display: inline-block;
+}
+
+.scenario-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.scenario-combobox {
+  flex: 1 1 12rem;
+  min-width: 10rem;
 }
 
 /* Document body — sole vertical scroller */

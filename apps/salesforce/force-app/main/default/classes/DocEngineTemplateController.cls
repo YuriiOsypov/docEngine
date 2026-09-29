@@ -20,6 +20,10 @@ public with sharing class DocEngineTemplateController {
     @AuraEnabled public Id versionId { get; set; }
     @AuraEnabled public String description { get; set; }
     @AuraEnabled public String pdfFilename { get; set; }
+    /** When true, preview / export hide empty field values. */
+    @AuraEnabled public Boolean hideEmpty { get; set; }
+    /** Finish attach format: pdf (default) or html. */
+    @AuraEnabled public String outputFormat { get; set; }
     /** Public Group Id; blank = no group restriction. */
     @AuraEnabled public String accessGroupId { get; set; }
   }
@@ -49,11 +53,13 @@ public with sharing class DocEngineTemplateController {
    */
   @AuraEnabled(cacheable=true)
   public static List<GroupOption> listPublicGroups() {
+    DocEngineAccess.assertManageAccess();
     List<GroupOption> out = new List<GroupOption>();
     for (Group g : [
       SELECT Id, Name
       FROM Group
       WHERE Type = 'Regular'
+      WITH USER_MODE
       ORDER BY Name
       LIMIT 500
     ]) {
@@ -94,9 +100,12 @@ public with sharing class DocEngineTemplateController {
         Current_Version__r.Version__c,
         Description__c,
         PDF_Filename__c,
+        Hide_Empty__c,
+        Output_Format__c,
         Access_Group_Id__c
       FROM DocEngine_Template__c
       WHERE Id = :templateId
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -125,11 +134,14 @@ public with sharing class DocEngineTemplateController {
         Template__r.Is_Active__c,
         Template__r.Description__c,
         Template__r.PDF_Filename__c,
+        Template__r.Hide_Empty__c,
+        Template__r.Output_Format__c,
         Template__r.Access_Group_Id__c,
         Template__r.Current_Version__c,
         Template__r.Version__c
       FROM DocEngine_Template_Version__c
       WHERE Id = :versionId
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -148,6 +160,8 @@ public with sharing class DocEngineTemplateController {
     dto.versionId = ver.Id;
     dto.description = ver.Template__r.Description__c;
     dto.pdfFilename = ver.Template__r.PDF_Filename__c;
+    dto.hideEmpty = ver.Template__r.Hide_Empty__c == true;
+    dto.outputFormat = normalizeOutputFormat(ver.Template__r.Output_Format__c);
     dto.accessGroupId = ver.Template__r.Access_Group_Id__c;
     return dto;
   }
@@ -166,6 +180,7 @@ public with sharing class DocEngineTemplateController {
       SELECT Id, Current_Version__c
       FROM DocEngine_Template__c
       WHERE Id = :templateId
+      WITH USER_MODE
       LIMIT 1
     ];
     Id currentId = heads.isEmpty() ? null : heads[0].Current_Version__c;
@@ -175,6 +190,7 @@ public with sharing class DocEngineTemplateController {
       SELECT Id, Version__c, CreatedDate, CreatedBy.Name
       FROM DocEngine_Template_Version__c
       WHERE Template__c = :templateId
+      WITH USER_MODE
       ORDER BY Version__c DESC
       LIMIT 200
     ]) {
@@ -203,6 +219,7 @@ public with sharing class DocEngineTemplateController {
       SELECT Id, Name, Description__c, Version__c, Access_Group_Id__c
       FROM DocEngine_Template__c
       WHERE Object_API_Name__c = :objectApiName AND Is_Active__c = TRUE
+      WITH USER_MODE
       ORDER BY Name
     ];
     List<TemplateSummary> out = new List<TemplateSummary>();
@@ -249,6 +266,7 @@ public with sharing class DocEngineTemplateController {
    */
   @AuraEnabled
   public static TemplateDTO saveTemplate(TemplateDTO dto) {
+    DocEngineAccess.assertManageAccess();
     if (dto == null) {
       throw new AuraHandledException('Template payload is required.');
     }
@@ -268,6 +286,7 @@ public with sharing class DocEngineTemplateController {
         SELECT Id, Version__c, Current_Version__c
         FROM DocEngine_Template__c
         WHERE Id = :dto.id
+        WITH USER_MODE
         LIMIT 1
       ];
       if (existing.isEmpty()) {
@@ -312,6 +331,9 @@ public with sharing class DocEngineTemplateController {
     dto.isActive = isActive == null ? true : (Boolean) isActive;
     dto.description = (String) raw.get('description');
     dto.pdfFilename = (String) raw.get('pdfFilename');
+    Object hideEmpty = raw.get('hideEmpty');
+    dto.hideEmpty = hideEmpty == null ? false : (Boolean) hideEmpty;
+    dto.outputFormat = normalizeOutputFormat((String) raw.get('outputFormat'));
     Object idVal = raw.get('id');
     if (idVal != null && String.isNotBlank(String.valueOf(idVal))) {
       dto.id = (Id) String.valueOf(idVal);
@@ -326,14 +348,35 @@ public with sharing class DocEngineTemplateController {
   @TestVisible
   private static void assertTemplateSaveAllowed(Id templateId) {
     Schema.DescribeSObjectResult describe = DocEngine_Template__c.SObjectType.getDescribe();
+    Boolean creating = templateId == null;
     if (templateId == null) {
       if (!describe.isCreateable()) {
         throw new AuraHandledException('You do not have permission to create templates.');
       }
-      return;
-    }
-    if (!describe.isUpdateable()) {
+    } else if (!describe.isUpdateable()) {
       throw new AuraHandledException('You do not have permission to update templates.');
+    }
+
+    List<Schema.SObjectField> optionalFields = new List<Schema.SObjectField>{
+      DocEngine_Template__c.Name,
+      DocEngine_Template__c.Template_JSON__c,
+      DocEngine_Template__c.Is_Active__c,
+      DocEngine_Template__c.Version__c,
+      DocEngine_Template__c.Description__c,
+      DocEngine_Template__c.PDF_Filename__c,
+      DocEngine_Template__c.Hide_Empty__c,
+      DocEngine_Template__c.Output_Format__c,
+      DocEngine_Template__c.Access_Group_Id__c,
+      DocEngine_Template__c.Current_Version__c
+    };
+    for (Schema.SObjectField fieldToken : optionalFields) {
+      Schema.DescribeFieldResult fieldDescribe = fieldToken.getDescribe();
+      Boolean allowed = creating ? fieldDescribe.isCreateable() : fieldDescribe.isUpdateable();
+      if (!allowed) {
+        throw new AuraHandledException(
+          'Insufficient field access to save templates: ' + fieldDescribe.getName()
+        );
+      }
     }
   }
 
@@ -365,6 +408,7 @@ public with sharing class DocEngineTemplateController {
       SELECT MAX(Version__c) maxVer
       FROM DocEngine_Template_Version__c
       WHERE Template__c = :templateId
+      WITH USER_MODE
     ];
     Decimal maxVer = aggs.isEmpty() ? null : (Decimal) aggs[0].get('maxVer');
     Decimal baseline = maxVer;
@@ -407,6 +451,10 @@ public with sharing class DocEngineTemplateController {
     out.versionId = ver != null ? ver.Id : null;
     out.description = dto.description;
     out.pdfFilename = dto.pdfFilename;
+    out.hideEmpty = head != null ? head.Hide_Empty__c == true : dto.hideEmpty == true;
+    out.outputFormat = head != null
+      ? normalizeOutputFormat(head.Output_Format__c)
+      : normalizeOutputFormat(dto.outputFormat);
     out.accessGroupId = head != null ? head.Access_Group_Id__c : dto.accessGroupId;
     return out;
   }
@@ -431,8 +479,19 @@ public with sharing class DocEngineTemplateController {
     dto.isActive = row.Is_Active__c;
     dto.description = row.Description__c;
     dto.pdfFilename = row.PDF_Filename__c;
+    dto.hideEmpty = row.Hide_Empty__c == true;
+    dto.outputFormat = normalizeOutputFormat(row.Output_Format__c);
     dto.accessGroupId = row.Access_Group_Id__c;
     return dto;
+  }
+
+  @TestVisible
+  private static String normalizeOutputFormat(String value) {
+    if (String.isBlank(value)) {
+      return 'pdf';
+    }
+    String mode = value.trim().toLowerCase();
+    return mode == 'html' ? 'html' : 'pdf';
   }
 
   private static String normalizeAccessGroupId(String accessGroupId) {
@@ -450,6 +509,7 @@ public with sharing class DocEngineTemplateController {
       SELECT Id
       FROM Group
       WHERE Id = :groupId AND Type = 'Regular'
+      WITH USER_MODE
       LIMIT 1
     ];
     if (groups.isEmpty()) {

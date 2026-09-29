@@ -21,9 +21,9 @@ function asBool(value, fallback = true) {
 }
 
 function asExportMode(value) {
-  const s = String(value || 'none').trim().toLowerCase();
-  if (s === 'pdf' || s === 'html' || s === 'none') return s;
-  return 'none';
+  const s = String(value == null ? 'pdf' : value).trim().toLowerCase();
+  if (s === 'html') return 'html';
+  return 'pdf';
 }
 
 export default class DocEngineInstanceList extends NavigationMixin(LightningElement) {
@@ -75,7 +75,7 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
 
   _wiredList;
   _fillMode = true;
-  _exportMode = 'none';
+  _exportMode = 'pdf';
   _showPreview = true;
   _hideEmpty = false;
   _attachToRecord = false;
@@ -262,7 +262,7 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
 
     this._configuredTemplateId = cfg && cfg.templateId ? cfg.templateId : '';
     this._fillMode = cfg ? asBool(cfg.fillMode, true) : true;
-    this._exportMode = asExportMode(cfg && cfg.exportMode ? cfg.exportMode : 'none');
+    this._exportMode = asExportMode(cfg && cfg.exportMode ? cfg.exportMode : 'pdf');
     this._showPreview = cfg ? asBool(cfg.showPreview, true) : true;
     this._hideEmpty = cfg ? asBool(cfg.hideEmpty, false) : false;
     this._attachToRecord = cfg ? asBool(cfg.attachToRecord, false) : false;

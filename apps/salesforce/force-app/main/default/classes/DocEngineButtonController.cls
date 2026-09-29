@@ -34,7 +34,7 @@ public with sharing class DocEngineButtonController {
         Attach_To_Record__c
       FROM DocEngine_Button_Config__c
       WHERE Developer_Name__c = :developerName.trim()
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       LIMIT 1
     ];
     if (rows.isEmpty()) {
@@ -72,7 +72,7 @@ public with sharing class DocEngineButtonController {
         Attach_To_Record__c
       FROM DocEngine_Button_Config__c
       WHERE Template__c = :templateId
-      WITH SECURITY_ENFORCED
+      WITH USER_MODE
       ORDER BY LastModifiedDate DESC
       LIMIT 1
     ];
@@ -108,7 +108,9 @@ public with sharing class DocEngineButtonController {
     cfg.templateId = row.Template__c;
     cfg.objectApiName = row.Template__r != null ? row.Template__r.Object_API_Name__c : null;
     cfg.fillMode = row.Fill_Mode__c == null ? true : row.Fill_Mode__c;
-    cfg.exportMode = String.isBlank(row.Export_Mode__c) ? 'none' : row.Export_Mode__c.toLowerCase();
+    // Blank / None → pdf (Finish default). Explicit html stays html.
+    String mode = String.isBlank(row.Export_Mode__c) ? 'pdf' : row.Export_Mode__c.toLowerCase();
+    cfg.exportMode = mode == 'html' ? 'html' : 'pdf';
     cfg.showPreview = row.Show_Preview__c == null ? true : row.Show_Preview__c;
     cfg.hideEmpty = row.Hide_Empty__c == true;
     cfg.attachToRecord = row.Attach_To_Record__c == true;

@@ -23,5 +23,5 @@
         <searchResultsAdditionalFields>Fill_Mode__c</searchResultsAdditionalFields>
         <searchResultsAdditionalFields>Export_Mode__c</searchResultsAdditionalFields>
     </searchLayouts>
-    <sharingModel>ReadWrite</sharingModel>
+    <sharingModel>Read</sharingModel>
 </CustomObject>

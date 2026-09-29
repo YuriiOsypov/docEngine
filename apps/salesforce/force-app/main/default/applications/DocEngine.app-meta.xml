@@ -18,6 +18,24 @@
         <skipRecordTypeSelect>false</skipRecordTypeSelect>
         <type>Flexipage</type>
     </actionOverrides>
+    <actionOverrides>
+        <actionName>View</actionName>
+        <comment>App default: Document HTML preview / PDF opener</comment>
+        <content>DocEngine_Document_Record_Page</content>
+        <formFactor>Large</formFactor>
+        <pageOrSobjectType>DocEngine_Document__c</pageOrSobjectType>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>Flexipage</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>View</actionName>
+        <comment>App default (phone): Document HTML preview / PDF opener</comment>
+        <content>DocEngine_Document_Record_Page</content>
+        <formFactor>Small</formFactor>
+        <pageOrSobjectType>DocEngine_Document__c</pageOrSobjectType>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>Flexipage</type>
+    </actionOverrides>
     <brand>
         <headerColor>#0176D3</headerColor>
         <shouldOverrideOrgTheme>false</shouldOverrideOrgTheme>
@@ -46,8 +64,25 @@
         <type>Flexipage</type>
         <profile>Admin</profile>
     </profileActionOverrides>
+    <profileActionOverrides>
+        <actionName>View</actionName>
+        <content>DocEngine_Document_Record_Page</content>
+        <formFactor>Large</formFactor>
+        <pageOrSobjectType>DocEngine_Document__c</pageOrSobjectType>
+        <type>Flexipage</type>
+        <profile>Admin</profile>
+    </profileActionOverrides>
+    <profileActionOverrides>
+        <actionName>View</actionName>
+        <content>DocEngine_Document_Record_Page</content>
+        <formFactor>Small</formFactor>
+        <pageOrSobjectType>DocEngine_Document__c</pageOrSobjectType>
+        <type>Flexipage</type>
+        <profile>Admin</profile>
+    </profileActionOverrides>
     <tabs>DocEngine_Template__c</tabs>
     <tabs>DocEngine_Document__c</tabs>
+    <tabs>DocEngine_Value_Set__c</tabs>
     <tabs>DocEngine_Button_Config__c</tabs>
     <uiType>Lightning</uiType>
 </CustomApplication>

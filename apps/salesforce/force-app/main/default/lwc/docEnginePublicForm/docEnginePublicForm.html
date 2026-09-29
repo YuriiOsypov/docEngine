@@ -1,0 +1,50 @@
+<template>
+  <div class="public-form">
+    <template if:true={loading}>
+      <div class="state state--loading">
+        <lightning-spinner alternative-text="Loading form" size="medium"></lightning-spinner>
+        <p class="slds-m-top_small">Loading form…</p>
+      </div>
+    </template>
+
+    <template if:true={errorMessage}>
+      <div class="state state--error" role="alert">
+        <h1 class="title">Form unavailable</h1>
+        <p>{errorMessage}</p>
+      </div>
+    </template>
+
+    <template if:true={submitted}>
+      <div class="state state--thanks" role="status">
+        <h1 class="title">Thank you</h1>
+        <p>{thankYouMessage}</p>
+      </div>
+    </template>
+
+    <template if:true={showForm}>
+      <header class="header">
+        <h1 class="title">{formTitle}</h1>
+        <p class="subtitle">Please complete the fields below and submit.</p>
+      </header>
+
+      <div lwc:dom="manual" class="doc-editor-host__sticky sticky-chrome"></div>
+      <div
+        lwc:dom="manual"
+        class="doc-editor-root doc-editor-host doc-editor-host__surface editor-root"
+      ></div>
+      <div lwc:dom="manual" class="doc-actions slds-hide"></div>
+
+      <div class="actions">
+        <lightning-button
+          variant="brand"
+          label="Submit"
+          onclick={handleSubmit}
+          disabled={submitDisabled}
+        ></lightning-button>
+        <template if:true={statusMessage}>
+          <p class="status">{statusMessage}</p>
+        </template>
+      </div>
+    </template>
+  </div>
+</template>

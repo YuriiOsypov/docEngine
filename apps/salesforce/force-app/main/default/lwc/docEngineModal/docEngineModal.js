@@ -2,14 +2,18 @@ import { api } from 'lwc';
 import LightningModal from 'lightning/modal';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import LightningConfirm from 'lightning/confirm';
+import LightningPrompt from 'lightning/prompt';
 import getTemplate from '@salesforce/apex/DocEngineTemplateController.getTemplate';
 import buildPayload from '@salesforce/apex/DocEngineMergeController.buildPayload';
-import saveInstance from '@salesforce/apex/DocEngineInstanceController.saveInstance';
+import saveInstanceJson from '@salesforce/apex/DocEngineInstanceController.saveInstanceJson';
 import saveHtml from '@salesforce/apex/DocEngineInstanceController.saveHtml';
 import getInstance from '@salesforce/apex/DocEngineInstanceController.getInstance';
 import generateAndSavePdf from '@salesforce/apex/DocEnginePdfController.generateAndSavePdf';
 import resolveListItems from '@salesforce/apex/DocEngineListController.resolveListItems';
 import resolveTemplateId from '@salesforce/apex/DocEngineButtonController.resolveTemplateId';
+import listValueSets from '@salesforce/apex/DocEngineValueSetController.listValueSets';
+import getValueSet from '@salesforce/apex/DocEngineValueSetController.getValueSet';
+import saveValueSetJson from '@salesforce/apex/DocEngineValueSetController.saveValueSetJson';
 import {
   ensureDocEngineAssets,
   createDocEditor,
@@ -21,6 +25,7 @@ import {
   parseJsonSafe,
   resolveReopenEditorData,
   replaceEmbeddedImageDataUrls,
+  assertDocumentJsonSize,
   apexErrorMessage
 } from 'c/docEngineLib';
 
@@ -46,18 +51,27 @@ export default class DocEngineModal extends LightningModal {
   @api objectApiName;
   @api templateId;
   @api fillMode;
-  @api exportMode = 'none';
+  /** Finish attach format: pdf (default) or html. `none` is treated as pdf. */
+  @api exportMode = 'pdf';
   @api showPreview;
   @api hideEmpty;
   @api attachToRecord;
   /** When set, reopen an existing DocEngine_Document__c for edit. */
   @api instanceId;
+  /**
+   * Open Document preview (HTML + View as PDF) immediately — no fill chrome / Finish.
+   * Closing the preview dismisses this modal.
+   */
+  @api previewOnly;
 
   templateName = 'DocEngine';
   errorMessage = '';
   busy = false;
   showSpinner = true;
   showEditor = false;
+  selectedValueSetId = '';
+  valueSetOptions = [];
+  scenarioPanelOpen = false;
 
   _editor = null;
   _editorInitialized = false;
@@ -71,6 +85,8 @@ export default class DocEngineModal extends LightningModal {
   _fieldMapping = null;
   _mergePayload = null;
   _autoFinishAfterMount = false;
+  _openPreviewAfterMount = false;
+  _previewOnlyAwaitingClose = false;
   _pendingValues = null;
   _bootstrapped = false;
   _recordIdFallback = '';
@@ -100,13 +116,56 @@ export default class DocEngineModal extends LightningModal {
 
   /** Save Draft is for Fill mode when the document is not already Completed. */
   get showSaveDraft() {
-    return this._asBool(this.fillMode, true) && this._documentStatus !== 'Completed';
+    return (
+      !this.isPreviewOnly &&
+      this._asBool(this.fillMode, true) &&
+      this._documentStatus !== 'Completed'
+    );
+  }
+
+  get isPreviewOnly() {
+    return this._asBool(this.previewOnly, false);
+  }
+
+  get showFillFooter() {
+    return !this.isPreviewOnly;
+  }
+
+  get showModalFooter() {
+    return !this.isPreviewOnly;
+  }
+
+  get showScenarioBar() {
+    return (
+      !this.isPreviewOnly &&
+      this._asBool(this.fillMode, true) &&
+      !!this._resolvedTemplateId
+    );
+  }
+
+  get valueSetPlaceholder() {
+    if (!this.valueSetOptions.length) {
+      return 'No scenarios';
+    }
+    return 'Select a scenario';
+  }
+
+  get loadScenarioDisabled() {
+    return this.busy || !this.selectedValueSetId || !this._editor;
+  }
+
+  get modalHeaderLabel() {
+    return this.isPreviewOnly ? 'Document preview' : this.templateName;
+  }
+
+  get shellClass() {
+    return this.isPreviewOnly ? 'doc-shell doc-shell--preview-only' : 'doc-shell';
   }
 
   connectedCallback() {
-    // Esc must never dismiss the fill editor shell (only Cancel / Finish / X after we allow it).
-    // Nested overlays are closed by _handleHostKeydown instead.
-    this.disableClose = true;
+    // Header ✕ stays enabled (see close() override → handleCancel).
+    // Esc is blocked in _handleHostKeydown so it only closes nested overlays.
+    this.disableClose = false;
     this._onHostKeydown = (event) => this._handleHostKeydown(event);
     // Capture in the LWC realm so Esc is blocked even when focus left the editor sandbox.
     window.addEventListener('keydown', this._onHostKeydown, true);
@@ -165,6 +224,11 @@ export default class DocEngineModal extends LightningModal {
         this.showEditor = true;
         this._pendingInit = true;
         this._autoFinishAfterMount = false;
+        this._openPreviewAfterMount = this._asBool(this.previewOnly, false);
+        this._applyTemplateRunSettings(dto);
+        this.scenarioPanelOpen = false;
+        this.selectedValueSetId = '';
+        this.valueSetOptions = [];
         return;
       }
 
@@ -175,6 +239,7 @@ export default class DocEngineModal extends LightningModal {
       this._initialData = parseJsonSafe(dto.templateJson, emptyDocument());
       this._fieldMapping =
         (this._initialData && this._initialData.fieldMapping) || null;
+      this._applyTemplateRunSettings(dto);
 
       try {
         this._mergePayload = await buildPayload({
@@ -196,10 +261,140 @@ export default class DocEngineModal extends LightningModal {
       this.showEditor = true;
       this._pendingInit = true;
       this._autoFinishAfterMount = !this._asBool(this.fillMode, true);
+      this.scenarioPanelOpen = false;
+      this.selectedValueSetId = '';
+      this.valueSetOptions = [];
     } catch (err) {
       this._showError('DocEngine', err);
     } finally {
       this.showSpinner = false;
+    }
+  }
+
+  async _refreshValueSets() {
+    this.selectedValueSetId = '';
+    this.valueSetOptions = [];
+    if (!this._resolvedTemplateId) {
+      return;
+    }
+    try {
+      const list = await listValueSets({ templateId: this._resolvedTemplateId });
+      this.valueSetOptions = (list || []).map((row) => ({
+        label: this._scenarioOptionLabel(row),
+        value: row.id,
+        name: row.name
+      }));
+    } catch (err) {
+      this.valueSetOptions = [];
+    }
+  }
+
+  _scenarioOptionLabel(row) {
+    const name = (row && row.name) || '';
+    const description = row && row.description ? String(row.description).trim() : '';
+    if (!description) {
+      return name;
+    }
+    return `${name} — ${description}`;
+  }
+
+  handleValueSetChange(event) {
+    this.selectedValueSetId = event.detail.value;
+  }
+
+  async handleScenarioPanelToggle(event) {
+    this.scenarioPanelOpen = event.target.checked === true;
+    if (this.scenarioPanelOpen && !this.valueSetOptions.length) {
+      await this._refreshValueSets();
+    }
+  }
+
+  async handleLoadScenario() {
+    if (!this._editor || !this.selectedValueSetId) {
+      return;
+    }
+    try {
+      this.busy = true;
+      this._syncDisableClose();
+      const dto = await getValueSet({ valueSetId: this.selectedValueSetId });
+      const data = parseJsonSafe(dto && dto.valuesJson, null);
+      if (!data || (!data.sections && !data.values)) {
+        throw new Error('Scenario has no values.');
+      }
+      await this._editor.load(data, { omitMappedFields: true });
+      this._markDirty();
+      this._showToast('Scenario loaded', `Applied “${dto.name}”.`, 'success');
+    } catch (err) {
+      this._showError('Load scenario failed', err);
+    } finally {
+      this.busy = false;
+      this._syncDisableClose();
+    }
+  }
+
+  async handleSaveScenario() {
+    if (!this._editor || !this._resolvedTemplateId) {
+      return;
+    }
+    try {
+      this.busy = true;
+      this._syncDisableClose();
+      const values =
+        typeof this._editor.exportFields === 'function'
+          ? await this._editor.exportFields({ omitMappedFields: true })
+          : null;
+      if (!values) {
+        throw new Error('exportFields is not available on the editor.');
+      }
+      const valuesJson = JSON.stringify(values);
+      assertDocumentJsonSize(valuesJson);
+
+      let valueSetId = this.selectedValueSetId || null;
+      let name = '';
+      if (valueSetId) {
+        const selected = (this.valueSetOptions || []).find((o) => o.value === valueSetId);
+        name = selected ? selected.name || selected.label : '';
+        const overwrite = await LightningConfirm.open({
+          message: `Overwrite scenario “${name || 'selected'}” with current unmapped values?`,
+          variant: 'header',
+          label: 'Save scenario',
+          theme: 'warning'
+        });
+        if (!overwrite) {
+          valueSetId = null;
+          name = '';
+        }
+      }
+      if (!valueSetId) {
+        name = await LightningPrompt.open({
+          message: 'Name for this scenario (unmapped field values only).',
+          label: 'Save as scenario',
+          defaultValue: name || ''
+        });
+        if (!name || !String(name).trim()) {
+          return;
+        }
+        name = String(name).trim();
+      }
+
+      const savedRaw = await saveValueSetJson({
+        dtoJson: JSON.stringify({
+          id: valueSetId,
+          templateId: this._resolvedTemplateId,
+          name,
+          isActive: true,
+          valuesJson
+        })
+      });
+      const saved = typeof savedRaw === 'string' ? JSON.parse(savedRaw) : savedRaw;
+      await this._refreshValueSets();
+      this.selectedValueSetId = saved.id;
+      this._showToast('Scenario saved', `Saved “${saved.name}”.`, 'success');
+    } catch (err) {
+      this._showError('Save scenario failed', err);
+    } finally {
+      this.busy = false;
+      this._syncDisableClose();
     }
   }
 
@@ -218,6 +413,10 @@ export default class DocEngineModal extends LightningModal {
           onPreviewStateChange: (open) => {
             this._previewOpen = !!open;
             this._syncDisableClose();
+            if (!open && this._previewOnlyAwaitingClose) {
+              this._previewOnlyAwaitingClose = false;
+              this._closeWithResult('preview-closed');
+            }
           },
           onNestedModalStateChange: (open) => {
             this._nestedModalOpen = !!open;
@@ -274,6 +473,16 @@ export default class DocEngineModal extends LightningModal {
 
       this._editorInitialized = true;
 
+      if (this._openPreviewAfterMount && typeof this._editor.preview === 'function') {
+        this._openPreviewAfterMount = false;
+        this.showSpinner = false;
+        this._previewOnlyAwaitingClose = true;
+        await this._editor.preview({
+          hideEmptyValues: this._asBool(this.hideEmpty, false)
+        });
+        return;
+      }
+
       if (this._autoFinishAfterMount) {
         this._autoFinishAfterMount = false;
         await this.handleFinish();
@@ -287,6 +496,7 @@ export default class DocEngineModal extends LightningModal {
     if (!this._editor || !this.effectiveRecordId || !this._resolvedTemplateId) return;
     try {
       this.busy = true;
+      this._syncDisableClose();
       this.showSpinner = true;
 
       // Do not open Document preview on Finish — save, attach, then close fill modal.
@@ -296,12 +506,13 @@ export default class DocEngineModal extends LightningModal {
       await this._saveInstanceOnly('Completed');
 
       // Completing always attaches (or revises) the PDF/HTML file on the document + source record.
+      // Default / none → PDF; only an explicit Export Mode = HTML attaches HTML.
       const exportMode = this._asExportMode(this.exportMode);
-      const format = exportMode === 'pdf' || exportMode === 'html' ? exportMode : 'html';
+      const format = exportMode === 'html' ? 'html' : 'pdf';
       let warningToast = null;
       let successToast = {
         title: 'Saved & attached',
-        message: 'Document saved. HTML attached to Notes & Attachments / Files.',
+        message: 'Document saved. PDF attached to Notes & Attachments / Files.',
         variant: 'success'
       };
 
@@ -314,6 +525,11 @@ export default class DocEngineModal extends LightningModal {
             variant: 'warning'
           };
           await this._attachHtml();
+          successToast = {
+            title: 'Saved & attached',
+            message: 'Document saved. HTML attached to Notes & Attachments / Files.',
+            variant: 'success'
+          };
         } else {
           const html =
             this._pdfProvider === 'Salesforce'
@@ -323,18 +539,17 @@ export default class DocEngineModal extends LightningModal {
                 })
               : null;
           await generateAndSavePdf({ docInstanceId: this._instanceId, html });
-          successToast = {
-            title: 'Saved & attached',
-            message: 'Document saved. PDF attached to Notes & Attachments / Files.',
-            variant: 'success'
-          };
         }
       } else {
         await this._attachHtml();
+        successToast = {
+          title: 'Saved & attached',
+          message: 'Document saved. HTML attached to Notes & Attachments / Files.',
+          variant: 'success'
+        };
       }
 
-      this.disableClose = false;
-      this.close({
+      this._closeWithResult({
         status: 'finished',
         warningToast,
         toast: successToast
@@ -344,6 +559,7 @@ export default class DocEngineModal extends LightningModal {
     } finally {
       this.busy = false;
       this.showSpinner = false;
+      this._syncDisableClose();
     }
   }
 
@@ -352,6 +568,7 @@ export default class DocEngineModal extends LightningModal {
     if (this._documentStatus === 'Completed') return;
     try {
       this.busy = true;
+      this._syncDisableClose();
       this.showSpinner = true;
       await this._saveInstanceOnly('Draft');
       await this._captureBaseline();
@@ -361,6 +578,7 @@ export default class DocEngineModal extends LightningModal {
     } finally {
       this.busy = false;
       this.showSpinner = false;
+      this._syncDisableClose();
     }
   }
 
@@ -380,9 +598,26 @@ export default class DocEngineModal extends LightningModal {
       return;
     }
     if (await this._confirmDiscardIfDirty()) {
-      this.disableClose = false;
-      this.close('cancelled');
+      this._closeWithResult('cancelled');
     }
+  }
+
+  /**
+   * LightningModal header ✕ calls close() with no / empty result. Intercept that so ✕
+   * matches Cancel (confirm if dirty). Intentional closes use _closeWithResult → super.close.
+   */
+  close(result) {
+    // Ignore ✕ while saving / confirming.
+    if (this.busy || this._confirmCloseBusy) {
+      return;
+    }
+    // Header ✕ / default dismiss — same as Cancel.
+    Promise.resolve(this.handleCancel()).catch(() => {});
+  }
+
+  _closeWithResult(result) {
+    this.disableClose = false;
+    super.close(result);
   }
 
   _wireEditorDirtyTracking(editorRoot) {
@@ -483,14 +718,15 @@ export default class DocEngineModal extends LightningModal {
   }
 
   _syncDisableClose() {
-    // Always keep the Lightning shell non-dismissible via Esc while this modal is open.
-    // handleCancel / handleFinish / _destroyEditor flip disableClose off before close().
-    this.disableClose = true;
+    // Keep header ✕ enabled so it can run handleCancel via close() override.
+    // Esc is still consumed in _handleHostKeydown (nested overlays only).
+    // Block dismiss only while busy / confirming to avoid mid-save closes.
+    this.disableClose = !!(this.busy || this._confirmCloseBusy);
   }
 
   /**
    * Esc closes nested preview / field dialogs only — never the editor shell.
-   * (Lightning may handle Esc before our listeners; disableClose is the real shell guard.)
+   * Header ✕ goes through close() → handleCancel (with dirty confirm).
    */
   _handleHostKeydown(event) {
     if (!event || (event.key !== 'Escape' && event.key !== 'Esc' && event.code !== 'Escape')) {
@@ -602,19 +838,31 @@ export default class DocEngineModal extends LightningModal {
       throw new Error('exportFields is not available on the editor.');
     }
     values = await replaceEmbeddedImageDataUrls(values, this.effectiveRecordId);
-    const saved = await saveInstance({
-      dto: {
-        id: this._instanceId,
+    // Push File URLs back into the editor so Finish HTML/PDF attach does not
+    // re-embed huge signature/image data URLs (Aura request / Long Text Area blowups).
+    if (this._editor && typeof this._editor.load === 'function') {
+      try {
+        await this._editor.load(values);
+      } catch (e) {
+        // Non-fatal: JSON save still uses cleaned values.
+      }
+    }
+    const documentJson = JSON.stringify(values);
+    assertDocumentJsonSize(documentJson);
+    const savedRaw = await saveInstanceJson({
+      dtoJson: JSON.stringify({
+        id: this._instanceId || null,
         name: (this._templateDto && this._templateDto.name) || 'Document',
         templateId: this._resolvedTemplateId,
         templateVersionId: (this._templateDto && this._templateDto.versionId) || null,
         recordId: this.effectiveRecordId,
         objectApiName: this.effectiveObjectApiName,
-        documentJson: JSON.stringify(values),
+        documentJson,
         status,
         completedDate: null
-      }
+      })
     });
+    const saved = typeof savedRaw === 'string' ? JSON.parse(savedRaw) : savedRaw;
     this._instanceId = saved.id;
     this._documentStatus = saved.status || status;
     return saved;
@@ -724,9 +972,23 @@ export default class DocEngineModal extends LightningModal {
   }
 
   _asExportMode(value) {
-    const s = String(value || 'none').trim().toLowerCase();
-    if (s === 'pdf' || s === 'html' || s === 'none') return s;
-    return 'none';
+    const s = String(value == null ? 'pdf' : value).trim().toLowerCase();
+    if (s === 'html') return 'html';
+    if (s === 'pdf' || s === 'none' || s === '') return 'pdf';
+    return 'pdf';
+  }
+
+  /**
+   * Template Hide Empty / Output Format win over Button Config / App Builder props.
+   */
+  _applyTemplateRunSettings(dto) {
+    if (!dto) return;
+    if (dto.hideEmpty != null) {
+      this.hideEmpty = dto.hideEmpty === true;
+    }
+    if (dto.outputFormat != null && String(dto.outputFormat).trim() !== '') {
+      this.exportMode = this._asExportMode(dto.outputFormat);
+    }
   }
 
   _showToast(title, message, variant) {

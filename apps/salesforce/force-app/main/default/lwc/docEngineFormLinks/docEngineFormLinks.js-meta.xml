@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>DocEngine Public Form Links</masterLabel>
+    <description>Mint, copy, and revoke public form links for a DocEngine template.</description>
+    <targets>
+        <target>lightning__RecordPage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__RecordPage">
+            <objects>
+                <object>DocEngine_Template__c</object>
+            </objects>
+            <property
+                name="siteBaseUrl"
+                type="String"
+                label="Experience site base URL"
+                description="e.g. https://myorg.my.site.com — prepended when copying the full public link."
+            />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

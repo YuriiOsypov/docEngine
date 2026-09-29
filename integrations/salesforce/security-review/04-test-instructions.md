@@ -10,10 +10,12 @@ Version: 1.0
 | Field | Value |
 |---|---|
 | **Login URL** | https://login.salesforce.com |
-| **Username** | yurii.osypov@gmail.com|
-| **Password** | contact ISV for access! |
+| **Username** | _Provide through the Partner Security Portal_ |
+| **Password** | _Provide through the Partner Security Portal; never store here_ |
 | **Org type** | Developer / Partner scratch org with DocEngine managed package installed |
 | **Experience** | Lightning Experience enabled |
+
+Rotate any credential previously stored in this file before granting reviewer access.
 
 ---
 

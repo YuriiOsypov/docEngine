@@ -1,12 +1,17 @@
 import { LightningElement, api, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import LightningPrompt from 'lightning/prompt';
+import LightningConfirm from 'lightning/confirm';
 import getObjectApiName from '@salesforce/apex/DocEngineTemplateController.getObjectApiName';
 import listForObject from '@salesforce/apex/DocEngineTemplateController.listForObject';
 import getTemplate from '@salesforce/apex/DocEngineTemplateController.getTemplate';
 import buildPayload from '@salesforce/apex/DocEngineMergeController.buildPayload';
-import saveInstance from '@salesforce/apex/DocEngineInstanceController.saveInstance';
+import saveInstanceJson from '@salesforce/apex/DocEngineInstanceController.saveInstanceJson';
 import generateAndSavePdf from '@salesforce/apex/DocEnginePdfController.generateAndSavePdf';
 import resolveListItems from '@salesforce/apex/DocEngineListController.resolveListItems';
+import listValueSets from '@salesforce/apex/DocEngineValueSetController.listValueSets';
+import getValueSet from '@salesforce/apex/DocEngineValueSetController.getValueSet';
+import saveValueSetJson from '@salesforce/apex/DocEngineValueSetController.saveValueSetJson';
 import {
   ensureDocEngineAssets,
   createDocEditor,
@@ -17,6 +22,7 @@ import {
   emptyDocument,
   parseJsonSafe,
   replaceEmbeddedImageDataUrls,
+  assertDocumentJsonSize,
   apexErrorMessage
 } from 'c/docEngineLib';
 
@@ -42,12 +48,20 @@ export default class DocEngineFiller extends LightningElement {
   editorBusy = false;
   pdfAvailable = false;
   pdfProvider = 'Salesforce';
+  selectedValueSetId = '';
+  valueSetOptions = [];
+  scenarioPanelOpen = false;
 
   _editor = null;
   _editorInitialized = false;
   _pendingInit = false;
   _instanceId = null;
   _pdfFilename = 'document.pdf';
+  _hideEmpty = false;
+  _templateDto = null;
+  _initialData = null;
+  _fieldMapping = null;
+  _mergePayload = null;
 
   get statusOptions() {
     return STATUS_OPTIONS;
@@ -78,6 +92,17 @@ export default class DocEngineFiller extends LightningElement {
 
   get loadDisabled() {
     return !this.selectedTemplateId || this.templatesLoading || this.editorBusy;
+  }
+
+  get valueSetPlaceholder() {
+    if (!this.valueSetOptions.length) {
+      return 'No scenarios for this template';
+    }
+    return 'Select a scenario';
+  }
+
+  get loadScenarioDisabled() {
+    return !this.selectedValueSetId || this.editorBusy || !this._editor;
   }
 
   connectedCallback() {
@@ -130,10 +155,23 @@ export default class DocEngineFiller extends LightningElement {
 
   handleTemplateChange(event) {
     this.selectedTemplateId = event.detail.value;
+    this.selectedValueSetId = '';
+    this.valueSetOptions = [];
   }
 
   handleStatusChange(event) {
     this.status = event.detail.value;
+  }
+
+  handleValueSetChange(event) {
+    this.selectedValueSetId = event.detail.value;
+  }
+
+  async handleScenarioPanelToggle(event) {
+    this.scenarioPanelOpen = event.target.checked === true;
+    if (this.scenarioPanelOpen && !this.valueSetOptions.length) {
+      await this._refreshValueSets();
+    }
   }
 
   async handleLoadTemplate() {
@@ -146,6 +184,7 @@ export default class DocEngineFiller extends LightningElement {
       await ensureDocEngineAssets(this);
       this._templateDto = await getTemplate({ templateId: this.selectedTemplateId });
       this._pdfFilename = this._templateDto.pdfFilename || 'document.pdf';
+      this._hideEmpty = this._templateDto.hideEmpty === true;
       this._initialData = parseJsonSafe(this._templateDto.templateJson, emptyDocument());
 
       // Mapping is embedded in Template_JSON__c as fieldMapping
@@ -173,9 +212,128 @@ export default class DocEngineFiller extends LightningElement {
       this.showEditor = true;
       this._pendingInit = true;
       this.statusMessage = `Loaded “${this._templateDto.name}”`;
+      this.scenarioPanelOpen = false;
+      this.selectedValueSetId = '';
+      this.valueSetOptions = [];
     } catch (err) {
       this._showError('Failed to load template', err);
       this.showEditor = false;
+    } finally {
+      this.editorBusy = false;
+    }
+  }
+
+  async _refreshValueSets() {
+    this.selectedValueSetId = '';
+    this.valueSetOptions = [];
+    if (!this.selectedTemplateId) {
+      return;
+    }
+    try {
+      const list = await listValueSets({ templateId: this.selectedTemplateId });
+      this.valueSetOptions = (list || []).map((row) => ({
+        label: this._scenarioOptionLabel(row),
+        value: row.id,
+        name: row.name
+      }));
+    } catch (err) {
+      this.valueSetOptions = [];
+      this._showToast(
+        'Scenarios unavailable',
+        apexErrorMessage(err) || 'Could not load value sets.',
+        'warning'
+      );
+    }
+  }
+
+  _scenarioOptionLabel(row) {
+    const name = (row && row.name) || '';
+    const description = row && row.description ? String(row.description).trim() : '';
+    if (!description) {
+      return name;
+    }
+    return `${name} — ${description}`;
+  }
+
+  async handleLoadScenario() {
+    if (!this._editor || !this.selectedValueSetId) {
+      return;
+    }
+    try {
+      this.editorBusy = true;
+      const dto = await getValueSet({ valueSetId: this.selectedValueSetId });
+      const data = parseJsonSafe(dto && dto.valuesJson, null);
+      if (!data || (!data.sections && !data.values)) {
+        throw new Error('Scenario has no values.');
+      }
+      await this._editor.load(data, { omitMappedFields: true });
+      this._showToast('Scenario loaded', `Applied “${dto.name}” (mapped fields kept).`, 'success');
+    } catch (err) {
+      this._showError('Load scenario failed', err);
+    } finally {
+      this.editorBusy = false;
+    }
+  }
+
+  async handleSaveScenario() {
+    if (!this._editor || !this.selectedTemplateId) {
+      return;
+    }
+    try {
+      this.editorBusy = true;
+      const values =
+        typeof this._editor.exportFields === 'function'
+          ? await this._editor.exportFields({ omitMappedFields: true })
+          : null;
+      if (!values) {
+        throw new Error('exportFields is not available on the editor.');
+      }
+      const valuesJson = JSON.stringify(values);
+      assertDocumentJsonSize(valuesJson);
+
+      let valueSetId = this.selectedValueSetId || null;
+      let name = '';
+      if (valueSetId) {
+        const selected = (this.valueSetOptions || []).find((o) => o.value === valueSetId);
+        name = selected ? selected.name || selected.label : '';
+        const overwrite = await LightningConfirm.open({
+          message: `Overwrite scenario “${name || 'selected'}” with current unmapped values?`,
+          variant: 'header',
+          label: 'Save scenario',
+          theme: 'warning'
+        });
+        if (!overwrite) {
+          valueSetId = null;
+          name = '';
+        }
+      }
+      if (!valueSetId) {
+        name = await LightningPrompt.open({
+          message: 'Name for this scenario (unmapped field values only).',
+          label: 'Save as scenario',
+          defaultValue: name || ''
+        });
+        if (!name || !String(name).trim()) {
+          return;
+        }
+        name = String(name).trim();
+      }
+
+      const savedRaw = await saveValueSetJson({
+        dtoJson: JSON.stringify({
+          id: valueSetId,
+          templateId: this.selectedTemplateId,
+          name,
+          isActive: true,
+          valuesJson
+        })
+      });
+      const saved = typeof savedRaw === 'string' ? JSON.parse(savedRaw) : savedRaw;
+      await this._refreshValueSets();
+      this.selectedValueSetId = saved.id;
+      this._showToast('Scenario saved', `Saved “${saved.name}”.`, 'success');
+    } catch (err) {
+      this._showError('Save scenario failed', err);
     } finally {
       this.editorBusy = false;
     }
@@ -280,7 +438,7 @@ export default class DocEngineFiller extends LightningElement {
         this.pdfProvider === 'Salesforce'
           ? await exportHtmlForPdf(this._editor, {
               title: this._pdfFilename.replace(/\.pdf$/i, '') || 'document',
-              hideEmptyValues: false
+              hideEmptyValues: this._hideEmpty === true
             })
           : null;
       const pdfResult = await generateAndSavePdf({
@@ -311,18 +469,28 @@ export default class DocEngineFiller extends LightningElement {
       throw new Error('exportFields is not available on the editor.');
     }
     values = await replaceEmbeddedImageDataUrls(values, this.recordId);
-    const saved = await saveInstance({
-      dto: {
-        id: this._instanceId,
+    if (this._editor && typeof this._editor.load === 'function') {
+      try {
+        await this._editor.load(values);
+      } catch (e) {
+        // Non-fatal: JSON save still uses cleaned values.
+      }
+    }
+    const documentJson = JSON.stringify(values);
+    assertDocumentJsonSize(documentJson);
+    const savedRaw = await saveInstanceJson({
+      dtoJson: JSON.stringify({
+        id: this._instanceId || null,
         templateId: this.selectedTemplateId,
         templateVersionId: (this._templateDto && this._templateDto.versionId) || null,
         recordId: this.recordId,
         objectApiName: this.objectApiName,
-        documentJson: JSON.stringify(values),
+        documentJson,
         status: this.status,
         completedDate: null
-      }
+      })
     });
+    const saved = typeof savedRaw === 'string' ? JSON.parse(savedRaw) : savedRaw;
     this._instanceId = saved.id;
     this.statusMessage = `Saved ${saved.name || saved.id}`;
     return saved;

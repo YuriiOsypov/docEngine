@@ -52,6 +52,15 @@
   flex-wrap: wrap;
 }
 
+.scenario-toggle {
+  display: inline-block;
+}
+
+.scenario-row {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .picker-row {
   display: grid;
   grid-template-columns: minmax(14rem, 1fr) auto;

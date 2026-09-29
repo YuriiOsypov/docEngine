@@ -1,0 +1,114 @@
+<template>
+  <lightning-card title="Public form links" icon-name="standard:link">
+    <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+      <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
+        Set your Experience Cloud site base URL, enable <strong>Public Form Enabled</strong> on the
+        template, then mint a link. Guests open
+        <code>https://&lt;site&gt;/s/docengine-form?token=…</code>
+      </p>
+
+      <div class="site-base slds-m-bottom_medium">
+        <lightning-input
+          label="Experience site base URL"
+          type="url"
+          placeholder="https://myorg.my.site.com"
+          value={siteBaseUrlInput}
+          onchange={handleSiteBaseChange}
+          required
+          class="slds-grow"
+        ></lightning-input>
+        <lightning-button
+          label="Save URL"
+          onclick={handleSaveSiteBase}
+          disabled={busy}
+          class="slds-m-top_small"
+        ></lightning-button>
+        <template if:true={missingSiteBase}>
+          <p class="slds-text-color_error slds-m-top_x-small slds-text-body_small">
+            Required. Find it in Digital Experiences → your site → Workspaces (published URL),
+            without <code>/s/…</code> at the end.
+          </p>
+        </template>
+      </div>
+
+      <div class="toolbar">
+        <lightning-input
+          label="Link label"
+          value={linkName}
+          onchange={handleNameChange}
+          class="slds-grow"
+        ></lightning-input>
+        <lightning-combobox
+          label="Mode"
+          value={mode}
+          options={modeOptions}
+          onchange={handleModeChange}
+        ></lightning-combobox>
+        <lightning-input
+          if:true={isUpdateMode}
+          label="Record Id (Update)"
+          value={recordIdForUpdate}
+          onchange={handleRecordIdChange}
+        ></lightning-input>
+        <lightning-button
+          label="Mint link"
+          variant="brand"
+          onclick={handleMint}
+          disabled={busy}
+        ></lightning-button>
+      </div>
+
+      <template if:true={errorMessage}>
+        <p class="slds-text-color_error slds-m-top_small">{errorMessage}</p>
+      </template>
+      <template if:true={statusMessage}>
+        <p class="slds-text-color_success slds-m-top_small">{statusMessage}</p>
+      </template>
+
+      <template if:true={hasLinks}>
+        <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-m-top_medium">
+          <thead>
+            <tr class="slds-line-height_reset">
+              <th scope="col"><div class="slds-truncate">Label</div></th>
+              <th scope="col"><div class="slds-truncate">Mode</div></th>
+              <th scope="col"><div class="slds-truncate">Active</div></th>
+              <th scope="col"><div class="slds-truncate">URL</div></th>
+              <th scope="col"><div class="slds-truncate">Actions</div></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template for:each={linkRows} for:item="row">
+              <tr key={row.id}>
+                <td><div class="slds-truncate">{row.name}</div></td>
+                <td><div class="slds-truncate">{row.mode}</div></td>
+                <td><div class="slds-truncate">{row.activeLabel}</div></td>
+                <td>
+                  <div class="url-cell" title={row.displayUrl}>{row.displayUrl}</div>
+                </td>
+                <td>
+                  <lightning-button-group>
+                    <lightning-button
+                      label="Copy URL"
+                      onclick={handleCopy}
+                      data-id={row.id}
+                      disabled={busy}
+                    ></lightning-button>
+                    <lightning-button
+                      label="Revoke"
+                      onclick={handleRevoke}
+                      data-id={row.id}
+                      disabled={row.revokeDisabled}
+                    ></lightning-button>
+                  </lightning-button-group>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </template>
+      <template if:false={hasLinks}>
+        <p class="slds-m-top_medium slds-text-body_small slds-text-color_weak">No links yet.</p>
+      </template>
+    </div>
+  </lightning-card>
+</template>

@@ -24,6 +24,8 @@ import {
   parseMappingSourcePath,
   formatDateValue,
   formatCurrencyValue,
+  omitMappedFields,
+  collectMappedSectionFieldKeys,
 } from './field-mapping.js';
 import { applyDocumentValues, normalizeDocumentValues } from './document-io.js';
 import { formatNumericDisplay } from './currency-format.js';
@@ -799,5 +801,115 @@ describe('field-mapping', () => {
 
     const result = applyFieldMapping(payload, mappingSpec, template);
     assert.equal(result.fieldsExport.sections['Order Details']['Date Added'], '22/07/2026');
+  });
+});
+
+describe('omitMappedFields', () => {
+  const mappingSpec = {
+    kind: 'fieldMapping',
+    version: 1,
+    rules: [
+      { section: 'Exam', field: 'Patient Name', sourcePath: 'Account.Name' },
+      {
+        section: 'Exam',
+        field: 'Labs',
+        columnKey: 'result',
+        sourcePath: 'Lab.Result',
+        sourceArrayPath: 'Lab',
+      },
+      {
+        section: 'Exam',
+        field: 'History',
+        childField: 'allergies',
+        sourcePath: 'Patient.Allergies',
+      },
+      { section: 'Billing', field: 'Amount', sourcePath: 'Invoice.Total' },
+    ],
+  };
+
+  it('collects unique section+field keys from rules', () => {
+    const keys = collectMappedSectionFieldKeys(mappingSpec);
+    assert.equal(keys.size, 4);
+    assert.ok(keys.has('Exam\0Patient Name'));
+    assert.ok(keys.has('Exam\0Labs'));
+    assert.ok(keys.has('Exam\0History'));
+    assert.ok(keys.has('Billing\0Amount'));
+  });
+
+  it('omits mapped fields and keeps unmapped ones', () => {
+    const fieldsExport = {
+      kind: 'field',
+      version: 2,
+      sections: {
+        Exam: {
+          'Patient Name': 'Ada Lovelace',
+          complaints: ['Blurred vision'],
+          Labs: [{ result: '5.2' }],
+          History: { allergies: ['Penicillin'] },
+          notes: 'Routine visit',
+        },
+        Billing: {
+          Amount: 120,
+          memo: 'Cash',
+        },
+        Notes: {
+          summary: 'All good',
+        },
+      },
+    };
+
+    const filtered = omitMappedFields(fieldsExport, mappingSpec);
+    assert.deepEqual(filtered.sections, {
+      Exam: {
+        complaints: ['Blurred vision'],
+        notes: 'Routine visit',
+      },
+      Billing: {
+        memo: 'Cash',
+      },
+      Notes: {
+        summary: 'All good',
+      },
+    });
+    // Input not mutated
+    assert.equal(fieldsExport.sections.Exam['Patient Name'], 'Ada Lovelace');
+  });
+
+  it('filters mapped fields from repeatable section instances', () => {
+    const fieldsExport = {
+      kind: 'field',
+      version: 2,
+      sections: {
+        Exam: [
+          { 'Patient Name': 'A', notes: 'one' },
+          { 'Patient Name': 'B', notes: 'two' },
+        ],
+      },
+    };
+    const filtered = omitMappedFields(fieldsExport, mappingSpec);
+    assert.deepEqual(filtered.sections.Exam, [{ notes: 'one' }, { notes: 'two' }]);
+  });
+
+  it('drops empty sections after filtering', () => {
+    const fieldsExport = {
+      kind: 'field',
+      version: 2,
+      sections: {
+        Billing: { Amount: 10 },
+      },
+    };
+    const filtered = omitMappedFields(fieldsExport, mappingSpec);
+    assert.deepEqual(filtered.sections, {});
+  });
+
+  it('returns a clone unchanged when mapping has no rules', () => {
+    const fieldsExport = {
+      kind: 'field',
+      version: 2,
+      sections: { Exam: { notes: 'x' } },
+    };
+    const filtered = omitMappedFields(fieldsExport, { kind: 'fieldMapping', rules: [] });
+    assert.deepEqual(filtered.sections, { Exam: { notes: 'x' } });
+    assert.notEqual(filtered, fieldsExport);
   });
 });

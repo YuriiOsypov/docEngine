@@ -51,7 +51,27 @@
                 <identifier>force_detailPanel</identifier>
             </componentInstance>
         </itemInstances>
+        <itemInstances>
+            <componentInstance>
+                <componentName>docEngineTemplateAudit</componentName>
+                <identifier>c_docEngineTemplateAudit</identifier>
+            </componentInstance>
+        </itemInstances>
         <name>detailTabContent</name>
+        <type>Facet</type>
+    </flexiPageRegions>
+    <flexiPageRegions>
+        <itemInstances>
+            <componentInstance>
+                <componentInstanceProperties>
+                    <name>siteBaseUrl</name>
+                    <value></value>
+                </componentInstanceProperties>
+                <componentName>docEngineFormLinks</componentName>
+                <identifier>c_docEngineFormLinks</identifier>
+            </componentInstance>
+        </itemInstances>
+        <name>publicFormTabContent</name>
         <type>Facet</type>
     </flexiPageRegions>
     <flexiPageRegions>
@@ -71,6 +91,20 @@
                 </componentInstanceProperties>
                 <componentName>flexipage:tab</componentName>
                 <identifier>detailTab</identifier>
+            </componentInstance>
+        </itemInstances>
+        <itemInstances>
+            <componentInstance>
+                <componentInstanceProperties>
+                    <name>body</name>
+                    <value>publicFormTabContent</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>title</name>
+                    <value>Public Form</value>
+                </componentInstanceProperties>
+                <componentName>flexipage:tab</componentName>
+                <identifier>publicFormTab</identifier>
             </componentInstance>
         </itemInstances>
         <name>maintabs</name>

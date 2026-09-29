@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Public_Form_Enabled__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Gate: only enabled templates can mint or resolve public form links.</description>
+    <label>Public Form Enabled</label>
+    <type>Checkbox</type>
+</CustomField>

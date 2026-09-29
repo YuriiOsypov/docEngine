@@ -183,6 +183,7 @@ Produces both artifacts and copies them into `apps/salesforce/force-app/main/def
 5. **P5** — Managed package + security review. ✅
 6. **P6** — Agentforce action.
 7. **P7** — Record Quick Action / URL button (`docEngineRun` + `DocEngine_Button_Config__c` with Template lookup, fill, export, preview). ✅
+8. **P8** — Public Forms Mode (Experience Cloud guest link → create/update record + PDF). See [PUBLIC_FORMS.md](./PUBLIC_FORMS.md) (F1–F6 implemented).
 
 ## 12. Open questions for review
 
@@ -197,6 +198,7 @@ Produces both artifacts and copies them into `apps/salesforce/force-app/main/def
 |---|---|
 | `integrations/lwc/` | Reference LWC (pre–SFDX); host contract |
 | `integrations/salesforce/` | This architecture + SF build notes |
+| `integrations/salesforce/PUBLIC_FORMS.md` | Public Form Link / Google Forms–style intake (design) |
 | `apps/salesforce/force-app/` | Deployable SFDX metadata (objects, Apex, LWC, Static Resources) |
 | `vite.config.sf.js` | IIFE library build for `loadScript` |
 | `scripts/build-sf.mjs` | CSS + IIFE + copy into `apps/salesforce/force-app` |

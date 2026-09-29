@@ -1,0 +1,27 @@
+:host {
+  display: block;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.site-base {
+  max-width: 40rem;
+}
+
+.url-cell {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+code {
+  font-size: 0.8em;
+}

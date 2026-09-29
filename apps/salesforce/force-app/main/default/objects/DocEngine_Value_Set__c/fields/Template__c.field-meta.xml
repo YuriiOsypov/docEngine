@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Template__c</fullName>
+    <description>Parent DocEngine template. Master-Detail so value sets share template sharing / Access Group.</description>
+    <label>Template</label>
+    <referenceTo>DocEngine_Template__c</referenceTo>
+    <relationshipLabel>Value Sets</relationshipLabel>
+    <relationshipName>Value_Sets</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <trackHistory>true</trackHistory>
+    <type>MasterDetail</type>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+</CustomField>

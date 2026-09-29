@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Token__c</fullName>
+    <caseSensitive>true</caseSensitive>
+    <description>High-entropy public ACL token. Used in Experience Cloud URL query string.</description>
+    <externalId>true</externalId>
+    <label>Token</label>
+    <length>64</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>true</unique>
+</CustomField>
