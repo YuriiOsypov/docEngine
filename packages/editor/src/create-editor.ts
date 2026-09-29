@@ -52,7 +52,6 @@ import {
   resolvePageSetupFieldHighlightStyle,
   applyFieldHighlightCssVars,
   applyPageFormatCssVars,
-  clearPageFormatCssVars,
   FILL_MODE_PAGE_SCALE,
   migratePageSetup,
 } from './core/page-setup-styles.js';
@@ -464,42 +463,28 @@ export function createEditor(options: any = {}) {
     syncDesignChromeTypography();
   }
 
-  /** Fill mode: editor window sized from Page Setup format/orientation, +10%. */
+  /** Editor window sized from Page Setup format/orientation (+10%), fill and design. */
   function syncPageFormatLayout() {
     const chromeHosts = collectFillPageChromeHosts();
 
-    if (!designMode) {
-      applyPageFormatCssVars(holder, documentPageSetup, {
-        scale: FILL_MODE_PAGE_SCALE,
-        fillPage: true,
-      });
-      for (const host of chromeHosts) {
-        applyPageFormatCssVars(host, documentPageSetup, {
-          scale: FILL_MODE_PAGE_SCALE,
-          fillPage: false,
-        });
-        if (host.classList.contains('doc-shell')) {
-          host.classList.add('doc-shell--fill-page');
-        }
-        if (host.classList.contains('page')) {
-          host.classList.add('page--fill-page');
-        }
-        if (host.classList.contains('design-panel__editor-scroll')) {
-          host.classList.add('design-panel__editor-scroll--fill-page');
-        }
-      }
-      return;
-    }
-
-    applyPageFormatCssVars(holder, documentPageSetup, { scale: 1, fillPage: false });
-    holder.classList.remove('editor-holder--fill-page');
+    applyPageFormatCssVars(holder, documentPageSetup, {
+      scale: FILL_MODE_PAGE_SCALE,
+      fillPage: true,
+    });
     for (const host of chromeHosts) {
-      clearPageFormatCssVars(host);
-      host.classList.remove(
-        'doc-shell--fill-page',
-        'page--fill-page',
-        'design-panel__editor-scroll--fill-page',
-      );
+      applyPageFormatCssVars(host, documentPageSetup, {
+        scale: FILL_MODE_PAGE_SCALE,
+        fillPage: false,
+      });
+      if (host.classList.contains('doc-shell')) {
+        host.classList.add('doc-shell--fill-page');
+      }
+      if (host.classList.contains('page')) {
+        host.classList.add('page--fill-page');
+      }
+      if (host.classList.contains('design-panel__editor-scroll')) {
+        host.classList.add('design-panel__editor-scroll--fill-page');
+      }
     }
   }
 

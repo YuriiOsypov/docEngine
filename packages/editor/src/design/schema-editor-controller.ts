@@ -19,6 +19,14 @@ import {
   normalizeListItems,
   normalizeTreeNodes,
 } from './schema-items-designer.js';
+import { FORMAT_ICONS } from '../ui/format-icons.js';
+
+/** Compact (i) tip; full help text lives in the native title tooltip. */
+function infoTipHtml(text: string) {
+  const tip = escapeAttr(text);
+  return `<button type="button" class="schema-form__info-tip" title="${tip}" aria-label="More information">${FORMAT_ICONS.info}</button>`;
+}
+
 /**
  * Shared field-schema form logic for modal and side-panel editors.
  * @param {{ getRegistry?: () => import('../registry/schema-registry.js').SchemaRegistry, body: HTMLElement, idPreviewEl?: HTMLElement | null }} options
@@ -478,22 +486,22 @@ export function createSchemaEditorController({
     row.className = 'schema-form__row schema-form__row--checkbox';
     row.innerHTML = `
       <input type="checkbox" data-field="allowManualEdit"${schema.allowManualEdit ? ' checked' : ''} />
-      <span>Allow manual edit</span>
+      <span class="schema-form__label-row">
+        <span>Allow manual edit</span>
+        ${infoTipHtml('Users can type free text outside catalog options when filling the document.')}
+      </span>
     `;
     extra.appendChild(row);
-
-    const hint = document.createElement('p');
-    hint.className = 'schema-form__hint';
-    hint.textContent = 'Users can type free text outside catalog options when filling the document.';
-    extra.appendChild(hint);
   }
 
   function renderDisplayStyleHint(form: any) {
     const section = document.createElement('div');
     section.className = 'schema-form__display-style';
     section.innerHTML = `
-      <div class="schema-form__subtitle">Value display style</div>
-      <p class="schema-form__hint">Select this field in the document and use the Format panel to style its value. For table cells, click any cell to select the whole column. Use Tx to reset to the editor default.</p>
+      <div class="schema-form__subtitle-row">
+        <div class="schema-form__subtitle">Value display style</div>
+        ${infoTipHtml('Select this field in the document and use the Format panel to style its value. For table cells, click any cell to select the whole column. Use Tx to reset to the editor default.')}
+      </div>
     `;
     form.appendChild(section);
   }
@@ -562,14 +570,12 @@ export function createSchemaEditorController({
     } else if (schema.type === 'computed') {
       extra.innerHTML = `
         <label class="schema-form__row schema-form__row--stacked">
-          <span>Formula</span>
+          <span class="schema-form__label-row">
+            <span>Formula</span>
+            ${infoTipHtml('Pick a field from the tree below, or type references like {Section.FieldName} and {Section.TableName.ColumnName}. Use the function buttons to wrap a selection with sum(), avg(), etc. Legacy {fieldId} still works.')}
+          </span>
           <textarea data-field="formula" rows="4" placeholder="{Section.Field} + sum({Section.Table.Column})">${escapeAttr(schema.formula ?? '')}</textarea>
         </label>
-        <p class="schema-form__hint">
-          Pick a field from the tree below, or type references like <code>{Section.FieldName}</code> and
-          <code>{Section.TableName.ColumnName}</code>. Use the function buttons to wrap a selection with
-          <code>sum()</code>, <code>avg()</code>, etc. Legacy <code>{fieldId}</code> still works.
-        </p>
         <div data-role="formula-picker"></div>
       `;
       const pickerHost = extra.querySelector('[data-role="formula-picker"]');
@@ -597,11 +603,12 @@ export function createSchemaEditorController({
           <input type="text" data-field="columnNames" value="${escapeAttr((schema.columns ?? []).map((c) => c.name ?? c.label).join(', '))}" />
         </label>
         <label class="schema-form__row">
-          <span>Column widths (optional, comma-separated)</span>
+          <span class="schema-form__label-row">
+            <span>Column widths (optional)</span>
+            ${infoTipHtml('Widths align with columns by position (e.g. 40%, 20%, auto). Percentages of data columns should add up to 100%. Bare numbers count as %. Leave blank or use auto for flexible columns. Column field IDs are generated from column field names.')}
+          </span>
           <input type="text" data-field="columnWidths" value="${escapeAttr((schema.columns ?? []).map((c) => c.width ?? '').join(', '))}" placeholder="40%, 15%, 15%, 15%, 15%" />
         </label>
-        <p class="schema-form__hint">Widths align with columns by position (e.g. <code>40%, 20%, auto</code>). Percentages are of the data columns and should add up to <code>100%</code>. Bare numbers count as <code>%</code>. Leave blank or use <code>auto</code> for flexible columns.</p>
-        <p class="schema-form__hint">Column field IDs are generated automatically from column field names. Align by position with Columns.</p>
         <label class="schema-form__row schema-form__row--checkbox">
           <input type="checkbox" data-field="hideHeader" ${schema.hideHeader ? 'checked' : ''} />
           <span>Hide header</span>
@@ -613,8 +620,11 @@ export function createSchemaEditorController({
       `;
     } else if (schema.type === 'child') {
       extra.innerHTML = `
-        <p class="schema-form__hint">Upload a template JSON (<code>kind: "template"</code>) — the same format as the main editor Template export.</p>
         <div class="schema-form__row schema-form__row--actions">
+          <span class="schema-form__label-row">
+            <span>Nested template</span>
+            ${infoTipHtml('Upload a template JSON (kind: "template") — the same format as the main editor Template export.')}
+          </span>
           <button type="button" class="btn btn-sm btn-primary" data-action="upload-repeater-template">Upload template</button>
           <input type="file" accept=".json,application/json" data-role="repeater-template-file" hidden />
         </div>
@@ -697,10 +707,12 @@ export function createSchemaEditorController({
       ? ''
       : `
       <label class="schema-form__row">
-        <span>Field Name</span>
+        <span class="schema-form__label-row">
+          <span>Field Name</span>
+          ${infoTipHtml('Used in document export and to generate the field ID.')}
+        </span>
         <input type="text" data-field="name" value="${escapeAttr(schema.name ?? schema.label ?? '')}" />
       </label>
-      <p class="schema-form__hint">Used in document export and to generate the field ID.</p>  
     `;
 
     const labelFields = editingCellField
@@ -727,9 +739,11 @@ export function createSchemaEditorController({
       ${schema.type === 'computed' ? '' : `
       <label class="schema-form__row schema-form__row--checkbox">
         <input type="checkbox" data-field="readonly"${schema.readonly ? ' checked' : ''} />
-        <span>Read-only when filling</span>
+        <span class="schema-form__label-row">
+          <span>Read-only when filling</span>
+          ${infoTipHtml('Users can see the value but cannot change it in fill mode.')}
+        </span>
       </label>
-      <p class="schema-form__hint">Users can see the value but cannot change it in fill mode.</p>
       `}
     `;
 

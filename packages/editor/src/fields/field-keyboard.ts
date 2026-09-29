@@ -12,7 +12,7 @@ import {
   normalizeEditableLineStructure,
 } from './inline-fields.js';
 import {
-  clearDesignTokenSelection,
+  clearAllDesignTokenSelection,
   getFieldTokensForClipboard,
   getSelectedFieldTokens,
   sortTokensByDocumentOrder,
@@ -886,7 +886,7 @@ function deleteSelectedTokens(container: any, onDeleteField: any, onStructureCha
   for (const token of deletable) {
     onDeleteField?.(token.dataset.fieldId, token);
   }
-  clearDesignTokenSelection(container);
+  clearAllDesignTokenSelection(document);
   onStructureChange?.();
   return true;
 }

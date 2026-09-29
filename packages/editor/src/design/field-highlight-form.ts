@@ -11,13 +11,10 @@ export function createFieldHighlightForm() {
   root.innerHTML = `
     <legend class="display-style-form__legend">
       <span class="display-style-form__legend-label">Empty field style</span>
+      <button type="button" class="schema-form__info-tip" title="Empty field placeholders use this color and weight in design and fill mode. Fields render as soft rounded pills so they read as data tokens, not links." aria-label="More information">${FORMAT_ICONS.info}</button>
     </legend>
-    <div class="form-callout" role="note">
-      <span class="form-callout__icon">${FORMAT_ICONS.info}</span>
-      <p class="form-callout__text">Empty field placeholders use this color and weight in design and fill mode. In fill mode, all fields are also underlined with this color.</p>
-    </div>
     <div class="field-highlight-form__colors">
-      <label class="color-field">
+    <label class="color-field">
         <span class="color-field__label">Text color</span>
         <span class="color-field__control">
           <input type="color" class="color-field__swatch" data-field="highlight-color-picker" aria-label="Field highlight text color" />
@@ -117,13 +114,16 @@ export function createFieldHighlightForm() {
     const borderWidth = resolved.borderWidth ?? DEFAULT_FIELD_HIGHLIGHT_STYLE.borderWidth;
 
     previewToken.style.color = color;
-    previewToken.style.backgroundColor = bg === 'transparent' ? 'transparent' : bg;
+    previewToken.style.backgroundColor = bg === 'transparent' ? '#f0fdfa' : bg;
     previewToken.style.fontWeight = weight;
-    previewToken.style.textDecoration = 'underline';
-    previewToken.style.textDecorationColor = color;
-    previewToken.style.textDecorationThickness = borderWidth;
-    previewToken.style.textUnderlineOffset = '2px';
-    previewToken.style.fontStyle = 'italic';
+    previewToken.style.textDecoration = 'none';
+    previewToken.style.textDecorationColor = '';
+    previewToken.style.textDecorationThickness = '';
+    previewToken.style.textUnderlineOffset = '';
+    previewToken.style.fontStyle = 'normal';
+    previewToken.style.padding = '1px 7px';
+    previewToken.style.borderRadius = '999px';
+    void borderWidth;
   }
 
   colorInput?.addEventListener('input', () => {

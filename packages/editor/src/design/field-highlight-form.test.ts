@@ -13,13 +13,12 @@ function installDom() {
 }
 
 describe('createFieldHighlightForm', () => {
-  it('renders compact color fields, callout, and live preview', () => {
+  it('renders compact color fields, info tip, and live preview', () => {
     installDom();
     const form = createFieldHighlightForm();
 
-    assert.ok(form.element.querySelector('.form-callout'));
-    assert.ok(form.element.querySelector('.form-callout__icon'));
-    assert.equal(form.element.querySelectorAll('.color-field').length, 2);
+    assert.ok(form.element.querySelector('.schema-form__info-tip'));
+    assert.ok(form.element.querySelectorAll('.color-field').length === 2);
     assert.ok(form.element.querySelector('.color-field__swatch'));
     assert.ok(form.element.querySelector('.color-field__hex'));
     assert.ok(form.element.querySelector('.field-highlight-form__preview-token'));
@@ -41,8 +40,9 @@ describe('createFieldHighlightForm', () => {
     ) as HTMLElement;
 
     assert.equal(token.style.color.toUpperCase(), DEFAULT_FIELD_HIGHLIGHT_STYLE.color.toUpperCase());
-    assert.equal(token.style.textDecoration, 'underline');
-    assert.equal(token.style.fontStyle, 'italic');
+    assert.equal(token.style.textDecoration, 'none');
+    assert.equal(token.style.fontStyle, 'normal');
     assert.equal(token.style.fontWeight, DEFAULT_FIELD_HIGHLIGHT_STYLE.fontWeight);
+    assert.equal(token.style.borderRadius, '999px');
   });
 });

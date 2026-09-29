@@ -5,7 +5,7 @@ export const DRAG_HANDLE_ICON_SVG =
 /**
  * @param {object} [options]
  * @param {string} [options.className]
- * @param {string} [options.hintTitle]
+ * @param {string | null} [options.hintTitle] Pass null to omit the hover tooltip bubble.
  * @param {string} [options.hintShortcut]
  * @param {Record<string, string>} [options.dataset]
  */
@@ -20,26 +20,29 @@ export function createDragHandle(options: any = {}) {
   const handle = document.createElement('span');
   handle.className = className ? `editor-drag-handle ${className}` : 'editor-drag-handle';
   handle.setAttribute('role', 'button');
-  handle.setAttribute('aria-label', hintTitle);
-
-  const hint = document.createElement('span');
-  hint.className = 'editor-drag-handle__hint';
-  hint.setAttribute('role', 'tooltip');
-
-  const title = document.createElement('span');
-  title.className = 'editor-drag-handle__hint-title';
-  title.textContent = hintTitle;
-  hint.appendChild(title);
-
-  if (hintShortcut) {
-    const shortcut = document.createElement('span');
-    shortcut.className = 'editor-drag-handle__hint-shortcut';
-    shortcut.textContent = hintShortcut;
-    hint.appendChild(shortcut);
-  }
+  handle.setAttribute('aria-label', hintTitle || 'Drag to move');
 
   handle.insertAdjacentHTML('afterbegin', DRAG_HANDLE_ICON_SVG);
-  handle.appendChild(hint);
+
+  if (hintTitle) {
+    const hint = document.createElement('span');
+    hint.className = 'editor-drag-handle__hint';
+    hint.setAttribute('role', 'tooltip');
+
+    const title = document.createElement('span');
+    title.className = 'editor-drag-handle__hint-title';
+    title.textContent = hintTitle;
+    hint.appendChild(title);
+
+    if (hintShortcut) {
+      const shortcut = document.createElement('span');
+      shortcut.className = 'editor-drag-handle__hint-shortcut';
+      shortcut.textContent = hintShortcut;
+      hint.appendChild(shortcut);
+    }
+
+    handle.appendChild(hint);
+  }
 
   for (const [key, value] of Object.entries(dataset)) {
     handle.dataset[key] = String(value);

@@ -72,7 +72,9 @@ export function selectDesignToken(token: any, container: any, { additive = false
     return;
   }
 
-  clearDesignTokenSelection(container, { notify: false });
+  // Clear across the whole document — containers are per-section, so a
+  // section-local clear leaves other sections looking selected.
+  clearAllDesignTokenSelection(document, { notify: false });
   token.classList.add('field-token--selected');
   emitSelectionChange();
 }
@@ -121,7 +123,7 @@ export function getFieldTokensForClipboard(container: any) {
 export function wireFieldSelectionClear(container: any) {
   function handleClick(e: any) {
     if (e.target.closest('.field-token')) return;
-    clearDesignTokenSelection(container);
+    clearAllDesignTokenSelection(document);
   }
 
   container.addEventListener('click', handleClick);

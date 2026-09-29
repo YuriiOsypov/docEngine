@@ -237,9 +237,7 @@ export function tableSegmentHasRequiredEmpty(tableFieldId: any, fieldValues: any
 
 function attachDesignCellToken(token: any, fieldId: any, tableFieldId: any, rowKey: any, colKey: any, options: any) {
   tagTableCellToken(token, tableFieldId, rowKey, colKey);
-  token.title = options.designPropertiesPanel
-    ? 'Click to select column and edit properties. Double-click to reopen cell schema.'
-    : 'Click to select column for formatting. Double-click to edit cell schema.';
+  token.removeAttribute('title');
 
   token.addEventListener('click', (e: any) => {
     e.preventDefault();

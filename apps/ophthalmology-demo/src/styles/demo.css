@@ -2,8 +2,8 @@ body {
   margin: 0;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
-  color: #1e293b;
-  background: #f8fafc;
+  color: var(--me-text-body, #1e293b);
+  background: var(--me-surface-50, #f4f7f7);
 }
 
 .page {
@@ -27,6 +27,7 @@ body.design-mode--panels .page,
   overflow: hidden;
   padding: var(--me-space-3, 12px) var(--me-space-4, 16px) var(--me-space-4, 16px);
   box-sizing: border-box;
+  background: var(--me-surface-50, #f4f7f7);
 }
 
 body.design-mode--panels .page > .design-shell--active,
@@ -49,7 +50,7 @@ body.design-mode--panels .page > .design-shell--active,
   position: sticky;
   top: 0;
   z-index: 100;
-  background: #f8fafc;
+  background: var(--me-surface-50, #f4f7f7);
   padding-bottom: var(--me-space-2, 8px);
 }
 
@@ -63,9 +64,10 @@ body.design-mode--panels .page > .design-shell--active,
 
 .page-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  letter-spacing: -0.01em;
+  color: var(--me-text-muted, #64748b);
 }
 
 .page-actions {
@@ -80,7 +82,7 @@ body.design-mode--panels .page > .design-shell--active,
   align-items: center;
   gap: var(--me-space-3, 12px);
   padding-right: var(--me-space-3, 12px);
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid var(--me-border, #d5e0e0);
 }
 
 .design-toggle {
@@ -90,22 +92,21 @@ body.design-mode--panels .page > .design-shell--active,
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  /* Match Preview accent (also set in editor/bridge; kept here so demo wins cascade). */
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.2;
   padding: 0.2rem 0.55rem;
-  border: 1px solid var(--me-accent-hover-border, #93c5fd);
-  border-radius: var(--me-radius-sm, 4px);
-  background: var(--me-accent-surface, #eff6ff);
-  color: var(--me-primary-muted, #1e40af);
+  border: 1px solid var(--me-accent-hover-border, #5eead4);
+  border-radius: var(--me-radius-sm, 6px);
+  background: var(--me-accent-surface, #f0fdfa);
+  color: var(--me-primary-muted, #115e59);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .design-toggle:hover:not(:has(input:disabled)) {
-  background: var(--me-accent-hover, #dbeafe);
-  border-color: var(--me-primary, #2563eb);
-  color: var(--me-primary, #2563eb);
+  background: var(--me-accent-hover, #ccfbf1);
+  border-color: var(--me-primary, #0d9488);
+  color: var(--me-primary, #0d9488);
 }
 
 .design-toggle:has(input:disabled) {
@@ -115,28 +116,48 @@ body.design-mode--panels .page > .design-shell--active,
 
 .page-actions__io {
   display: inline-flex;
-  gap: var(--me-space-2, 8px);
+  gap: var(--me-space-1, 4px);
   flex-wrap: wrap;
   align-items: center;
+  opacity: 0.72;
+}
+
+.page-actions__io:hover,
+.page-actions__io:focus-within {
+  opacity: 1;
 }
 
 .page-actions__document {
   display: inline-flex;
   align-items: center;
+  gap: var(--me-space-2, 8px);
   padding-left: var(--me-space-3, 12px);
-  border-left: 1px solid #e2e8f0;
+  border-left: 1px solid var(--me-border, #d5e0e0);
 }
 
 .page-actions__document .document-actions__btn--icon {
-  color: #64748b;
+  color: var(--me-text-muted, #64748b);
   border: none;
   background: transparent;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .page-actions__document .document-actions__btn--icon:hover:not(:disabled) {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--me-surface-100, #eef3f3);
+  color: var(--me-text-body, #1e293b);
+}
+
+/* Primary document CTAs stand out over quiet IO chrome */
+.page-actions__document .btn-primary,
+.page-actions__document .document-actions__btn--primary {
+  background: var(--me-primary, #0d9488);
+  border-color: var(--me-primary-hover, #0f766e);
+  color: var(--me-primary-contrast, #fff);
+}
+
+.page-actions__document .btn-primary:hover,
+.page-actions__document .document-actions__btn--primary:hover {
+  background: var(--me-primary-hover, #0f766e);
 }
 
 .io-group {
@@ -150,18 +171,18 @@ body.design-mode--panels .page > .design-shell--active,
 }
 
 .io-group__label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--me-text-subtle, #64748b);
   text-transform: none;
   letter-spacing: 0.01em;
-  margin-right: 4px;
+  margin-right: 2px;
   white-space: nowrap;
 }
 
 .page-actions__io .btn-icon,
 .page-actions__io label.btn-icon {
-  color: #64748b;
+  color: var(--me-text-muted, #64748b);
   border: none;
   background: transparent;
   box-shadow: none;
@@ -169,8 +190,8 @@ body.design-mode--panels .page > .design-shell--active,
 
 .page-actions__io .btn-icon:hover:not(:disabled),
 .page-actions__io label.btn-icon:hover {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--me-surface-100, #eef3f3);
+  color: var(--me-text-body, #475569);
 }
 
 .page-actions__io .btn-secondary.btn-icon {
@@ -178,25 +199,44 @@ body.design-mode--panels .page > .design-shell--active,
 }
 
 .page-actions__io #btn-edit-mapping {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--me-border, #d5e0e0);
   border-radius: var(--me-radius-sm, 6px);
-  color: #64748b;
+  color: var(--me-text-muted, #64748b);
   background: transparent;
   font-weight: 500;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .page-actions__io #btn-edit-mapping:hover {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--me-surface-100, #eef3f3);
+  border-color: var(--me-accent-hover-border, #5eead4);
+  color: var(--me-primary-muted, #115e59);
 }
 
 .editor-holder {
-  background: #fff;
+  background: var(--me-surface-0, #fff);
   border: none;
   border-radius: var(--me-radius-md, 6px);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 8px 24px -4px rgb(15 23 42 / 0.08);
   min-height: 200px;
+}
+
+/* Design panels: slate workspace; white Source / Properties */
+body.design-mode--panels .design-panel--center {
+  background: #f1f5f9;
+}
+
+body.design-mode--panels .design-panel--left,
+body.design-mode--panels .design-panel--right {
+  background: var(--me-surface-0, #fff);
+}
+
+body.design-mode--panels .editor-holder.editor-holder--fill-page {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .btn-sm {
@@ -214,7 +254,7 @@ body.design-mode--panels .page > .design-shell--active,
   padding: 0;
   flex-shrink: 0;
   border-radius: var(--me-radius-sm, 6px);
-  color: #64748b;
+  color: var(--me-text-muted, #64748b);
   border: none;
   background: transparent;
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -226,8 +266,8 @@ body.design-mode--panels .page > .design-shell--active,
 }
 
 .btn-icon:hover:not(:disabled) {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--me-surface-100, #eef3f3);
+  color: var(--me-text-body, #475569);
 }
 
 .btn-icon:disabled {

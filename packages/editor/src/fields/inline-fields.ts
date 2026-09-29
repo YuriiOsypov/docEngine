@@ -1394,9 +1394,13 @@ function ensureFieldTokenDragHandle(token: any) {
   if (!handle) {
     handle = createDragHandle({
       dataset: { action: 'drag-field' },
-      hintTitle: 'Drag to move',
+      hintTitle: null,
     });
     token.insertBefore(handle, token.firstChild);
+  } else {
+    // Drop legacy hover bubbles / native titles left on older design tokens.
+    handle.querySelectorAll('.editor-drag-handle__hint').forEach((el: Element) => el.remove());
+    handle.removeAttribute('title');
   }
   return handle;
 }
@@ -1432,9 +1436,7 @@ function makeFieldTokenDraggable(token: any) {
 }
 
 function attachDesignToken(token: any, fieldId: any, { onEditSchema, designPropertiesPanel }: any) {
-  token.title = designPropertiesPanel
-    ? 'Click to select. Drag the grip to move. Double-click to edit field.'
-    : 'Drag the grip to move. Double-click to edit. Delete or Backspace removes the field.';
+  token.removeAttribute('title');
 
   token.addEventListener('click', (e: any) => {
     e.preventDefault();
@@ -1458,6 +1460,7 @@ function attachDesignToken(token: any, fieldId: any, { onEditSchema, designPrope
 export function wireDesignFieldToken(token: any, { onEditSchema, onDeleteField, designPropertiesPanel }: any) {
   if (!token) return;
   token.classList.add('field-token--design');
+  token.removeAttribute('title');
   if (token.dataset.designWired === 'true') {
     if (!token.classList.contains('field-token--cell')) {
       makeFieldTokenDraggable(token);

@@ -4,11 +4,21 @@ import { createFieldHighlightForm } from './field-highlight-form.js';
 import { findFieldPlacement } from '../core/field-id.js';
 import { parseCellFieldId } from '../core/field-schemas.js';
 import { ACTION_ICONS } from '../ui/action-icons.js';
+import { FORMAT_ICONS } from '../ui/format-icons.js';
 import {
   resolvePageSetupFieldHighlightStyle,
   resolvePageSetupFieldValueStyle,
   resolvePageSetupTextStyle,
 } from '../core/page-setup-styles.js';
+
+function infoTipHtml(text: string) {
+  const tip = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return `<button type="button" class="schema-form__info-tip" title="${tip}" aria-label="More information">${FORMAT_ICONS.info}</button>`;
+}
 
 /**
  * Right-side properties panel for design mode.
@@ -50,7 +60,19 @@ export function createPropertiesPanel({
   const empty = document.createElement('div');
   empty.className = 'properties-panel__empty';
   empty.innerHTML = `
-    <p>Select a field, section, or columns block to edit its properties.</p>
+    <div class="properties-panel__empty-card">
+      <span class="properties-panel__empty-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <path d="M8 8h8"/>
+          <path d="M8 12h5"/>
+          <path d="M8 16h3"/>
+          <path d="m14.5 14.5 5.4 1.5-3.2 3.2"/>
+        </svg>
+      </span>
+      <p class="properties-panel__empty-title">Nothing selected</p>
+      <p class="properties-panel__empty-text">Select a field, section, or columns block to edit its properties.</p>
+    </div>
   `;
   body.appendChild(empty);
 
@@ -74,34 +96,44 @@ export function createPropertiesPanel({
   sectionWrap.hidden = true;
   sectionWrap.innerHTML = `
     <label class="schema-form__row">
-      <span>Section name</span>
+      <span class="schema-form__label-row">
+        <span>Section name</span>
+        ${infoTipHtml('Used in document export and as the field ID prefix.')}
+      </span>
       <input type="text" data-field="section-name" placeholder="Export key" />
     </label>
-    <p class="schema-form__hint">Used in document export and as the field ID prefix.</p>
     <label class="schema-form__row">
-      <span>Section title</span>
+      <span class="schema-form__label-row">
+        <span>Section title</span>
+        ${infoTipHtml('Shown as the section header in the document.')}
+      </span>
       <input type="text" data-field="section-label" placeholder="Display title" />
     </label>
-    <p class="schema-form__hint">Shown as the section header in the document.</p>
     <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-hide-title-in-preview" />
-      <span>Hide title in preview</span>
+      <span class="schema-form__label-row">
+        <span>Hide title in preview</span>
+        ${infoTipHtml('When checked, the section title is hidden in document preview. The title remains available for export keys and the design editor.')}
+      </span>
     </label>
-    <p class="schema-form__hint">When checked, the section title is hidden in document preview. The title remains available for export keys and the design editor.</p>
     <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-border-top" />
       <span>Top border line</span>
     </label>
     <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-border-bottom" />
-      <span>Bottom border line</span>
+      <span class="schema-form__label-row">
+        <span>Bottom border line</span>
+        ${infoTipHtml('Draw a horizontal rule above and/or below this section in the editor, preview, and PDF.')}
+      </span>
     </label>
-    <p class="schema-form__hint">Draw a horizontal rule above and/or below this section in the editor, preview, and PDF.</p>
     <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-repeatable" />
-      <span>Show on each page</span>
+      <span class="schema-form__label-row">
+        <span>Show on each page</span>
+        ${infoTipHtml('When checked, this section\'s content becomes the PDF page header on every page. Long tables in this or the next section paginate with column headers on continuation pages. For multiple full section copies, use a document array in JSON import.')}
+      </span>
     </label>
-    <p class="schema-form__hint">When checked, this section's content becomes the PDF page header on every page. Long tables in this or the next section paginate with column headers on continuation pages. For multiple full section copies, use a document array in JSON import.</p>
     <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-visibility-enabled" />
       <span>Show/hide by field value</span>
@@ -130,10 +162,12 @@ export function createPropertiesPanel({
         </select>
       </label>
       <label class="schema-form__row" data-role="section-visibility-value-row">
-        <span>Value</span>
+        <span class="schema-form__label-row">
+          <span>Value</span>
+          ${infoTipHtml('The selected section is shown or hidden while filling, previewing, and exporting PDF.')}
+        </span>
         <input type="text" data-field="section-visibility-value" placeholder="Field value or list item id" />
       </label>
-      <p class="schema-form__hint">The selected section is shown or hidden while filling, previewing, and exporting PDF.</p>
     </div>
   `;
   body.appendChild(sectionWrap);
@@ -142,41 +176,52 @@ export function createPropertiesPanel({
   documentWrap.className = 'properties-panel__document';
   documentWrap.hidden = true;
   documentWrap.innerHTML = `
-    <label class="schema-form__row">
-      <span>Page size</span>
-      <select data-field="page-format">
-        <option value="a4">A4</option>
-        <option value="letter">Letter</option>
-      </select>
-    </label>
-    <label class="schema-form__row">
-      <span>Orientation</span>
-      <select data-field="page-orientation">
-        <option value="portrait">Portrait</option>
-        <option value="landscape">Landscape</option>
-      </select>
-    </label>
-    <label class="schema-form__row">
-      <span>Margin (mm)</span>
-      <input type="number" data-field="page-margin" min="0" step="1" placeholder="15" />
-    </label>
-    <label class="schema-form__row">
-      <span>PDF title</span>
-      <input type="text" data-field="page-title" placeholder="Document title" />
-    </label>
-    <label class="schema-form__row">
-      <span>Footer text</span>
-      <input type="text" data-field="page-footer-text" placeholder="Optional footer" />
-    </label>
-    <label class="schema-form__row schema-form__row--checkbox">
-      <input type="checkbox" data-field="page-footer-numbers" />
-      <span>Show page numbers</span>
-    </label>
-    <label class="schema-form__row schema-form__row--checkbox">
-      <input type="checkbox" data-field="page-protect-fields" />
-      <span>Protect fields in fill mode</span>
-    </label>
-    <p class="schema-form__hint">When checked, Backspace, Delete, area selection delete, and Cut cannot remove field placeholders while filling the document.</p>
+    <section class="properties-panel__card">
+      <h3 class="properties-panel__card-title">Page</h3>
+      <label class="schema-form__row">
+        <span>Page size</span>
+        <select data-field="page-format">
+          <option value="a4">A4</option>
+          <option value="letter">Letter</option>
+        </select>
+      </label>
+      <label class="schema-form__row">
+        <span>Orientation</span>
+        <select data-field="page-orientation">
+          <option value="portrait">Portrait</option>
+          <option value="landscape">Landscape</option>
+        </select>
+      </label>
+      <label class="schema-form__row">
+        <span>Margin (mm)</span>
+        <input type="number" data-field="page-margin" min="0" step="1" placeholder="15" />
+      </label>
+    </section>
+    <section class="properties-panel__card">
+      <h3 class="properties-panel__card-title">PDF &amp; footer</h3>
+      <label class="schema-form__row">
+        <span>PDF title</span>
+        <input type="text" data-field="page-title" placeholder="Document title" />
+      </label>
+      <label class="schema-form__row">
+        <span>Footer text</span>
+        <input type="text" data-field="page-footer-text" placeholder="Optional footer" />
+      </label>
+      <label class="schema-form__row schema-form__row--checkbox">
+        <input type="checkbox" data-field="page-footer-numbers" />
+        <span>Show page numbers</span>
+      </label>
+    </section>
+    <section class="properties-panel__card">
+      <h3 class="properties-panel__card-title">
+        <span>Fill mode</span>
+        ${infoTipHtml('When checked, Backspace, Delete, area selection delete, and Cut cannot remove field placeholders while filling the document.')}
+      </h3>
+      <label class="schema-form__row schema-form__row--checkbox">
+        <input type="checkbox" data-field="page-protect-fields" />
+        <span>Protect fields in fill mode</span>
+      </label>
+    </section>
     <div class="properties-panel__style-forms" data-role="style-forms"></div>
   `;
   body.appendChild(documentWrap);
@@ -215,10 +260,12 @@ export function createPropertiesPanel({
       <input type="text" data-field="column-width-0" placeholder="1fr, 50%, 200px" />
     </label>
     <label class="schema-form__row properties-panel__column-width">
-      <span>Right column width</span>
+      <span class="schema-form__label-row">
+        <span>Right column width</span>
+        ${infoTipHtml('Use CSS grid track sizes (e.g. 1fr, 50%, 200px). Leave blank for equal columns.')}
+      </span>
       <input type="text" data-field="column-width-1" placeholder="1fr, 50%, 200px" />
     </label>
-    <p class="schema-form__hint">Use CSS grid track sizes (e.g. <code>1fr</code>, <code>50%</code>, <code>200px</code>). Leave blank for equal columns.</p>
   `;
   body.appendChild(columnsWrap);
 

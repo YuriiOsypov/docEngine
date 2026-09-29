@@ -199,13 +199,6 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
   fontCustomInput.disabled = true;
   fontGroup.appendChild(fontCustomInput);
 
-  fontSelect.addEventListener('change', () => {
-    const isCustom = fontSelect.value === '__custom__';
-    fontCustomInput.hidden = !isCustom;
-    fontCustomInput.disabled = !isCustom || !fieldMode && !activeEditable;
-    if (isCustom) fontCustomInput.focus();
-  });
-
   const sizeInput = createFontSizeSpinInput({ ariaLabel: 'Font size', placeholder: '16', disabled: true });
   fontGroup.appendChild(sizeInput);
 
@@ -316,14 +309,25 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
     detachSelectionListener();
     selectionListener = () => {
       if (activeEditable !== editable) return;
-      savedRange = saveSelection(editable) ?? savedRange;
+      // Font/size inputs need focus; don't let that collapse overwrite the saved range.
+      if (bar.contains(document.activeElement)) return;
+      const next = saveSelection(editable);
+      if (!next) return;
+      // Prefer a non-collapsed range; keep the prior highlight if the browser only left a caret.
+      if (next.collapsed && savedRange && !savedRange.collapsed && !editable.contains(document.activeElement)) {
+        return;
+      }
+      savedRange = next;
     };
     document.addEventListener('selectionchange', selectionListener);
   }
 
   function refreshSavedRange() {
     if (activeEditable) {
-      savedRange = saveSelection(activeEditable) ?? savedRange;
+      const next = saveSelection(activeEditable);
+      if (next && !(next.collapsed && savedRange && !savedRange.collapsed)) {
+        savedRange = next;
+      }
     }
   }
 
@@ -361,6 +365,11 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
 
     fieldMode.onStyleChange?.(next);
     refreshFieldModeControls();
+  }
+
+  function applyFontAndSizeFromControls() {
+    if (fieldMode) applyFontAndSizeToField();
+    else applyFontAndSizeToText();
   }
 
   function applyFieldStyleCommand(command: any) {
@@ -440,16 +449,29 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
 
   applyBtn.addEventListener('click', (e: any) => {
     e.preventDefault();
-    if (fieldMode) applyFontAndSizeToField();
-    else applyFontAndSizeToText();
+    applyFontAndSizeFromControls();
+  });
+
+  fontSelect.addEventListener('change', () => {
+    const isCustom = fontSelect.value === '__custom__';
+    fontCustomInput.hidden = !isCustom;
+    fontCustomInput.disabled = !isCustom || (!fieldMode && !activeEditable);
+    if (isCustom) {
+      fontCustomInput.focus();
+      return;
+    }
+    applyFontAndSizeFromControls();
+  });
+
+  sizeInput.addEventListener('change', () => {
+    applyFontAndSizeFromControls();
   });
 
   for (const input of [fontCustomInput, sizeInput]) {
     input.addEventListener('keydown', (e: any) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (fieldMode) applyFontAndSizeToField();
-        else applyFontAndSizeToText();
+        applyFontAndSizeFromControls();
       }
     });
   }
@@ -457,8 +479,7 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
   fontSelect.addEventListener('keydown', (e: any) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (fieldMode) applyFontAndSizeToField();
-      else applyFontAndSizeToText();
+      applyFontAndSizeFromControls();
     }
   });
 

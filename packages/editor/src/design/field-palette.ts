@@ -1,4 +1,5 @@
 import { getFieldTypes } from '../fields/handlers/index.js';
+import { getPaletteIcon } from '../ui/palette-icons.js';
 
 let paletteDragActive = false;
 
@@ -130,6 +131,15 @@ function createPaletteItem(item: any,onAddItem: any,{ draggable = false }: any =
   btn.className = 'field-palette__item';
   btn.dataset.paletteKind = item.kind;
   btn.dataset.paletteType = item.type;
+
+  const iconHtml = getPaletteIcon(item.type);
+  if (iconHtml) {
+    const icon = document.createElement('span');
+    icon.className = 'field-palette__item-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = iconHtml;
+    btn.appendChild(icon);
+  }
 
   const label = document.createElement('span');
   label.className = 'field-palette__item-label';
