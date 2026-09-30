@@ -596,6 +596,14 @@ export function applyDocumentValues(
         const tableSchema = nextFieldSchemas[seg.id] as TableSchema | undefined;
         if (!tableSchema) continue;
 
+        if ((tableSchema as any).type === 'pivotTable') {
+          if (Object.prototype.hasOwnProperty.call(expandedValues, seg.id)) {
+            fieldValues[seg.id] = expandedValues[seg.id];
+            appliedKeys.add(seg.id);
+          }
+          continue;
+        }
+
         const replacingTable =
           isTableRowArray(values?.[seg.id]) || expandedValuesIncludeTable(seg.id, expandedValues);
         if (replacingTable) {

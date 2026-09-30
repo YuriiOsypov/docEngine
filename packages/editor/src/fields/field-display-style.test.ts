@@ -1,15 +1,29 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
+import { parseHTML } from 'linkedom';
 
 import { cellFieldId } from '../core/field-schemas.js';
 import { DOCUMENT_TABLE_HEADER_STYLE, DOCUMENT_TABLE_TEXT_STYLE, DEFAULT_DOCUMENT_BODY_STYLE, EDITOR_FONT_FAMILY } from '../core/document-display-defaults.js';
 import {
+  applyFieldDisplayStyle,
+  applyTableCellDisplayStyle,
   normalizeFieldDisplayStyle,
+  refreshTableColumnStylesForFieldIds,
   resolveTableCellDisplayStyle,
   resolveTableColumnDisplayStyle,
   resolveTokenDisplayStyle,
 } from './field-display-style.js';
 import { normalizeFontFamily } from './rich-text.js';
+
+before(() => {
+  const { window, document } = parseHTML('<!DOCTYPE html><html><body></body></html>');
+  globalThis.window = window as any;
+  globalThis.document = document;
+  globalThis.CSS = {
+    escape: (value: string) =>
+      String(value).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => `\\${ch}`),
+  } as any;
+});
 
 describe('normalizeFontFamily', () => {
   it('preserves comma-separated font stacks', () => {
@@ -35,6 +49,24 @@ describe('normalizeFontFamily', () => {
       normalizeFontFamily('"Tahoma, \'Segoe UI\', Geneva, Verdana, sans-serif"'),
       'Tahoma, "Segoe UI", Geneva, Verdana, sans-serif',
     );
+  });
+});
+
+describe('normalizeFieldDisplayStyle backgroundColor', () => {
+  it('keeps valid background colors and drops invalid ones', () => {
+    assert.equal(normalizeFieldDisplayStyle({ backgroundColor: '#e8eef5' }).backgroundColor, '#e8eef5');
+    assert.equal(normalizeFieldDisplayStyle({ backgroundColor: 'navy' }).backgroundColor, 'navy');
+    assert.equal(normalizeFieldDisplayStyle({ backgroundColor: 'not a color' }).backgroundColor, undefined);
+  });
+});
+
+describe('applyFieldDisplayStyle backgroundColor', () => {
+  it('sets and clears element backgroundColor', () => {
+    const el = document.createElement('span');
+    applyFieldDisplayStyle(el, { backgroundColor: '#e8eef5' });
+    assert.match(el.style.backgroundColor, /^(#e8eef5|rgb\(232,\s*238,\s*245\))$/i);
+    applyFieldDisplayStyle(el, {});
+    assert.equal(el.style.backgroundColor, '');
   });
 });
 
@@ -148,6 +180,107 @@ describe('resolveTableCellDisplayStyle', () => {
 
     const style = resolveTableCellDisplayStyle(tableId, 'col2', fieldSchemas[row2Cell], fieldSchemas);
     assert.equal(style.textAlign, 'right');
+  });
+
+  it('uses column backgroundColor from any cell in the column', () => {
+    const tableId = 'exam_table';
+    const row1Cell = cellFieldId(tableId, 'row1', 'label');
+    const row2Cell = cellFieldId(tableId, 'row2', 'label');
+    const fieldSchemas = {
+      [tableId]: {
+        type: 'table',
+        columns: [{ key: 'label', label: 'Label' }],
+        rows: [
+          { key: 'row1', label: 'Row 1' },
+          { key: 'row2', label: 'Row 2' },
+        ],
+      },
+      [row1Cell]: {
+        type: 'text',
+        label: 'Label',
+        displayStyle: { backgroundColor: '#e8eef5' },
+      },
+      [row2Cell]: { type: 'text', label: 'Label' },
+    };
+
+    const style = resolveTableCellDisplayStyle(tableId, 'label', fieldSchemas[row2Cell], fieldSchemas);
+    assert.equal(style.backgroundColor, '#e8eef5');
+  });
+});
+
+describe('applyTableCellDisplayStyle backgroundColor', () => {
+  it('applies background on td and clears when unset', () => {
+    const tableId = 'bg_table';
+    const cellId = cellFieldId(tableId, 'row1', 'col1');
+    const fieldSchemas: any = {
+      [tableId]: {
+        type: 'table',
+        columns: [{ key: 'col1', label: 'Label' }],
+        rows: [{ key: 'row1', label: 'Row 1' }],
+      },
+      [cellId]: {
+        type: 'text',
+        label: 'Label',
+        displayStyle: { backgroundColor: '#e8eef5' },
+      },
+    };
+
+    const td = document.createElement('td');
+    const token = document.createElement('span');
+    token.className = 'field-token field-token--cell';
+    token.dataset.fieldId = cellId;
+    token.dataset.tableId = tableId;
+    token.dataset.colKey = 'col1';
+    td.appendChild(token);
+
+    applyTableCellDisplayStyle(token, cellId, fieldSchemas[cellId], fieldSchemas);
+    assert.match(td.style.backgroundColor, /^(#e8eef5|rgb\(232,\s*238,\s*245\))$/i);
+    assert.equal(token.style.backgroundColor, '');
+
+    fieldSchemas[cellId] = { type: 'text', label: 'Label', displayStyle: {} };
+    applyTableCellDisplayStyle(token, cellId, fieldSchemas[cellId], fieldSchemas);
+    assert.equal(td.style.backgroundColor, '');
+  });
+
+  it('refreshes column background onto sibling row cells', () => {
+    const tableId = 'bg_col_table';
+    const row1 = cellFieldId(tableId, 'row1', 'label');
+    const row2 = cellFieldId(tableId, 'row2', 'label');
+    const fieldSchemas: any = {
+      [tableId]: {
+        type: 'table',
+        columns: [{ key: 'label', label: 'Label' }],
+        rows: [
+          { key: 'row1', label: 'Row 1' },
+          { key: 'row2', label: 'Row 2' },
+        ],
+      },
+      [row1]: {
+        type: 'text',
+        label: 'Label',
+        displayStyle: { backgroundColor: '#e8eef5' },
+      },
+      [row2]: { type: 'text', label: 'Label' },
+    };
+
+    const root = document.createElement('div');
+    for (const cellId of [row1, row2]) {
+      const td = document.createElement('td');
+      const token = document.createElement('span');
+      token.className = 'field-token field-token--cell';
+      token.dataset.fieldId = cellId;
+      token.dataset.tableId = tableId;
+      token.dataset.colKey = 'label';
+      td.appendChild(token);
+      root.appendChild(td);
+    }
+
+    refreshTableColumnStylesForFieldIds([row1], fieldSchemas, root, undefined);
+    for (const token of root.querySelectorAll('.field-token--cell')) {
+      const td = token.closest('td') as HTMLElement;
+      assert.match(td.style.backgroundColor, /^(#e8eef5|rgb\(232,\s*238,\s*245\))$/i);
+      assert.equal((token as HTMLElement).style.backgroundColor, '');
+    }
   });
 });
 

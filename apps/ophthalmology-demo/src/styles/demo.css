@@ -80,9 +80,17 @@ body.design-mode--panels .page > .design-shell--active,
 .page-actions__mode {
   display: inline-flex;
   align-items: center;
-  gap: var(--me-space-3, 12px);
+  gap: var(--me-space-2, 8px);
   padding-right: var(--me-space-3, 12px);
   border-right: 1px solid var(--me-border, #d5e0e0);
+}
+
+.page-actions__mode .page-actions__document {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--me-space-2, 8px);
+  padding-left: 0;
+  border-left: none;
 }
 
 .design-toggle {
@@ -131,8 +139,6 @@ body.design-mode--panels .page > .design-shell--active,
   display: inline-flex;
   align-items: center;
   gap: var(--me-space-2, 8px);
-  padding-left: var(--me-space-3, 12px);
-  border-left: 1px solid var(--me-border, #d5e0e0);
 }
 
 .page-actions__document .document-actions__btn--icon {
@@ -145,6 +151,43 @@ body.design-mode--panels .page > .design-shell--active,
 .page-actions__document .document-actions__btn--icon:hover:not(:disabled) {
   background: var(--me-surface-100, #eef3f3);
   color: var(--me-text-body, #1e293b);
+}
+
+/* Preview CTA next to Design mode */
+.page-actions__mode .document-actions__btn--preview,
+.page-actions__document .document-actions__btn--preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--me-accent-hover-border, #5eead4);
+  border-radius: var(--me-radius-sm, 6px);
+  background: var(--me-accent-surface, #f0fdfa);
+  color: var(--me-primary-muted, #115e59);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.page-actions__mode .document-actions__btn--preview:hover:not(:disabled),
+.page-actions__document .document-actions__btn--preview:hover:not(:disabled) {
+  background: var(--me-accent-hover, #ccfbf1);
+  border-color: var(--me-primary, #0d9488);
+  color: var(--me-primary, #0d9488);
+}
+
+.page-actions__mode .document-actions__btn--preview:disabled,
+.page-actions__document .document-actions__btn--preview:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.page-actions__mode .document-actions__btn--preview svg,
+.page-actions__document .document-actions__btn--preview svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 /* Primary document CTAs stand out over quiet IO chrome */

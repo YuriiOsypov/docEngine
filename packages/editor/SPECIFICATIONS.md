@@ -472,12 +472,14 @@ type FieldType =
   | 'tree'
   | 'image'
   | 'signature'
+  | 'barcode'
   | 'table'
+  | 'pivotTable'
   | 'child'
   | 'computed';
 ```
 
-`getFieldTypes()` — live palette list from the field-handler registry (built-in order: text, integer, computed, logical, image, signature, list, choice, tree, table, child). Host plugins such as `@docengine/field-date` appear after they call `registerField`.
+`getFieldTypes()` — live palette list from the field-handler registry (built-in order: text, integer, computed, logical, image, signature, barcode, list, choice, tree, table, pivotTable, child). Host plugins such as `@docengine/field-date` appear after they call `registerField`.
 
 `FIELD_TYPES` — snapshot of built-ins at module load; prefer `getFieldTypes()` when host plugins may be registered.
 
@@ -623,6 +625,25 @@ interface SignatureFieldSchema extends FieldSchemaBase {
 
 Preview and PDF render the signature like an image token (`field-token--image`).
 
+#### `barcode`
+
+Built-in inline field. Value is the **string to encode**; the token renders a generated barcode/QR image (`field-token--image` + `field-token--barcode`) via `bwip-js`.
+
+```ts
+type BarcodeSymbology = 'qr' | 'code128' | 'ean13' | 'code39';
+
+interface BarcodeFieldSchema extends FieldSchemaBase {
+  type: 'barcode';
+  symbology?: BarcodeSymbology; // default 'code128'
+  maxWidth?: number;            // default 180
+  height?: number;              // 1D bar height; ignored for QR
+  displayValue?: boolean;       // human-readable text under 1D bars
+  quietZone?: boolean;
+}
+```
+
+Fill mode reuses the text picker. Mapping is a scalar `$payload…` path (same as text). Invalid codes (e.g. bad EAN-13 checksum) show the raw value plus an error hint — they do not throw.
+
 #### `table`
 
 ```ts
@@ -643,6 +664,48 @@ Table column properties:
 - **`key`** — auto-generated via `labelToFieldKey(name)`; used in cell field IDs and document export row keys; not user-editable
 
 Cell field IDs: `cellFieldId(tableId, rowKey, colKey)` → `{tableId}_{rowKey}_{colKey}`
+
+#### `pivotTable`
+
+Auto-pivot / cross-tab field (`insertion: 'table'`). At mapping time, DocEngine reads a **source array**, groups by schema row/column properties, aggregates the value property, and stores a structured matrix.
+
+```ts
+type PivotAggregation = 'sum' | 'count' | 'avg' | 'min' | 'max' | 'first';
+
+interface PivotTableFieldSchema extends FieldSchemaBase {
+  type: 'pivotTable';
+  rowProperty?: string;
+  columnProperty?: string;
+  valueProperty?: string;
+  aggregation?: PivotAggregation;
+  showRowTotals?: boolean;
+  showColumnTotals?: boolean;
+  showGrandTotal?: boolean;
+  emptyCell?: string;
+  sortRows?: 'asc' | 'desc' | 'none';
+  sortColumns?: 'asc' | 'desc' | 'none';
+}
+
+interface PivotTableValue {
+  columns: Array<{ key: string; label: string }>;
+  rows: Array<{
+    key: string;
+    label: string;
+    cells: Record<string, number | string | null>;
+    rowTotal?: number | string | null;
+  }>;
+  columnTotals?: Record<string, number | string | null>;
+  grandTotal?: number | string | null;
+}
+```
+
+Mapping rule (one per pivot field — no `columnKey`):
+
+```json
+{ "section": "Main", "field": "salesPivot", "sourceArrayPath": "$payload.OrderItems" }
+```
+
+Rendered as a read-only `table.vision-table.pivot-table` inside `.document-table--pivot` (PDF uses the existing vision-table converter).
 
 #### `computed`
 

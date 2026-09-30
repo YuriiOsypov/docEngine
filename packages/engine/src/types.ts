@@ -8,6 +8,8 @@ export interface FieldDisplayStyle {
   fontWeight?: 'normal' | 'bold';
   fontStyle?: 'normal' | 'italic';
   color?: string;
+  /** Cell / field background fill (e.g. table column shading). */
+  backgroundColor?: string;
   textDecoration?: 'none' | 'underline' | 'line-through';
   textAlign?: TextAlign;
 }

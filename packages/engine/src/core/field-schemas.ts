@@ -359,11 +359,12 @@ function flattenTreeToItems(nodes: any, ancestors: any = []): Array<{ id: string
 
 function getBuiltinEmptyValue( type: any) {
   if (type === 'list' || type === 'tree') return [];
-  if (type === 'integer' || type === 'date') return '';
+  if (type === 'integer' || type === 'date' || type === 'barcode') return '';
   if (type === 'logical') return null;
   if (type === 'image') return createEmptyImageValue();
   if (type === 'signature') return '';
   if (type === 'child') return {};
+  if (type === 'pivotTable') return { columns: [], rows: [] };
   return '';
 }
 
@@ -399,6 +400,10 @@ function resolveBuiltinDefaultValue( schema: any, { forTemplate = false } = {}) 
     }
     case 'signature':
       return '';
+    case 'barcode':
+      return '';
+    case 'pivotTable':
+      return { columns: [], rows: [] };
     default:
       return getBuiltinEmptyValue(schema.type);
   }
@@ -434,6 +439,15 @@ function createBuiltinDefaultSchema(type: any, label: any = 'New field', name: a
       return { ...base, defaultValue: null };
     case 'signature':
       return { ...base, maxWidth: 320 };
+    case 'barcode':
+      return {
+        ...base,
+        symbology: 'code128',
+        maxWidth: 180,
+        height: 10,
+        displayValue: true,
+        quietZone: true,
+      };
     case 'list':
       return {
         ...base,
@@ -465,6 +479,20 @@ function createBuiltinDefaultSchema(type: any, label: any = 'New field', name: a
         cellType: 'text',
       };
     }
+    case 'pivotTable':
+      return {
+        ...base,
+        rowProperty: 'Region',
+        columnProperty: 'Product',
+        valueProperty: 'Amount',
+        aggregation: 'sum',
+        showRowTotals: true,
+        showColumnTotals: true,
+        showGrandTotal: true,
+        emptyCell: '',
+        sortRows: 'asc',
+        sortColumns: 'asc',
+      };
     case 'child':
       return {
         ...base,
@@ -488,7 +516,9 @@ function createBuiltinBlockData( fieldType: any) {
     tree: 'Tree',
     image: 'Image',
     signature: 'Signature',
+    barcode: 'Barcode',
     table: 'Table',
+    pivotTable: 'Pivot Table',
     child: 'Child',
   };
   const label = labels[fieldType] ?? 'Field';
@@ -501,6 +531,8 @@ function createBuiltinBlockData( fieldType: any) {
     value:
       fieldType === 'child'
         ? {}
+        : fieldType === 'pivotTable'
+          ? { columns: [], rows: [] }
         : fieldType === 'list' || fieldType === 'tree'
           ? []
           : fieldType === 'logical'
@@ -695,6 +727,7 @@ export function convertSchemaType(schema: any, newType: any, catalogProvider: an
     next.cellItems = schema.cellItems ?? next.cellItems;
     if (schema.hideHeader) next.hideHeader = true;
     if (schema.hideBorders) next.hideBorders = true;
+    if (schema.allowAddRows) next.allowAddRows = true;
   }
 
   if (newType === 'computed' && schema.type === 'computed') {

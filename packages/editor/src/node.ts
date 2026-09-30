@@ -101,3 +101,10 @@ export {
 } from './fields/table-field.js';
 
 export { normalizeFieldDisplayStyle, resolveFieldDisplayStyle, resolveTableCellDisplayStyle, resolveTableColumnDisplayStyle, resolveTokenDisplayStyle } from './fields/field-display-style.js';
+
+export {
+  encodeBarcodeToDataUrl,
+  encodeBarcodeToSvg,
+  barcodeValueToPdfBlock,
+  normalizeBarcodeSymbology,
+} from './fields/barcode-encode.js';

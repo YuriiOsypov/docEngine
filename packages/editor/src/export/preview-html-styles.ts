@@ -285,6 +285,18 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
+.pivot-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.pivot-table .vision-table__row-label-head,
+.pivot-table .vision-table__row-label {
+  width: var(--pivot-row-label-width, 8em);
+  min-width: 4em;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .preview-document .vision-table .field-token--cell {
   font-family: var(--me-document-font-family);
   font-size: var(--me-table-font-size);

@@ -39,22 +39,27 @@ describe('field handler registry', () => {
       'logical',
       'image',
       'signature',
+      'barcode',
       'list',
       'choice',
       'tree',
       'table',
+      'pivotTable',
       'child',
     ]);
     assert.equal(hasFieldHandler('date'), false);
     registerField(dateFieldHandler);
   });
 
-  it('marks table as non-inline insertion', () => {
+  it('marks table and pivotTable as non-inline insertion', () => {
     assert.equal(isInlineFieldType('text'), true);
     assert.equal(isInlineFieldType('child'), true);
     assert.equal(isInlineFieldType('table'), false);
+    assert.equal(isInlineFieldType('pivotTable'), false);
     assert.ok(!getInlineFieldTypes().includes('table'));
     assert.equal(getFieldHandler('table')?.insertion, 'table');
+    assert.equal(getFieldHandler('pivotTable')?.insertion, 'table');
+    assert.equal(getFieldHandler('barcode')?.type, 'barcode');
   });
 
   it('createDefaultSchema uses handlers', () => {

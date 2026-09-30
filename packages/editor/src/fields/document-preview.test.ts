@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { before, describe, it } from 'node:test';
 import { parseHTML } from 'linkedom';
+import { cellFieldId } from '../core/field-schemas.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const mammologyTemplate = JSON.parse(
@@ -1187,5 +1188,68 @@ describe('renderDocumentPreview', () => {
     const text = root.textContent ?? '';
     assert.match(text, /Injuries are directly and proximately caused/);
     assert.doesNotMatch(text, /causation-yes/);
+  });
+
+  it('applies cell backgroundColor on table td in HTML preview', () => {
+    const tableId = 'visual_acuity';
+    const visOd = cellFieldId(tableId, 'row1', 'vis');
+    const visOs = cellFieldId(tableId, 'row2', 'vis');
+    const sphOd = cellFieldId(tableId, 'row1', 'sph');
+    const doc = {
+      kind: 'document',
+      version: 1,
+      fieldSchemas: {
+        [tableId]: {
+          type: 'table',
+          name: 'Visual acuity',
+          label: 'Visual acuity',
+          columns: [
+            { key: 'sph', label: 'Sph' },
+            { key: 'vis', label: 'Vis' },
+          ],
+          rows: [
+            { key: 'row1', label: 'OD' },
+            { key: 'row2', label: 'OS' },
+          ],
+        },
+        [visOd]: {
+          type: 'text',
+          label: 'Vis',
+          displayStyle: { backgroundColor: '#e8eef5' },
+        },
+        [visOs]: {
+          type: 'text',
+          label: 'Vis',
+          displayStyle: { backgroundColor: '#e8eef5' },
+        },
+        [sphOd]: { type: 'text', label: 'Sph' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'Visual acuity',
+            segments: [{ type: 'table', id: tableId }],
+            fieldValues: {
+              [visOd]: '0.3',
+              [visOs]: '0.9',
+              [sphOd]: '-1.00',
+            },
+          },
+        },
+      ],
+    };
+
+    const root = renderDocumentPreview(doc);
+    const visTokens = [...root.querySelectorAll('.field-token--cell')].filter(
+      (token: any) => token.dataset.colKey === 'vis' || String(token.dataset.fieldId ?? '').endsWith('_vis'),
+    );
+    assert.ok(visTokens.length >= 1);
+    for (const token of visTokens) {
+      const td = token.closest('td');
+      assert.ok(td);
+      assert.match(td.style.backgroundColor, /^(#e8eef5|rgb\(232,\s*238,\s*245\))$/i);
+      assert.equal((token as HTMLElement).style.backgroundColor, '');
+    }
   });
 });

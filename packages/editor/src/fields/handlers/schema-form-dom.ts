@@ -1,10 +1,18 @@
 /** Shared DOM helpers for field handler schema forms. */
 
+import { FORMAT_ICONS } from '../../ui/format-icons.js';
+
 export function escapeAttr(str: unknown): string {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;');
+}
+
+/** Compact (i) tip; full help text lives in the native title tooltip. */
+export function infoTipHtml(text: string): string {
+  const tip = escapeAttr(text);
+  return `<button type="button" class="schema-form__info-tip" title="${tip}" aria-label="More information">${FORMAT_ICONS.info}</button>`;
 }
 
 export function readInputValue(host: ParentNode, field: string): string {
@@ -39,24 +47,32 @@ export function readOptionalInteger(host: ParentNode, field: string): number | '
 /**
  * Display format / currency / fraction digits / suffix controls shared by Number and Computed.
  * @param options.append When true, append into `host` instead of replacing `innerHTML`.
- * @param options.hint Override the help text under the controls.
+ * @param options.hint Override the help text under the controls (omit when `infoTip` is set).
+ * @param options.infoTip When set, show an (i) tip on Display format instead of a hint paragraph.
  */
 export function renderNumericDisplayFormatFields(
   host: ParentNode & { innerHTML?: string; insertAdjacentHTML?: Function; appendChild?: Function; querySelector?: Function },
   schema: { displayFormat?: unknown; currencyCode?: unknown; fractionDigits?: unknown; suffix?: unknown },
-  options: { append?: boolean; hint?: string } = {},
+  options: { append?: boolean; hint?: string; infoTip?: string } = {},
 ) {
   const displayFormat = normalizeIntegerDisplayFormat(schema.displayFormat);
   const fractionDigits =
     schema.fractionDigits == null || schema.fractionDigits === ''
       ? ''
       : String(schema.fractionDigits);
-  const hint =
-    options.hint ??
-    'Stored value stays a plain number. Format applies in the document, preview, and PDF.';
+  const infoTip = options.infoTip ? infoTipHtml(options.infoTip) : '';
+  const formatLabel = infoTip
+    ? `<span class="schema-form__label-row"><span>Display format</span>${infoTip}</span>`
+    : '<span>Display format</span>';
+  const hintHtml = infoTip
+    ? ''
+    : `<p class="schema-form__hint" data-role="display-format-hint">${
+        options.hint ??
+        'Stored value stays a plain number. Format applies in the document, preview, and PDF.'
+      }</p>`;
   const html = `
         <label class="schema-form__row">
-          <span>Display format</span>
+          ${formatLabel}
           <select data-field="displayFormat">
             <option value="plain"${displayFormat === 'plain' ? ' selected' : ''}>Plain</option>
             <option value="number"${displayFormat === 'number' ? ' selected' : ''}>Number</option>
@@ -75,7 +91,7 @@ export function renderNumericDisplayFormatFields(
           <span>Suffix</span>
           <input type="text" data-field="suffix" value="${escapeAttr(schema.suffix ?? '')}" placeholder="e.g. mmHg" />
         </label>
-        <p class="schema-form__hint" data-role="display-format-hint">${hint}</p>
+        ${hintHtml}
       `;
 
   if (options.append && typeof (host as Element).insertAdjacentHTML === 'function') {

@@ -9,7 +9,10 @@ function markMappedToken(token: any, badgeContext: any, rule: any) {
   updateFieldToken(token, '', token.dataset.placeholder, badgeContext);
   token.classList.add('field-token--mapped');
 
-  const sourcePath = typeof rule?.sourcePath === 'string' ? rule.sourcePath : '';
+  const sourcePath =
+    (typeof rule?.sourcePath === 'string' && rule.sourcePath) ||
+    (typeof rule?.sourceArrayPath === 'string' && rule.sourceArrayPath) ||
+    '';
   const tip = sourcePath || 'Mapped';
   token.title = tip;
   token.dataset.sourcePath = sourcePath;
@@ -30,6 +33,31 @@ function markMappedToken(token: any, badgeContext: any, rule: any) {
     token.appendChild(badge);
   }
   badge.title = tip;
+}
+
+function markMappedPivot(wrapper: any, rule: any) {
+  wrapper.classList.add('document-table--mapped');
+  const sourcePath =
+    (typeof rule?.sourceArrayPath === 'string' && rule.sourceArrayPath) ||
+    (typeof rule?.sourcePath === 'string' && rule.sourcePath) ||
+    '';
+  wrapper.title = sourcePath || 'Mapped';
+  wrapper.dataset.sourcePath = sourcePath;
+  let badge = wrapper.querySelector(':scope > .document-table__mapping-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'document-table__mapping-badge';
+    badge.textContent = '↔';
+    wrapper.appendChild(badge);
+  }
+  badge.title = sourcePath || 'Mapped';
+}
+
+function clearMappedPivot(wrapper: any) {
+  wrapper.classList.remove('document-table--mapped');
+  wrapper.removeAttribute('title');
+  delete wrapper.dataset.sourcePath;
+  wrapper.querySelector(':scope > .document-table__mapping-badge')?.remove();
 }
 
 /**
@@ -112,8 +140,24 @@ export function applyMappingBadges(holder: any, rules: any = [], context: any = 
   holder.querySelectorAll('.field-token').forEach((token: any) => {
     clearMappedToken(token);
   });
+  holder.querySelectorAll('.document-table--pivot').forEach((el: any) => {
+    clearMappedPivot(el);
+  });
 
   for (const rule of rules ?? []) {
+    const hasPath = !!(rule?.sourcePath || rule?.sourceArrayPath);
+    if (!hasPath) continue;
+
+    if (rule.sourceArrayPath && !rule.columnKey && rule.fieldId) {
+      const pivot = holder.querySelector(
+        `.document-table--pivot[data-pivot-field-id="${CSS.escape(rule.fieldId)}"]`,
+      );
+      if (pivot) {
+        markMappedPivot(pivot, rule);
+        continue;
+      }
+    }
+
     if (!rule?.sourcePath) continue;
 
     if (rule.columnKey && rule.fieldId) {

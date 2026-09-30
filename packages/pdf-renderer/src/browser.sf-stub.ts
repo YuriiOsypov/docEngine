@@ -16,7 +16,11 @@ export async function generateDocumentPdfBlobFromPreview() {
 }
 
 export function mapEditorPdfOptions(doc: any, editorOptions: any = {}) {
-  return { pageSetup: doc?.pageSetup ?? {}, ...editorOptions };
+  return {
+    pageSetup: doc?.pageSetup ?? {},
+    ...editorOptions,
+    hideEmptyValues: editorOptions.hideEmptyValues === true,
+  };
 }
 
 export const DEFAULT_FIELD_VALUE_STYLE_OPTIONS = {};

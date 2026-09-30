@@ -412,7 +412,7 @@ describe('readonly schema helpers', () => {
     assert.equal(next.readonly, true);
   });
 
-  it('preserves table hideHeader and hideBorders when converting table to table', () => {
+  it('preserves table hideHeader, hideBorders, and allowAddRows when converting table to table', () => {
     const next = convertSchemaType(
       {
         type: 'table',
@@ -421,10 +421,12 @@ describe('readonly schema helpers', () => {
         columns: [{ key: 'col1', label: 'Col1' }],
         hideHeader: true,
         hideBorders: true,
+        allowAddRows: true,
       },
       'table',
     );
     assert.equal(next.hideHeader, true);
     assert.equal(next.hideBorders, true);
+    assert.equal(next.allowAddRows, true);
   });
 });

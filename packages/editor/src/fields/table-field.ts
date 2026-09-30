@@ -13,7 +13,8 @@ import {
 import { evaluateComputedField } from '../core/computed-formula.js';
 import {
   applyFieldDisplayStyle,
-    resolveTableColumnDisplayStyle,
+  applyTableCellDisplayStyle,
+  resolveTableColumnDisplayStyle,
 } from './field-display-style.js';
 import {
   createFieldToken,
@@ -28,9 +29,9 @@ import { createInlineRepeaterSeedValue } from './repeater-field.js';
 import {
   TABLE_ROW_LABEL_COL_WIDTH,
   getTableDataColElements,
-  getTableDataHeaderCells,
   scalePercentCssWidthsToFill,
   schemaWidthToColCss,
+  syncTableHeaderWidthsFromCols,
   wireTableColumnResize,
 } from './wire-table-column-resize.js';
 
@@ -40,6 +41,16 @@ function tableHasRowLabels(rows: any): boolean {
 
 function shouldShowRowLabels(tableSchema: any, rows: any): boolean {
   return tableSchema?.showRowLabels === true && tableHasRowLabels(rows);
+}
+
+/**
+ * Add row / Paste / Import panel: always in design mode; in fill mode only when
+ * `allowAddRows` is opted in (and the table is not read-only).
+ */
+export function shouldShowTableRowActions(tableSchema: any, designMode = false): boolean {
+  if (designMode) return true;
+  if (isSchemaReadonly(tableSchema)) return false;
+  return tableSchema?.allowAddRows === true;
 }
 
 function createTableCellFieldToken(cellId: any, value: any, label: any, context: any, classNames: any = []) {
@@ -118,12 +129,7 @@ function applyScaledWidthsToCols(colEls: any, scaledWidths: any) {
 }
 
 function syncHeaderWidthsFromColgroup(table: any) {
-  const widths = getTableDataColElements(table).map((colEl: any) =>
-    String(colEl?.style?.width ?? '').trim(),
-  );
-  getTableDataHeaderCells(table).forEach((th: any, index: any) => {
-    if (widths[index]) th.style.width = widths[index];
-  });
+  syncTableHeaderWidthsFromCols(table);
 }
 
 function buildColgroup(tableSchema: any, includeRowLabels = false) {
@@ -210,6 +216,16 @@ function tableCellIsRequiredEmpty(cellId: any, value: any, fieldSchemas: any, co
 
 export function tableSegmentHasContent(tableFieldId: any, fieldValues: any, fieldSchemas: any, segmentRows: any) {
   const tableSchema = getTableSchema(tableFieldId, { fieldSchemas });
+  if (tableSchema?.type === 'pivotTable') {
+    const value = fieldValues?.[tableFieldId];
+    return !!(
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Array.isArray(value.rows) &&
+      value.rows.length > 0
+    );
+  }
   const rows = resolveTableInstanceRows(segmentRows, tableSchema);
   for (const row of rows) {
     for (const col of tableSchema.columns ?? []) {
@@ -224,6 +240,10 @@ export function tableSegmentHasContent(tableFieldId: any, fieldValues: any, fiel
 /** True when the table has at least one required empty cell (shown as placeholder). */
 export function tableSegmentHasRequiredEmpty(tableFieldId: any, fieldValues: any, fieldSchemas: any, segmentRows: any) {
   const tableSchema = getTableSchema(tableFieldId, { fieldSchemas });
+  if (tableSchema?.type === 'pivotTable') {
+    // Pivot cells are computed — never a "required empty" interactive cell.
+    return false;
+  }
   const rows = resolveTableInstanceRows(segmentRows, tableSchema);
   for (const row of rows) {
     for (const col of tableSchema.columns ?? []) {
@@ -364,6 +384,12 @@ function buildTableRowElement(row: any, tableFieldId: any, tableSchema: any, fie
     }
 
     td.appendChild(token);
+    // Styles that target the td (align, background) need the token in the DOM.
+    applyTableCellDisplayStyle(token, cellId, cellSchema, fieldSchemas, {
+      ...options,
+      fieldSchemas,
+      isTableCell: true,
+    });
     tr.appendChild(td);
   }
 
@@ -636,6 +662,12 @@ export function buildPreviewTableElement(tableFieldId: any, fieldValues: any, op
           ['field-token--preview', 'field-token--cell'],
         );
         td.appendChild(span);
+        // Token was styled before attach; re-apply so td gets background/align.
+        applyTableCellDisplayStyle(span, cellId, fieldSchemas?.[cellId], fieldSchemas, {
+          ...previewContext,
+          fieldSchemas,
+          isTableCell: true,
+        });
       }
       tr.appendChild(td);
     }

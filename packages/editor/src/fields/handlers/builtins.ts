@@ -8,6 +8,7 @@ import { registerField } from './registry.js';
 import {
   escapeAttr,
   normalizeIntegerDisplayFormat,
+  infoTipHtml,
   readCheckbox,
   readInputValue,
   readNumericDisplayFormatFields,
@@ -378,6 +379,91 @@ const BUILTIN_HANDLERS = [
     pdfRenderMode: () => 'plain',
   },
   {
+    type: 'barcode',
+    label: 'Barcode',
+    paletteOrder: 55,
+    createSchema(label: any, name: any) {
+      return {
+        ...baseSchema('barcode', label, name),
+        symbology: 'code128',
+        maxWidth: 180,
+        height: 10,
+        displayValue: true,
+        quietZone: true,
+      };
+    },
+    getEmptyValue: () => '',
+    resolveDefaultValue() {
+      return '';
+    },
+    toDisplayConfig(schema: any) {
+      return {
+        picker: 'barcode',
+        label: schema.label,
+        symbology: schema.symbology ?? 'code128',
+        maxWidth: schema.maxWidth ?? 180,
+        height: schema.height ?? 10,
+        displayValue: schema.displayValue !== false,
+        quietZone: schema.quietZone !== false,
+      };
+    },
+    toPickerConfig(schema: any) {
+      return {
+        picker: 'text',
+        label: schema.label,
+        defaultText: '',
+      };
+    },
+    renderSchemaFields(host: any, schema: any) {
+      const symbology = schema.symbology ?? 'code128';
+      host.innerHTML = `
+        <label class="schema-form__row">
+          <span>Symbology</span>
+          <select data-field="symbology">
+            <option value="code128"${symbology === 'code128' ? ' selected' : ''}>Code 128</option>
+            <option value="qr"${symbology === 'qr' ? ' selected' : ''}>QR Code</option>
+            <option value="ean13"${symbology === 'ean13' ? ' selected' : ''}>EAN-13</option>
+            <option value="code39"${symbology === 'code39' ? ' selected' : ''}>Code 39</option>
+          </select>
+        </label>
+        <label class="schema-form__row">
+          <span>Max width (px)</span>
+          <input type="number" data-field="maxWidth" value="${schema.maxWidth ?? 180}" />
+        </label>
+        <label class="schema-form__row">
+          <span>Bar height</span>
+          <input type="number" data-field="height" value="${schema.height ?? 10}" />
+        </label>
+        <label class="schema-form__row schema-form__row--checkbox">
+          <input type="checkbox" data-field="displayValue"${schema.displayValue !== false ? ' checked' : ''} />
+          <span>Show value under bars</span>
+        </label>
+        <label class="schema-form__row schema-form__row--checkbox">
+          <input type="checkbox" data-field="quietZone"${schema.quietZone !== false ? ' checked' : ''} />
+          <span>Quiet zone</span>
+        </label>
+        <p class="schema-form__hint">Value is entered when filling (or mapped from a scalar payload path). Invalid codes show a placeholder.</p>
+      `;
+    },
+    readSchemaFields(host: any) {
+      return {
+        symbology: readInputValue(host, 'symbology') || 'code128',
+        maxWidth: Number(readInputValue(host, 'maxWidth') || 180),
+        height: Number(readInputValue(host, 'height') || 10),
+        displayValue: readCheckbox(host, 'displayValue'),
+        quietZone: readCheckbox(host, 'quietZone'),
+      };
+    },
+    formatDisplay(value: any, { emptyLabel }: any) {
+      if (scalarEmpty(value)) return emptyLabel ?? '';
+      return String(value);
+    },
+    isEmpty(value: any) {
+      return scalarEmpty(value);
+    },
+    pdfRenderMode: () => 'plain',
+  },
+  {
     type: 'list',
     label: 'List',
     paletteOrder: 60,
@@ -575,6 +661,159 @@ const BUILTIN_HANDLERS = [
     toPickerConfig(schema: any) {
       return { picker: 'text', label: schema.label ?? '' };
     },
+  },
+  {
+    type: 'pivotTable',
+    label: 'Pivot Table',
+    paletteOrder: 95,
+    insertion: 'table',
+    editableInFill: false,
+    createSchema(label: any, name: any) {
+      return {
+        ...baseSchema('pivotTable', label, name),
+        rowProperty: 'Region',
+        columnProperty: 'Product',
+        valueProperty: 'Amount',
+        aggregation: 'sum',
+        showRowTotals: true,
+        showColumnTotals: true,
+        showGrandTotal: true,
+        emptyCell: '',
+        sortRows: 'asc',
+        sortColumns: 'asc',
+        displayFormat: 'plain',
+        currencyCode: 'EUR',
+        valueAlign: 'right',
+      };
+    },
+    getEmptyValue: () => ({ columns: [], rows: [] }),
+    resolveDefaultValue() {
+      return { columns: [], rows: [] };
+    },
+    toDisplayConfig(schema: any) {
+      return { picker: 'pivotTable', label: schema.label ?? '' };
+    },
+    toPickerConfig(schema: any) {
+      return { picker: 'pivotTable', label: schema.label ?? '' };
+    },
+    renderSchemaFields(host: any, schema: any) {
+      const aggregation = schema.aggregation ?? 'sum';
+      const sortRows = schema.sortRows ?? 'asc';
+      const sortColumns = schema.sortColumns ?? 'asc';
+      const valueAlign =
+        schema.valueAlign === 'left' || schema.valueAlign === 'center' || schema.valueAlign === 'right'
+          ? schema.valueAlign
+          : 'right';
+      host.innerHTML = `
+        <label class="schema-form__row">
+          <span class="schema-form__label-row">
+            <span>Row property</span>
+            ${infoTipHtml('Bind a source array in Field Mapping. Properties are paths on each array element (e.g. Item__r.Name).')}
+          </span>
+          <input type="text" data-field="rowProperty" value="${escapeAttr(schema.rowProperty ?? '')}" placeholder="Region" />
+        </label>
+        <label class="schema-form__row">
+          <span>Column property</span>
+          <input type="text" data-field="columnProperty" value="${escapeAttr(schema.columnProperty ?? '')}" placeholder="Product" />
+        </label>
+        <label class="schema-form__row">
+          <span>Value property</span>
+          <input type="text" data-field="valueProperty" value="${escapeAttr(schema.valueProperty ?? '')}" placeholder="Amount" />
+        </label>
+        <label class="schema-form__row">
+          <span>Aggregation</span>
+          <select data-field="aggregation">
+            <option value="sum"${aggregation === 'sum' ? ' selected' : ''}>Sum</option>
+            <option value="count"${aggregation === 'count' ? ' selected' : ''}>Count</option>
+            <option value="avg"${aggregation === 'avg' ? ' selected' : ''}>Average</option>
+            <option value="min"${aggregation === 'min' ? ' selected' : ''}>Min</option>
+            <option value="max"${aggregation === 'max' ? ' selected' : ''}>Max</option>
+            <option value="first"${aggregation === 'first' ? ' selected' : ''}>First</option>
+          </select>
+        </label>
+        <label class="schema-form__row">
+          <span>Sort rows</span>
+          <select data-field="sortRows">
+            <option value="asc"${sortRows === 'asc' ? ' selected' : ''}>Ascending</option>
+            <option value="desc"${sortRows === 'desc' ? ' selected' : ''}>Descending</option>
+            <option value="none"${sortRows === 'none' ? ' selected' : ''}>None</option>
+          </select>
+        </label>
+        <label class="schema-form__row">
+          <span>Sort columns</span>
+          <select data-field="sortColumns">
+            <option value="asc"${sortColumns === 'asc' ? ' selected' : ''}>Ascending</option>
+            <option value="desc"${sortColumns === 'desc' ? ' selected' : ''}>Descending</option>
+            <option value="none"${sortColumns === 'none' ? ' selected' : ''}>None</option>
+          </select>
+        </label>
+        <label class="schema-form__row">
+          <span>Empty cell</span>
+          <input type="text" data-field="emptyCell" value="${escapeAttr(schema.emptyCell ?? '')}" placeholder="(blank)" />
+        </label>
+        <label class="schema-form__row">
+          <span class="schema-form__label-row">
+            <span>Value align</span>
+            ${infoTipHtml('Aligns aggregation and total cells only — column headers stay left-aligned.')}
+          </span>
+          <select data-field="valueAlign">
+            <option value="left"${valueAlign === 'left' ? ' selected' : ''}>Left</option>
+            <option value="center"${valueAlign === 'center' ? ' selected' : ''}>Center</option>
+            <option value="right"${valueAlign === 'right' ? ' selected' : ''}>Right</option>
+          </select>
+        </label>
+        <label class="schema-form__row schema-form__row--checkbox">
+          <input type="checkbox" data-field="showRowTotals"${schema.showRowTotals ? ' checked' : ''} />
+          <span>Show row totals</span>
+        </label>
+        <label class="schema-form__row schema-form__row--checkbox">
+          <input type="checkbox" data-field="showColumnTotals"${schema.showColumnTotals ? ' checked' : ''} />
+          <span>Show column totals</span>
+        </label>
+        <label class="schema-form__row schema-form__row--checkbox">
+          <input type="checkbox" data-field="showGrandTotal"${schema.showGrandTotal ? ' checked' : ''} />
+          <span class="schema-form__label-row">
+            <span>Show grand total</span>
+            ${infoTipHtml('Grand total is the bottom-right cell (intersection of row totals and column totals) — the aggregate of every value in the pivot.')}
+          </span>
+        </label>
+      `;
+      renderNumericDisplayFormatFields(host, schema, {
+        append: true,
+        infoTip:
+          'Formats aggregation and total cells in the document, preview, and PDF. Stored pivot numbers stay unformatted.',
+      });
+    },
+    readSchemaFields(host: any) {
+      const valueAlignRaw = readInputValue(host, 'valueAlign');
+      const valueAlign =
+        valueAlignRaw === 'left' || valueAlignRaw === 'center' || valueAlignRaw === 'right'
+          ? valueAlignRaw
+          : 'right';
+      return {
+        rowProperty: readInputValue(host, 'rowProperty'),
+        columnProperty: readInputValue(host, 'columnProperty'),
+        valueProperty: readInputValue(host, 'valueProperty'),
+        aggregation: readInputValue(host, 'aggregation') || 'sum',
+        sortRows: readInputValue(host, 'sortRows') || 'asc',
+        sortColumns: readInputValue(host, 'sortColumns') || 'asc',
+        emptyCell: readInputValue(host, 'emptyCell'),
+        valueAlign,
+        showRowTotals: readCheckbox(host, 'showRowTotals'),
+        showColumnTotals: readCheckbox(host, 'showColumnTotals'),
+        showGrandTotal: readCheckbox(host, 'showGrandTotal'),
+        ...readNumericDisplayFormatFields(host),
+      };
+    },
+    formatDisplay() {
+      return '[Pivot Table]';
+    },
+    isEmpty(value: any) {
+      if (value == null) return true;
+      if (typeof value !== 'object' || Array.isArray(value)) return true;
+      return !Array.isArray(value.rows) || value.rows.length === 0;
+    },
+    pdfRenderMode: () => 'plain',
   },
   {
     type: 'child',

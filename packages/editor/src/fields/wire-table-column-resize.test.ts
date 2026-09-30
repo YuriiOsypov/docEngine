@@ -193,6 +193,8 @@ describe('table column resize handles', () => {
     assert.equal(committed?.columns[0].width, '63.6%');
     assert.equal(col0.style.width, '63.6%');
     assert.equal(col1.style.width, '36.4%');
+    assert.equal(th0.style.width, '63.6%');
+    assert.equal(th1.style.width, '36.4%');
     table.remove();
   });
 

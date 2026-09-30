@@ -540,10 +540,13 @@
   min-width: 0;
   min-height: 1.5em;
   outline: none;
-  font-family: var(--me-document-font-family);
-  font-size: var(--me-document-font-size);
-  line-height: var(--me-document-line-height);
-  color: #000;
+  /* Inherit Default text style from .document-section__body (not hardcoded #000). */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  line-height: inherit;
+  color: inherit;
   caret-color: var(--me-selection-outline, #2563eb);
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -721,39 +724,8 @@ body.document-columns-col-resize-active .field-token {
   overflow-x: auto;
 }
 
-.rich-text-toolbar__preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-right: 8px;
-  padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
-  border: 1px solid #93c5fd;
-  border-radius: 4px;
-  background: #eff6ff;
-  color: #1e40af;
-  cursor: pointer;
-}
-
-.rich-text-toolbar__preview:hover:not(:disabled) {
-  background: #dbeafe;
-  border-color: #2563eb;
-}
-
-.rich-text-toolbar__preview[hidden] {
-  display: none !important;
-}
-
-.rich-text-toolbar__preview:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* Dim format controls only — Preview stays a full-strength document action. */
-.rich-text-toolbar--inactive > :not(.rich-text-toolbar__preview) {
+/* Dim format controls when no selection. */
+.rich-text-toolbar--inactive {
   opacity: 0.65;
 }
 
@@ -776,6 +748,138 @@ body.document-columns-col-resize-active .field-token {
   height: 28px;
   padding: 2px;
   cursor: pointer;
+}
+
+.rich-text-toolbar__bg-color {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.rich-text-toolbar__bg-color-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rich-text-toolbar__bg-color-toggle:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.rich-text-toolbar__bg-color-toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rich-text-toolbar__bg-color--disabled .rich-text-toolbar__bg-color-toggle {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rich-text-toolbar__bg-color-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.rich-text-toolbar__bg-color-label {
+  flex: 0 0 auto;
+}
+
+.rich-text-toolbar__bg-color-chevron {
+  display: inline-flex;
+  color: #94a3b8;
+}
+
+.rich-text-toolbar__bg-color-chevron svg {
+  display: block;
+}
+
+.rich-text-toolbar__bg-color-panel {
+  position: fixed;
+  z-index: 10050;
+  min-width: 168px;
+  padding: 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.rich-text-toolbar__bg-color-recent {
+  margin-bottom: 8px;
+}
+
+.rich-text-toolbar__bg-color-recent-label,
+.rich-text-toolbar__bg-color-custom-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.rich-text-toolbar__bg-color-recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rich-text-toolbar__bg-color-recent-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.rich-text-toolbar__bg-color-recent-swatch:hover {
+  outline: 2px solid var(--me-primary, #0d9488);
+  outline-offset: 1px;
+}
+
+.rich-text-toolbar__bg-color-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.rich-text-toolbar__bg-color-input {
+  width: 100%;
+  height: 28px;
+  padding: 2px;
+  margin: 0;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.rich-text-toolbar__bg-color-input:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .rich-text-toolbar__hint {
@@ -1205,6 +1309,58 @@ body.document-columns-col-resize-active .field-token {
   max-height: none;
   border-radius: 2px;
   border: 1px solid #ccc;
+}
+
+.field-token--barcode .field-token__barcode-error {
+  display: block;
+  font-size: 0.75em;
+  color: var(--me-danger, #b91c1c);
+}
+
+.document-table--pivot {
+  position: relative;
+}
+
+.document-table--pivot.document-table--mapping-drop,
+.document-table--pivot.document-table--mapped {
+  outline: 2px dashed var(--me-field-active-outline, #0d9488);
+  outline-offset: 2px;
+}
+
+.document-table__mapping-badge {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+/* Pivot row labels need room for values; override vision-table's 3em index col. */
+.pivot-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.pivot-table .vision-table__row-label-head,
+.pivot-table .vision-table__row-label {
+  width: var(--pivot-row-label-width, 8em);
+  min-width: 4em;
+  max-width: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pivot-table > colgroup > .vision-table__row-label-col {
+  width: var(--pivot-row-label-width, 8em);
+}
+
+.pivot-table__total,
+.pivot-table__grand-total {
+  font-weight: 600;
+}
+
+.pivot-table__empty {
+  color: var(--me-muted, #64748b);
+  font-style: italic;
 }
 
 .field-token__caption {
@@ -2282,12 +2438,28 @@ body.modal-move-active {
   flex-wrap: wrap;
 }
 
+.document-actions[hidden] {
+  display: none !important;
+}
+
 .document-actions__title {
   font-size: 11px;
   font-weight: 600;
   color: #555;
   text-transform: uppercase;
   margin-right: 2px;
+}
+
+.document-actions__btn--preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.document-actions__btn--preview svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .document-actions__btn--icon {

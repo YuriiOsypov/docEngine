@@ -6,6 +6,7 @@ const STYLE_KEYS = [
   'fontWeight',
   'fontStyle',
   'color',
+  'backgroundColor',
   'textDecoration',
   'textAlign',
 ] as const;
@@ -93,6 +94,7 @@ export function normalizeFieldDisplayStyle(style: unknown): FieldDisplayStyle {
   const fontWeight = normalizeFontWeight(input.fontWeight);
   const fontStyle = normalizeFontStyle(input.fontStyle);
   const color = normalizeColor(input.color);
+  const backgroundColor = normalizeColor(input.backgroundColor);
   const textDecoration = normalizeTextDecoration(input.textDecoration);
   const textAlign = normalizeTextAlign(input.textAlign);
   if (fontFamily) next.fontFamily = fontFamily;
@@ -100,6 +102,7 @@ export function normalizeFieldDisplayStyle(style: unknown): FieldDisplayStyle {
   if (fontWeight) next.fontWeight = fontWeight;
   if (fontStyle) next.fontStyle = fontStyle;
   if (color) next.color = color;
+  if (backgroundColor) next.backgroundColor = backgroundColor;
   if (textDecoration) next.textDecoration = textDecoration;
   if (textAlign) next.textAlign = textAlign;
   return next;

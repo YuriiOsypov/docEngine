@@ -20,6 +20,7 @@ export function getFieldSelectionContainer(token: any) {
 export function clearAllDesignTokenSelection(root: any = document, { notify = true }: any = {}) {
   root.querySelectorAll('.field-token--selected').forEach((el: any) => {
     el.classList.remove('field-token--selected');
+    el.classList.remove('field-token--column-anchor');
   });
   if (notify) emitSelectionChange();
 }
@@ -43,7 +44,9 @@ export function selectDesignTableColumn(token: any, container: any, { additive =
     const allSelected = columnTokens.length > 0 && columnTokens.every((t: any) => t.classList.contains('field-token--selected'));
     for (const t of columnTokens) {
       t.classList.toggle('field-token--selected', !allSelected);
+      t.classList.remove('field-token--column-anchor');
     }
+    if (!allSelected) token.classList.add('field-token--column-anchor');
     emitSelectionChange();
     return;
   }
@@ -52,6 +55,8 @@ export function selectDesignTableColumn(token: any, container: any, { additive =
   for (const t of columnTokens) {
     t.classList.add('field-token--selected');
   }
+  // Format / Properties should follow the clicked cell, not Object.keys order.
+  token.classList.add('field-token--column-anchor');
   emitSelectionChange();
 }
 
@@ -68,6 +73,7 @@ export function selectDesignToken(token: any, container: any, { additive = false
 
   if (additive) {
     token.classList.toggle('field-token--selected');
+    token.classList.remove('field-token--column-anchor');
     emitSelectionChange();
     return;
   }

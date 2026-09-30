@@ -1,0 +1,92 @@
+{
+  "kind": "template",
+  "version": 2,
+  "time": 1782202748519,
+  "fieldSchemas": {
+    "sku_barcode": {
+      "type": "barcode",
+      "name": "SKU Barcode",
+      "label": "SKU Barcode",
+      "symbology": "code128",
+      "maxWidth": 180,
+      "height": 10,
+      "displayValue": true,
+      "quietZone": true
+    },
+    "product_qr": {
+      "type": "barcode",
+      "name": "Product QR",
+      "label": "Product QR",
+      "symbology": "qr",
+      "maxWidth": 120,
+      "displayValue": false,
+      "quietZone": true
+    },
+    "sales_pivot": {
+      "type": "pivotTable",
+      "name": "Sales Pivot",
+      "label": "Sales by Region × Product",
+      "rowProperty": "Region",
+      "columnProperty": "Product",
+      "valueProperty": "Amount",
+      "aggregation": "sum",
+      "showRowTotals": true,
+      "showColumnTotals": true,
+      "showGrandTotal": true,
+      "emptyCell": "",
+      "sortRows": "asc",
+      "sortColumns": "asc"
+    }
+  },
+  "blocks": [
+    {
+      "type": "documentSection",
+      "data": {
+        "name": "Main",
+        "label": "Main",
+        "segments": [
+          { "type": "text", "content": "SKU: " },
+          { "type": "field", "id": "sku_barcode" },
+          { "type": "text", "content": "\nQR: " },
+          { "type": "field", "id": "product_qr" },
+          { "type": "text", "content": "\n" },
+          { "type": "table", "id": "sales_pivot" }
+        ],
+        "fieldValues": {}
+      }
+    }
+  ],
+  "fieldMapping": {
+    "kind": "fieldMapping",
+    "version": 1,
+    "rules": [
+      {
+        "section": "Main",
+        "field": "SKU Barcode",
+        "fieldId": "sku_barcode",
+        "sourcePath": "$payload.ProductCode"
+      },
+      {
+        "section": "Main",
+        "field": "Product QR",
+        "fieldId": "product_qr",
+        "sourcePath": "$payload.ProductUrl"
+      },
+      {
+        "section": "Main",
+        "field": "Sales by Region × Product",
+        "fieldId": "sales_pivot",
+        "sourceArrayPath": "$payload.OrderItems"
+      }
+    ],
+    "sourceSample": {
+      "ProductCode": "SKU-1001",
+      "ProductUrl": "https://example.com/p/1001",
+      "OrderItems": [
+        { "Region": "West", "Product": "A", "Amount": 10 },
+        { "Region": "West", "Product": "B", "Amount": 5 },
+        { "Region": "East", "Product": "A", "Amount": 7 }
+      ]
+    }
+  }
+}

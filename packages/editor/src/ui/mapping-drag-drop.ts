@@ -65,6 +65,16 @@ function resolveDropTarget(token: any) {
   };
 }
 
+function resolvePivotDropTarget(el: any) {
+  const pivot = el?.closest?.('.document-table--pivot[data-pivot-field-id]');
+  if (!pivot) return null;
+  return {
+    fieldId: pivot.dataset.pivotFieldId ?? pivot.dataset.tableId ?? '',
+    childFieldIds: [],
+    bulkChild: false,
+  };
+}
+
 /**
  * @param {HTMLElement} container
  * @param {{
@@ -81,11 +91,27 @@ export function wireMappingDragDrop(container: any,options: any = {}) {
 
   function clearActive() {
     activeToken?.classList.remove('field-token--mapping-drop');
+    activeToken?.classList.remove('document-table--mapping-drop');
     activeToken = null;
   }
 
   container.addEventListener('dragover', (event: any) => {
     if (!parseSourcePathDrag(event.dataTransfer)) return;
+
+    const pivotTarget = resolvePivotDropTarget(event.target);
+    if (pivotTarget?.fieldId) {
+      const pivotEl = event.target.closest?.('.document-table--pivot');
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'copy';
+      if (activeToken !== pivotEl) {
+        clearActive();
+        activeToken = pivotEl;
+        pivotEl?.classList.add('document-table--mapping-drop');
+      }
+      return;
+    }
+
     const token = event.target.closest?.('.field-token');
     if (!token || !container.contains(token)) return;
     if (!resolveDropTarget(token)) return;
@@ -109,10 +135,13 @@ export function wireMappingDragDrop(container: any,options: any = {}) {
     const sourcePath = parseSourcePathDrag(event.dataTransfer);
     if (!sourcePath) return;
 
+    const pivotTarget = resolvePivotDropTarget(event.target);
     const token = event.target.closest?.('.field-token');
-    if (!token || !container.contains(token)) return;
-
-    const target = resolveDropTarget(token);
+    const target = pivotTarget?.fieldId
+      ? pivotTarget
+      : token && container.contains(token)
+        ? resolveDropTarget(token)
+        : null;
     if (!target?.fieldId) return;
 
     event.preventDefault();

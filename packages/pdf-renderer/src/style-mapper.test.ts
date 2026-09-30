@@ -37,6 +37,12 @@ describe('fieldStyleToPdfmake', () => {
     const style = fieldStyleToPdfmake({ fontSize: '15px' }, (name) => name ?? 'dejavu');
     assert.equal(style.fontSize, 11.25);
   });
+
+  it('maps backgroundColor to text background and cell fillColor', () => {
+    const style = fieldStyleToPdfmake({ backgroundColor: '#e8eef5' }, (name) => name ?? 'dejavu');
+    assert.equal(style.background, '#e8eef5');
+    assert.equal(style.fillColor, '#e8eef5');
+  });
 });
 
 describe('applyPdfFieldHighlightDecoration', () => {

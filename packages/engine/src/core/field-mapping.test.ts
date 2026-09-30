@@ -913,3 +913,61 @@ describe('omitMappedFields', () => {
     assert.notEqual(filtered, fieldsExport);
   });
 });
+
+describe('pivotTable mapping', () => {
+  it('expands sourceArrayPath into a pivot matrix', () => {
+    const fieldSchemas = {
+      sales_pivot: {
+        type: 'pivotTable',
+        name: 'Sales Pivot',
+        label: 'Sales Pivot',
+        rowProperty: 'Region',
+        columnProperty: 'Product',
+        valueProperty: 'Amount',
+        aggregation: 'sum',
+        showRowTotals: true,
+        showColumnTotals: true,
+        showGrandTotal: true,
+      },
+    };
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Main',
+          label: 'Main',
+          segments: [{ type: 'table', id: 'sales_pivot' }],
+          fieldValues: {},
+        },
+      },
+    ];
+    const preview = previewFieldMapping(
+      {
+        OrderItems: [
+          { Region: 'West', Product: 'A', Amount: 10 },
+          { Region: 'West', Product: 'B', Amount: 5 },
+          { Region: 'East', Product: 'A', Amount: 7 },
+        ],
+      },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          {
+            section: 'Main',
+            field: 'Sales Pivot',
+            fieldId: 'sales_pivot',
+            sourceArrayPath: '$payload.OrderItems',
+          },
+        ],
+      },
+      { blocks, fieldSchemas },
+    );
+    assert.equal(preview.validation.valid, true, JSON.stringify(preview.validation));
+    const pivot = preview.fieldsExport.sections.Main['Sales Pivot'];
+    assert.ok(pivot && Array.isArray(pivot.columns));
+    assert.ok(Array.isArray(pivot.rows));
+    assert.equal(pivot.rows.length, 2);
+    assert.equal(pivot.grandTotal, 22);
+  });
+});

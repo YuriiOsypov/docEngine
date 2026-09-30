@@ -8,6 +8,7 @@ import { normalizeDocumentValues, applyDocumentValues } from './document-io.js';
 import { parseCellFieldId } from './field-schemas.js';
 import { parseMappingSourcePath } from './date-format.js';
 import { applyMappingFormatSuffix, looksLikeMappingFormatSuffix } from './mapping-format.js';
+import { pivotExpand, isPivotTableValue } from './pivot.js';
 import type { FieldSchema } from '../types.js';
 
 export {
@@ -499,6 +500,18 @@ function validateMappedFieldValue( schema: any, value: any) {
       if (value == null) return null;
       if (!isTableRowArray(value)) {
         return `Field "${schema.name ?? schema.label}" expects a table row array.`;
+      }
+      return null;
+    case 'pivotTable':
+      if (value == null) return null;
+      if (!isPivotTableValue(value) && !Array.isArray(value)) {
+        return `Field "${schema.name ?? schema.label}" expects a pivot table value or source row array.`;
+      }
+      return null;
+    case 'barcode':
+      if (value == null || value === '') return null;
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        return `Field "${schema.name ?? schema.label}" expects a string barcode value.`;
       }
       return null;
     case 'integer':
@@ -1118,14 +1131,41 @@ function inferSourceArrayPathFromColumnRules( tableRules: any) {
  * @param {import('../types.d.ts').FieldMappingRule[]} rules
  * @param {boolean} [resolved=false]
  * @param {unknown} [payload=null]
+ * @param {Record<string, import('../types.d.ts').FieldSchema>} [fieldSchemas={}]
+ * @param {import('../types.d.ts').EditorBlock[]} [blocks=[]]
  */
-function buildSectionsFromRules( rules: any, resolved: any = false, payload: any = null) {
+function buildSectionsFromRules(
+  rules: any,
+  resolved: any = false,
+  payload: any = null,
+  fieldSchemas: any = {},
+  blocks: any = [],
+) {
   const sections: Record<string, Record<string, unknown>> = {};
 
   const tableRuleGroups = new Map<string, FieldMappingRule[]>();
+  /** @type {FieldMappingRule[]} */
+  const pivotRules = [];
 
   for (const rule of rules ?? []) {
-    if (!rule?.section || !rule?.field || !rule?.sourcePath) continue;
+    if (!rule?.section || !rule?.field) continue;
+
+    const sourcePath = String(rule.sourcePath ?? '').trim();
+    const sourceArrayPath = String(rule.sourceArrayPath ?? '').trim();
+
+    // Pivot: sourceArrayPath without columnKey; confirmed via schema or array-only rule.
+    if (sourceArrayPath && !rule.columnKey) {
+      const fieldId =
+        rule.fieldId ||
+        resolveFieldIdByName(rule.section, rule.field, blocks, fieldSchemas);
+      const schema = (fieldId && fieldSchemas?.[fieldId]) || null;
+      if (schema?.type === 'pivotTable' || (!sourcePath && !schema)) {
+        pivotRules.push(rule);
+        continue;
+      }
+    }
+
+    if (!sourcePath) continue;
 
     if (rule.columnKey) {
       const groupKey = `${rule.section}\0${rule.field}`;
@@ -1164,6 +1204,26 @@ function buildSectionsFromRules( rules: any, resolved: any = false, payload: any
       if (rule.columnKey) templateRow[rule.columnKey] = rule.sourcePath;
     }
     sections[section][field] = [templateRow];
+  }
+
+  for (const rule of pivotRules) {
+    if (!sections[rule.section]) sections[rule.section] = {};
+    const fieldId =
+      rule.fieldId ||
+      resolveFieldIdByName(rule.section, rule.field, blocks, fieldSchemas);
+    const schema = (fieldId && fieldSchemas?.[fieldId]) || null;
+
+    if (resolved) {
+      let sourceRows = resolveSourcePath(rule.sourceArrayPath, payload);
+      if (!Array.isArray(sourceRows)) sourceRows = [];
+      if (schema?.type === 'pivotTable') {
+        sections[rule.section][rule.field] = pivotExpand(sourceRows, schema);
+      } else {
+        sections[rule.section][rule.field] = sourceRows;
+      }
+    } else {
+      sections[rule.section][rule.field] = rule.sourceArrayPath;
+    }
   }
 
   return sections;
@@ -1439,12 +1499,22 @@ export function parseMappingResultToRules( mappingResult: any, blocks: any, fiel
       const fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
 
       if (isMappingExpressionValue(value)) {
-        rules.push({
-          section: sectionName,
-          field: fieldName,
-          sourcePath: value,
-          fieldId: fieldId ?? undefined,
-        });
+        const schema = fieldId ? fieldSchemas[fieldId] : null;
+        if (schema?.type === 'pivotTable') {
+          rules.push({
+            section: sectionName,
+            field: fieldName,
+            fieldId: fieldId ?? undefined,
+            sourceArrayPath: value,
+          });
+        } else {
+          rules.push({
+            section: sectionName,
+            field: fieldName,
+            sourcePath: value,
+            fieldId: fieldId ?? undefined,
+          });
+        }
         continue;
       }
 
@@ -1492,8 +1562,10 @@ export function parseMappingResultToRules( mappingResult: any, blocks: any, fiel
  * @param {unknown} payload
  * @param {{ blocks: import('../types.d.ts').EditorBlock[]; fieldSchemas: Record<string, import('../types.d.ts').FieldSchema> }} template
  */
-export function resolveRulesToFieldsExport( rules: any, payload: any, _template: any) {
-  const sections = buildSectionsFromRules(rules, true, payload);
+export function resolveRulesToFieldsExport( rules: any, payload: any, template: any) {
+  const fieldSchemas = template?.fieldSchemas ?? {};
+  const blocks = template?.blocks ?? [];
+  const sections = buildSectionsFromRules(rules, true, payload, fieldSchemas, blocks);
   return {
     kind: 'field',
     version: IO_VERSION,
@@ -1549,6 +1621,21 @@ export function createMappingRulesFromDrop( fieldId: any, sourcePath: any, block
   }
 
   const parentSchema = fieldSchemas[fieldId];
+  if (parentSchema?.type === 'pivotTable') {
+    const target = resolveFieldMappingTarget(fieldId, blocks, fieldSchemas);
+    if (!target) return [];
+    const normalized = normalizeTableColumnSourcePath(sourcePath);
+    const arrayPath = normalized.sourceArrayPath || normalized.sourcePath || sourcePath;
+    return [
+      {
+        section: target.section,
+        field: target.field,
+        fieldId,
+        sourceArrayPath: arrayPath,
+      },
+    ];
+  }
+
   if (bulkChild && parentSchema?.type === 'child') {
     const target = resolveFieldMappingTarget(fieldId, blocks, fieldSchemas);
     if (!target) return [];

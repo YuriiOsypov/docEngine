@@ -21,7 +21,9 @@ import {
   resolvePageSetupFieldValueStyle,
   resolvePageSetupFieldHighlightStyle,
   evaluateSectionVisibility,
+  barcodeValueToPdfBlock,
 } from '@docengine/editor/node';
+import { isPivotTableValue, createEmptyPivotValue, formatNumericDisplay } from '@docengine/engine';
 import { htmlToPdfBlocks, htmlToPdfText, isBlockLevelHtml, pdfBlocksHaveContent, pdfTextContent, plainTextToPdfText, finalizePdfInlineParts, withPdfStyle } from './html-text.js';
 import {
   resolvePdfFieldStyleForExport,
@@ -32,6 +34,7 @@ import {
   DEFAULT_TABLE_FONT_PT,
 } from './style-mapper.js';
 import { resolveVisionTablePdfLayout, TABLE_PDF_LINE_HEIGHT } from './table-layout.js';
+import { withPdfSectionBorderRules } from './pdf-horizontal-rule.js';
 import {
   chunkTableBodyRowsVariable,
   estimateContinuationChunkMaxBodyHeight,
@@ -144,7 +147,28 @@ export function buildPdfSectionTitleNode(
 function stripBlockAlignment(style: any) {
   const inlineStyle = { ...style };
   delete inlineStyle.alignment;
+  // Cell fill belongs on the table cell node, not inline text parts.
+  delete inlineStyle.fillColor;
   return inlineStyle;
+}
+
+/** Table body text: drop both fillColor and background so only td fillColor paints. */
+function stripTableCellInlineStyle(style: any) {
+  const inlineStyle = stripBlockAlignment(style);
+  delete inlineStyle.background;
+  return inlineStyle;
+}
+
+function withTableCellFillColor(cell: any, style: any): any {
+  const fillColor = style?.fillColor;
+  if (!fillColor) return cell;
+  if (cell === '' || cell == null) {
+    return { text: '', fillColor, lineHeight: TABLE_PDF_LINE_HEIGHT };
+  }
+  if (typeof cell !== 'object') {
+    return { text: cell, fillColor, lineHeight: TABLE_PDF_LINE_HEIGHT };
+  }
+  return { ...cell, fillColor };
 }
 
 function pushPdfBlocks(
@@ -181,7 +205,7 @@ function withTableCellLineHeight(cell: any): any {
 
 function pdfBlocksToTableCell(blocks: any, style: any): any {
   const cellAlignment = style.alignment;
-  const inlineStyle = { lineHeight: TABLE_PDF_LINE_HEIGHT, ...stripBlockAlignment(style) };
+  const inlineStyle = { lineHeight: TABLE_PDF_LINE_HEIGHT, ...stripTableCellInlineStyle(style) };
   const fontName = String(inlineStyle.font ?? '');
 
   const nodes: PdfContentNode[] = [];
@@ -193,9 +217,11 @@ function pdfBlocksToTableCell(blocks: any, style: any): any {
     else if (cellAlignment) node.alignment = cellAlignment;
     nodes.push(node);
   }
-  if (!nodes.length) return '';
-  if (nodes.length === 1) return withTableCellLineHeight(nodes[0]);
-  return withTableCellLineHeight({ stack: nodes });
+  let cell: any;
+  if (!nodes.length) cell = '';
+  else if (nodes.length === 1) cell = withTableCellLineHeight(nodes[0]);
+  else cell = withTableCellLineHeight({ stack: nodes });
+  return withTableCellFillColor(cell, style);
 }
 
 function buildEmptyPdfTableCell(cellId: any, ctx: PdfRenderContext): PdfContentNode {
@@ -211,7 +237,7 @@ function buildEmptyPdfTableCell(cellId: any, ctx: PdfRenderContext): PdfContentN
   };
   if (style.font) cell.font = style.font;
   if (style.alignment) cell.alignment = style.alignment;
-  return cell;
+  return withTableCellFillColor(cell, style);
 }
 
 export function renderSegmentsToPdfContent(segments: any, ctx: PdfRenderContext): PdfContentNode[] {
@@ -325,12 +351,34 @@ export function renderSegmentsToPdfProseBlocks(segments: any, ctx: PdfRenderCont
       const fieldBlockStyle = fieldAlignment ? { alignment: fieldAlignment } : {};
 
       if (empty && schema?.required) {
+        const requiredStyle = { ...stripBlockAlignment(style), italics: true, color: '#888888' };
+        const requiredParts = plainTextToPdfText(String(label ?? ''));
         builder.ensureAlignment(fieldAlignment ?? null);
         builder.setBlockStyle(fieldBlockStyle);
-        builder.appendParts(withPdfStyle(
-          plainTextToPdfText(String(label ?? '')),
-          { ...stripBlockAlignment(style), italics: true, color: '#888888' },
-        ));
+        builder.appendParts(withPdfStyle(requiredParts, requiredStyle));
+        continue;
+      }
+
+      // Barcode: emit svg image block (JSON→PDF path has no preview DOM images).
+      if (schema?.type === 'barcode') {
+        builder.flush();
+        const barcodeBlock = barcodeValueToPdfBlock(value, schema);
+        if (barcodeBlock) {
+          if (fieldAlignment) {
+            content.push({ ...barcodeBlock, alignment: fieldAlignment });
+          } else {
+            content.push(barcodeBlock);
+          }
+        } else {
+          // Invalid code — fall back to plain text so the value is not lost.
+          builder.ensureAlignment(fieldAlignment ?? null);
+          builder.setBlockStyle(fieldBlockStyle);
+          builder.appendParts(withPdfStyle(
+            fieldValueToPdfParts(fieldId, value, schema, label, ctx),
+            stripBlockAlignment(style),
+          ));
+          builder.flush();
+        }
         continue;
       }
 
@@ -338,12 +386,13 @@ export function renderSegmentsToPdfProseBlocks(segments: any, ctx: PdfRenderCont
 
       if (pdfMode === 'html') {
         builder.flush();
+        const htmlBlocks = htmlToPdfBlocks(String(value ?? ''), {
+          baseFontSize,
+          baseFont: String(style.font ?? ctx.defaultFont ?? ''),
+        });
         pushPdfBlocks(
           content,
-          htmlToPdfBlocks(String(value ?? ''), {
-            baseFontSize,
-            baseFont: String(style.font ?? ctx.defaultFont ?? ''),
-          }),
+          htmlBlocks,
           style,
           fieldBlockStyle,
           fieldAlignment,
@@ -428,8 +477,174 @@ function tableHasPreviewContent(tableId: any, ctx: PdfRenderContext, segmentRows
   );
 }
 
+function formatPivotPdfCell(value: unknown, emptyCell = '', schema: Record<string, any> = {}): string {
+  if (value == null || value === '') return emptyCell;
+  const formatted = formatNumericDisplay(value, {
+    displayFormat: schema.displayFormat,
+    currencyCode: schema.currencyCode,
+    fractionDigits: schema.fractionDigits,
+    suffix: schema.suffix,
+  });
+  if (formatted !== '') return formatted;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
+  }
+  return String(value);
+}
+
+function pivotValueAlign(schema: Record<string, any> = {}): 'left' | 'center' | 'right' {
+  const align = schema.valueAlign;
+  if (align === 'left' || align === 'center' || align === 'right') return align;
+  return 'right';
+}
+
+function buildPivotPdfTable(tableId: string, ctx: PdfRenderContext): PdfContentNode | null {
+  const schema = ctx.fieldSchemas?.[tableId] ?? {};
+  const raw = ctx.fieldValues?.[tableId];
+  const pivot = isPivotTableValue(raw) ? raw : createEmptyPivotValue();
+  const columns = pivot.columns ?? [];
+  const rows = pivot.rows ?? [];
+  if (!rows.length && !columns.length) return null;
+
+  const emptyCell = schema.emptyCell != null ? String(schema.emptyCell) : '';
+  const showRowTotals = !!schema.showRowTotals;
+  const showColumnTotals = !!schema.showColumnTotals;
+  const showGrandTotal = !!schema.showGrandTotal;
+  const valueAlign = pivotValueAlign(schema);
+  const bodyFont = ctx.bodyPdfStyle?.font ?? ctx.defaultFont;
+  const fontSize = Number(ctx.bodyPdfStyle?.fontSize) || DEFAULT_TABLE_FONT_PT;
+
+  const headerRow: any[] = [
+    {
+      // Corner stays empty (same as canvas) — long labels crush the first column.
+      text: '',
+      bold: true,
+      fillColor: '#f0f0f0',
+      fontSize,
+      font: bodyFont,
+      lineHeight: TABLE_PDF_LINE_HEIGHT,
+    },
+    ...columns.map((col: any) => ({
+      text: String(col.label ?? col.key ?? ''),
+      bold: true,
+      fillColor: '#f0f0f0',
+      fontSize,
+      font: bodyFont,
+      lineHeight: TABLE_PDF_LINE_HEIGHT,
+    })),
+  ];
+  if (showRowTotals) {
+    headerRow.push({
+      text: 'Total',
+      bold: true,
+      fillColor: '#f0f0f0',
+      fontSize,
+      font: bodyFont,
+      lineHeight: TABLE_PDF_LINE_HEIGHT,
+    });
+  }
+
+  const bodyRows: any[][] = rows.map((row: any) => {
+    const cells: any[] = [
+      {
+        text: String(row.label ?? ''),
+        bold: true,
+        fontSize,
+        font: bodyFont,
+        lineHeight: TABLE_PDF_LINE_HEIGHT,
+      },
+      ...columns.map((col: any) => ({
+        text: formatPivotPdfCell(row.cells?.[col.key], emptyCell, schema),
+        fontSize,
+        font: bodyFont,
+        lineHeight: TABLE_PDF_LINE_HEIGHT,
+        alignment: valueAlign,
+      })),
+    ];
+    if (showRowTotals) {
+      cells.push({
+        text: formatPivotPdfCell(row.rowTotal, emptyCell, schema),
+        bold: true,
+        fontSize,
+        font: bodyFont,
+        lineHeight: TABLE_PDF_LINE_HEIGHT,
+        alignment: valueAlign,
+      });
+    }
+    return cells;
+  });
+
+  if (showColumnTotals || showGrandTotal) {
+    const totalsRow: any[] = [
+      {
+        text: 'Total',
+        bold: true,
+        fontSize,
+        font: bodyFont,
+        lineHeight: TABLE_PDF_LINE_HEIGHT,
+      },
+      ...columns.map((col: any) => ({
+        text: showColumnTotals
+          ? formatPivotPdfCell(pivot.columnTotals?.[col.key], emptyCell, schema)
+          : emptyCell,
+        bold: true,
+        fontSize,
+        font: bodyFont,
+        lineHeight: TABLE_PDF_LINE_HEIGHT,
+        alignment: valueAlign,
+      })),
+    ];
+    if (showRowTotals) {
+      totalsRow.push({
+        text: showGrandTotal
+          ? formatPivotPdfCell(pivot.grandTotal, emptyCell, schema)
+          : emptyCell,
+        bold: true,
+        fontSize,
+        font: bodyFont,
+        lineHeight: TABLE_PDF_LINE_HEIGHT,
+        alignment: valueAlign,
+      });
+    }
+    bodyRows.push(totalsRow);
+  }
+
+  if (!bodyRows.length) return null;
+
+  const colCount = headerRow.length;
+  const rowLabelWidth = parseTableColumnWidth(schema.rowLabelWidth);
+  const firstWidth =
+    rowLabelWidth !== '*'
+      ? rowLabelWidth
+      : (() => {
+          const em = String(schema.rowLabelWidth ?? '8em').match(/^(\d+(?:\.\d+)?)em$/i);
+          if (em) return Math.round(Number.parseFloat(em[1]) * fontSize);
+          return 'auto';
+        })();
+  const widths = [firstWidth, ...Array.from({ length: colCount - 1 }, () => '*')];
+
+  return {
+    table: {
+      headerRows: 1,
+      keepWithHeaderRows: 1,
+      widths,
+      body: [headerRow, ...bodyRows],
+      dontBreakRows: true,
+    },
+    layout: resolveVisionTablePdfLayout({ hideBorders: !!schema.hideBorders }),
+    margin: [0, 0, 0, 8],
+  };
+}
+
 function renderTableSegmentPdf(seg: any, ctx: PdfRenderContext): PdfContentNode | null {
   const tableId = String(seg.id ?? '');
+  const schema = ctx.fieldSchemas?.[tableId];
+  if (schema?.type === 'pivotTable') {
+    if (ctx.hideEmptyValues && !tableHasPreviewContent(tableId, ctx, seg.rows)) {
+      return null;
+    }
+    return buildPivotPdfTable(tableId, ctx);
+  }
   if (ctx.hideEmptyValues && !tableHasPreviewContent(tableId, ctx, seg.rows)) {
     return null;
   }
@@ -486,14 +701,14 @@ export function buildPdfTableBodyRows(tableId: any, ctx: PdfRenderContext, segme
       if (isTableCellDisplayPlaceholder(value, label) || isPdfFieldEmpty(value, cellSchema)) {
         if (cellSchema?.required) {
           hasValue = true;
-          cells.push({
+          const requiredStyle = resolvePdfFieldStyleForExport(cellId, ctx, DOCUMENT_TABLE_TEXT_STYLE);
+          cells.push(withTableCellFillColor({
             text: String(label ?? ''),
             italics: true,
             color: '#888888',
             lineHeight: TABLE_PDF_LINE_HEIGHT,
-            fontSize: resolvePdfFieldStyleForExport(cellId, ctx, DOCUMENT_TABLE_TEXT_STYLE).fontSize
-              ?? DEFAULT_TABLE_FONT_PT,
-          });
+            fontSize: requiredStyle.fontSize ?? DEFAULT_TABLE_FONT_PT,
+          }, requiredStyle));
         } else {
           cells.push(buildEmptyPdfTableCell(cellId, ctx));
         }
@@ -1095,10 +1310,12 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
 
       if (!sectionStack.length) continue;
 
+      const borderedStack = withPdfSectionBorderRules(sectionStack, data);
+
       if (usedRepeatableTableChunks) {
-        content.push(...sectionStack);
+        content.push(...borderedStack);
       } else {
-        content.push({ stack: sectionStack, margin: [0, 0, 0, 6] });
+        content.push({ stack: borderedStack, margin: [0, 0, 0, 6] });
       }
       continue;
     }
@@ -1153,9 +1370,10 @@ function renderTemplateBlockPdf(blockData: any, ctx: PdfRenderContext): PdfConte
   const fieldFont = String(style.font ?? ctx.defaultFont ?? '');
 
   if (empty && schema?.required) {
+    const requiredInline = { ...inlineStyle, italics: true, color: '#888888' };
     const parts = finalizePdfInlineParts(plainTextToPdfText(String(label ?? '')), {
       font: fieldFont,
-      inlineStyle: { ...inlineStyle, italics: true, color: '#888888' },
+      inlineStyle: requiredInline,
     });
     const node: PdfContentNode = { text: parts, margin: [0, 0, 0, 4] };
     if (fieldAlignment) node.alignment = fieldAlignment;

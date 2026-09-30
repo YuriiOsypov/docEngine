@@ -23,6 +23,6 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --pretty false",
     "prepare": "npm run build",
-    "test": "npm run build && node --test dist/utils/tree-nodes.test.js dist/core/field-mapping.test.js dist/core/currency-format.test.js dist/core/section-visibility.test.js dist/core/formula-functions.test.js"
+    "test": "npm run build && node --test dist/utils/tree-nodes.test.js dist/core/field-mapping.test.js dist/core/currency-format.test.js dist/core/section-visibility.test.js dist/core/formula-functions.test.js dist/core/pivot.test.js"
   }
 }

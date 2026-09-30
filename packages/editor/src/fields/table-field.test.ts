@@ -9,6 +9,7 @@ import {
   readTableRowsFromDom,
   syncTableRowsDataset,
   applyTableColumnWidthsToElement,
+  shouldShowTableRowActions,
 } from './table-field.js';
 import { SchemaRegistry } from '../registry/schema-registry.js';
 import { syncFillComputedFields, updateFieldToken, refreshTableCellTokens } from './inline-fields.js';
@@ -18,6 +19,29 @@ before(() => {
   globalThis.document = window.document;
   globalThis.Node = window.Node;
   globalThis.CSS = { escape: (value: any) => String(value).replace(/"/g, '\\"') } as any;
+});
+
+describe('shouldShowTableRowActions', () => {
+  it('shows the panel in design mode even when allowAddRows is off', () => {
+    assert.equal(shouldShowTableRowActions({ type: 'table' }, true), true);
+    assert.equal(shouldShowTableRowActions({ type: 'table', allowAddRows: false }, true), true);
+  });
+
+  it('hides the panel in fill mode by default', () => {
+    assert.equal(shouldShowTableRowActions({ type: 'table' }, false), false);
+    assert.equal(shouldShowTableRowActions({ type: 'table', allowAddRows: false }, false), false);
+  });
+
+  it('shows the panel in fill mode when allowAddRows is enabled', () => {
+    assert.equal(shouldShowTableRowActions({ type: 'table', allowAddRows: true }, false), true);
+  });
+
+  it('keeps the panel hidden for read-only tables in fill mode', () => {
+    assert.equal(
+      shouldShowTableRowActions({ type: 'table', allowAddRows: true, readonly: true }, false),
+      false,
+    );
+  });
 });
 
 describe('table presentation options', () => {

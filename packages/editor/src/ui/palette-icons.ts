@@ -36,6 +36,9 @@ export const PALETTE_ICONS: Record<string, string> = {
   signature: svg(
     '<path d="M3 17c3-1 5.5-4 7-7 1.5 4 4 6 7 7"/><path d="M3 21h18"/>',
   ),
+  barcode: svg(
+    '<path d="M3 5v14"/><path d="M6 5v14"/><path d="M8 5v14"/><path d="M11 5v14"/><path d="M14 5v14"/><path d="M16 5v14"/><path d="M19 5v14"/><path d="M21 5v14"/>',
+  ),
   list: svg(
     '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
   ),
@@ -47,6 +50,9 @@ export const PALETTE_ICONS: Record<string, string> = {
   ),
   table: svg(
     '<path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M3 15h18"/><path d="M9 5v14"/><path d="M15 5v14"/>',
+  ),
+  pivotTable: svg(
+    '<path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M9 5v14"/><path d="M3 15h6"/><path d="m14 13 2 2 4-4"/>',
   ),
   child: svg(
     '<circle cx="12" cy="7" r="3"/><path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><path d="M16 11h5"/><path d="M18.5 8.5v5"/>',

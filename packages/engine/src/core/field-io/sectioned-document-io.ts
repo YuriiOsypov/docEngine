@@ -94,6 +94,8 @@ export function expandSectionFieldMap(
     const schema = fieldSchemas[fieldId];
     if (schema?.type === 'table' && isTableRowArray(value)) {
       flat[fieldId] = value;
+    } else if (schema?.type === 'pivotTable') {
+      flat[fieldId] = value;
     } else if (
       schema?.type === 'child' &&
       value != null &&
@@ -155,7 +157,9 @@ export function buildSectionedDocumentFromValues(
           if (includeAllFields || hasValue) {
             sectionMap[name] = hasValue
               ? values[seg.id]
-              : [];
+              : schema?.type === 'pivotTable'
+                ? { columns: [], rows: [] }
+                : [];
           }
         }
       });

@@ -46,6 +46,7 @@ export function applyColElementWidthPx(colEl: any, widthPx: any) {
   colEl.style.width = width;
   colEl.style.minWidth = width;
   colEl.style.maxWidth = width;
+  colEl.setAttribute('width', width);
 }
 
 export function chromeCssPartsFromFlags({ includeRowLabels = false }: any = {}) {
@@ -108,6 +109,26 @@ export function applyColElementWidthPercent(colEl: any, percent: any) {
   colEl.style.width = width;
   colEl.style.minWidth = width;
   colEl.style.maxWidth = '';
+  colEl.setAttribute('width', width);
+}
+
+/**
+ * Mirror data-column widths onto header cells so table-layout:fixed stays in sync.
+ * @param {HTMLTableElement | null | undefined} tableEl
+ * @param {Array<string | null | undefined>} [widths]
+ */
+export function syncTableHeaderWidthsFromCols(tableEl: any, widths: any = null) {
+  if (!tableEl) return;
+  const resolved = Array.isArray(widths)
+    ? widths
+    : getTableDataColElements(tableEl).map((colEl: any) =>
+        String(colEl?.style?.width ?? '').trim(),
+      );
+  getTableDataHeaderCells(tableEl).forEach((th: any, index: any) => {
+    const width = String(resolved[index] ?? '').trim();
+    if (width) th.style.width = width;
+    else th.style.width = '';
+  });
 }
 
 export function getTableDataHeaderCells(tableEl: any) {
@@ -327,6 +348,10 @@ export function wireTableColumnResize(tableEl: any, options: any = {}) {
         liveWidths.forEach((widthPx: any, index: any) => {
           applyColElementWidthPx(colEls[index], widthPx);
         });
+        syncTableHeaderWidthsFromCols(
+          tableEl,
+          liveWidths.map((widthPx: any) => `${clampColumnWidthPx(widthPx)}px`),
+        );
       }
 
       function previewColumns() {
@@ -386,6 +411,7 @@ export function wireTableColumnResize(tableEl: any, options: any = {}) {
           if (pct == null) return;
           applyColElementWidthPercent(colEls[index], pct);
         });
+        syncTableHeaderWidthsFromCols(tableEl);
 
         const columns = applyPercentWidthsToColumns(
           schema.columns ?? [],

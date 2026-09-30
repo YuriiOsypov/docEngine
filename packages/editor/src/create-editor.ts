@@ -601,9 +601,10 @@ export function createEditor(options: any = {}) {
         clearStructureSelection();
         updateSectionSelectionHighlight();
       }
-      // Format toolbar stays visible in fill mode (only palette/properties hide).
-      if (designToolbarWrap) designToolbarWrap.hidden = false;
+      if (designToolbarWrap) designToolbarWrap.hidden = !designMode;
     }
+    // Format toolbar is design-only; Preview lives in document actions / host chrome.
+    if (richTextToolbar?.element) richTextToolbar.element.hidden = !designMode;
     syncShowFieldsHighlight();
   }
 
@@ -780,6 +781,9 @@ export function createEditor(options: any = {}) {
   }
 
   function handleTableColumnWidthsChange(tableId: any, columns: any) {
+    // Same path as typing in Properties — splitter updates schema already, but
+    // must re-apply col + header widths or the canvas can stay equal-width.
+    applyTableColumnWidthsToElement(findLiveTableEl(tableId), columns);
     options.onSchemaChange?.(registry.getFieldSchemas());
     syncTableWidthsToProperties(tableId, columns);
   }
@@ -798,6 +802,7 @@ export function createEditor(options: any = {}) {
     if (!prev || prev.type !== 'table' || next?.type !== 'table') return false;
     if (!!prev.hideHeader !== !!next.hideHeader) return false;
     if (!!prev.hideBorders !== !!next.hideBorders) return false;
+    if (!!prev.allowAddRows !== !!next.allowAddRows) return false;
     if (String(prev.name ?? prev.label ?? '') !== String(next.name ?? next.label ?? '')) return false;
     if (String(prev.label ?? '') !== String(next.label ?? '')) return false;
     const prevCols = prev.columns ?? [];
@@ -1191,7 +1196,7 @@ export function createEditor(options: any = {}) {
       updateSectionSelectionHighlight();
       clearColumnsSelection();
 
-      if (liveSchema.type === 'table') {
+      if (liveSchema.type === 'table' || liveSchema.type === 'pivotTable') {
         const tableEl = findLiveTableEl(fieldId);
         if (tableEl) {
           clearTableSelection();
@@ -1419,7 +1424,10 @@ export function createEditor(options: any = {}) {
     if (item.kind !== 'field') return;
 
     if (getFieldHandler(item.type)?.insertion === 'table' || item.type === 'table') {
-      const { fieldId } = await insertPaletteTableAtPoint(container, clientX, clientY, opts);
+      const { fieldId } = await insertPaletteTableAtPoint(container, clientX, clientY, {
+        ...opts,
+        fieldType: item.type === 'pivotTable' ? 'pivotTable' : 'table',
+      });
       options.onSchemaChange?.(registry.getFieldSchemas());
       await handleEditSchema(fieldId);
       return;
@@ -1891,7 +1899,7 @@ export function createEditor(options: any = {}) {
     lastFocusedEditable = editable;
   }
 
-  async function insertPaletteTableInline() {
+  async function insertPaletteTableInline(fieldType = 'table') {
     await editor.isReady;
     let editable = resolveTargetEditable();
     if (!editable) {
@@ -1901,7 +1909,10 @@ export function createEditor(options: any = {}) {
     }
     if (!editable) return;
 
-    const { fieldId } = insertTableAtCaret(editable, getInlineFieldOptions());
+    const { fieldId } = insertTableAtCaret(editable, {
+      ...getInlineFieldOptions(),
+      fieldType: fieldType === 'pivotTable' ? 'pivotTable' : 'table',
+    });
     options.onSchemaChange?.(registry.getFieldSchemas());
     wireTableRegions(editable, {
       ...getInlineFieldOptions(),
@@ -2480,7 +2491,7 @@ export function createEditor(options: any = {}) {
 
     const handler = getFieldHandler(fieldType);
     if (handler?.insertion === 'table' || fieldType === 'table') {
-      await insertPaletteTableInline();
+      await insertPaletteTableInline(fieldType === 'pivotTable' ? 'pivotTable' : 'table');
       return;
     }
 
@@ -2524,7 +2535,6 @@ export function createEditor(options: any = {}) {
   });
 
   async function handlePreview() {
-    richTextToolbar.setPreviewBusy(true);
     documentActions.setBusy(true);
     try {
       if (editor) await editor.save();
@@ -2532,21 +2542,16 @@ export function createEditor(options: any = {}) {
     } catch (err: any) {
       showNotification(err?.message ?? 'Preview failed.', { type: 'error' });
     } finally {
-      richTextToolbar.setPreviewBusy(false);
       documentActions.setBusy(false);
       refreshTableCellTokens(holder, { getRegistry: () => registry, fieldValueStyle });
       pruneTableCellCaretAnchors(holder);
     }
   }
 
-  richTextToolbar.setOnPreview(
-    ui.showPreview === false ? null : () => {
-      void handlePreview();
-    }
-  );
-
   const documentActions = createDocumentActions({
-    onPreview: null,
+    onPreview: ui.showPreview === false ? null : () => {
+      void handlePreview();
+    },
   });
 
   let topChrome: any = null;
@@ -2654,6 +2659,8 @@ export function createEditor(options: any = {}) {
           label: block.data?.label ?? '',
           repeatable: !!block.data?.repeatable,
           hideTitleInPreview: !!block.data?.hideTitleInPreview,
+          borderTop: !!block.data?.borderTop,
+          borderBottom: !!block.data?.borderBottom,
           visibility: block.data?.visibility ?? null,
         },
         section,
@@ -2726,6 +2733,18 @@ export function createEditor(options: any = {}) {
       return;
     }
 
+    // Pivot has no cell tokens — clicking the grid should still select the block.
+    const pivotEl = e.target.closest('.document-table--pivot');
+    if (pivotEl && holder.contains(pivotEl)) {
+      if (e.target.closest('[data-action="delete-table"], .pivot-table__row-label-resizer, .vision-table__col-resizer')) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      selectTableEl(pivotEl);
+      return;
+    }
+
     const header = e.target.closest('.document-section__header');
     if (!header || !holder.contains(header)) return;
     if (e.target.closest('.document-section__body, .field-token')) {
@@ -2774,24 +2793,26 @@ export function createEditor(options: any = {}) {
   }
 
   function getPrimaryStyleFieldId() {
-    const token = getSelectedDesignFieldTokens()[0];
-    if (!token) return null;
+    const tokens = getSelectedDesignFieldTokens();
+    if (!tokens.length) return null;
 
-    if (token.classList.contains('field-token--cell')) {
-      const tableId = token.dataset.tableId;
-      const colKey = token.dataset.colKey;
-      if (tableId && colKey) {
-        const ids = listColumnCellFieldIds(tableId, colKey, registry.getFieldSchemas());
-        return ids[0] ?? token.dataset.fieldId ?? null;
-      }
-    }
-
-    return token.dataset.fieldId ?? null;
+    const anchor =
+      tokens.find((token: any) => token.classList.contains('field-token--column-anchor')) ?? tokens[0];
+    return anchor?.dataset.fieldId ?? null;
   }
 
   function isTableColumnSelection() {
     const tokens = getSelectedDesignFieldTokens();
     return tokens.length > 0 && tokens.every((token: any) => token.classList.contains('field-token--cell'));
+  }
+
+  function getTableColumnSelectionHint() {
+    const tokens = getSelectedDesignFieldTokens();
+    const token =
+      tokens.find((t: any) => t.classList.contains('field-token--column-anchor')) ?? tokens[0];
+    const colKey = String(token?.dataset?.colKey ?? '').trim();
+    const label = colKey ? `“${colKey}”` : 'Table column';
+    return `${label} column selected — formatting applies to the whole column.`;
   }
 
   function applyDisplayStyleToFieldIds(fieldIds: any,normalized: any) {
@@ -2868,9 +2889,7 @@ export function createEditor(options: any = {}) {
       getGlobalDefault: () => isTableColumnSelection()
         ? { ...DOCUMENT_TABLE_TEXT_STYLE, ...(fieldValueStyle?.default ?? {}) }
         : (fieldValueStyle?.default ?? {}),
-      hint: isTableColumnSelection()
-        ? 'Table column selected — formatting applies to the whole column.'
-        : undefined,
+      hint: isTableColumnSelection() ? getTableColumnSelectionHint() : undefined,
       onStyleChange: (override: any) => {
         applyDisplayStyleToSelectedFields(override);
       },
@@ -3282,14 +3301,12 @@ export function createEditor(options: any = {}) {
     async preview(options: any = {}) {
       if (editor) await editor.save();
       documentActions.setBusy(true);
-      richTextToolbar.setPreviewBusy(true);
       try {
         await previewModal.open(await getDocument(), {
           hideEmptyValues: options.hideEmptyValues === true,
         });
       } finally {
         documentActions.setBusy(false);
-        richTextToolbar.setPreviewBusy(false);
         refreshTableCellTokens(holder, { getRegistry: () => registry, fieldValueStyle });
         pruneTableCellCaretAnchors(holder);
       }

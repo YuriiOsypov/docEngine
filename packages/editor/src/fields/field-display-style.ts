@@ -6,13 +6,28 @@ import {
 } from '../core/document-display-defaults.js';
 import { normalizeFontFamily, normalizeFontSize } from './rich-text.js';
 
-const STYLE_KEYS = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'color', 'textDecoration', 'textAlign'];
+const STYLE_KEYS = [
+  'fontFamily',
+  'fontSize',
+  'fontWeight',
+  'fontStyle',
+  'color',
+  'backgroundColor',
+  'textDecoration',
+  'textAlign',
+];
 
 function resetTableCellTokenAlignment(token: any, td: any) {
   if (td) td.style.textAlign = '';
   token.style.removeProperty('display');
   token.style.removeProperty('width');
   token.style.removeProperty('textAlign');
+}
+
+function applyTableCellBackground(td: any, style: any) {
+  if (!td) return;
+  if (style?.backgroundColor) td.style.backgroundColor = style.backgroundColor;
+  else td.style.backgroundColor = '';
 }
 function normalizeFontWeight(value: any) {
   const v = String(value ?? '').trim().toLowerCase();
@@ -61,6 +76,7 @@ export function normalizeFieldDisplayStyle(style: any) {
   const fontWeight = normalizeFontWeight(style.fontWeight);
   const fontStyle = normalizeFontStyle(style.fontStyle);
   const color = normalizeColor(style.color);
+  const backgroundColor = normalizeColor(style.backgroundColor);
   const textDecoration = normalizeTextDecoration(style.textDecoration);
   const textAlign = normalizeTextAlign(style.textAlign);
 
@@ -69,6 +85,7 @@ export function normalizeFieldDisplayStyle(style: any) {
   if (fontWeight) next.fontWeight = fontWeight;
   if (fontStyle) next.fontStyle = fontStyle;
   if (color) next.color = color;
+  if (backgroundColor) next.backgroundColor = backgroundColor;
   if (textDecoration) next.textDecoration = textDecoration;
   if (textAlign) next.textAlign = textAlign;
 
@@ -250,20 +267,25 @@ export function applyTableCellDisplayStyle(token: any, fieldId: any, schema: any
 
   if (!cellRef) {
     const fallbackBase = { ...DOCUMENT_TABLE_TEXT_STYLE, ...normalizeFieldDisplayStyle(fieldValueStyle?.default) };
+    const resolvedStyle = resolveFieldDisplayStyle(schema, fallbackBase);
     if (isEmpty) {
-      const resolvedStyle = resolveFieldDisplayStyle(schema, fallbackBase);
       const tokenStyle = { ...resolvedStyle };
       delete tokenStyle.textAlign;
+      delete tokenStyle.backgroundColor;
       if (shouldHighlightEmptyField(token, options)) {
         delete tokenStyle.color;
         delete tokenStyle.textDecoration;
         delete tokenStyle.fontWeight;
       }
       applyFieldDisplayStyle(token, tokenStyle);
+      applyTableCellBackground(td, resolvedStyle);
       resetTableCellTokenAlignment(token, td);
       return;
     }
-    applyFieldDisplayStyle(token, resolveFieldDisplayStyle(schema, fallbackBase));
+    const tokenStyle = { ...resolvedStyle };
+    delete tokenStyle.backgroundColor;
+    applyFieldDisplayStyle(token, tokenStyle);
+    applyTableCellBackground(td, resolvedStyle);
     return;
   }
 
@@ -279,12 +301,14 @@ export function applyTableCellDisplayStyle(token: any, fieldId: any, schema: any
   if (isEmpty) {
     const tokenStyle = { ...displayStyle };
     delete tokenStyle.textAlign;
+    delete tokenStyle.backgroundColor;
     if (shouldHighlightEmptyField(token, options)) {
       delete tokenStyle.color;
       delete tokenStyle.textDecoration;
       delete tokenStyle.fontWeight;
     }
     applyFieldDisplayStyle(token, tokenStyle);
+    applyTableCellBackground(td, displayStyle);
     if (align) {
       if (td) td.style.textAlign = align;
       token.style.display = 'block';
@@ -301,8 +325,10 @@ export function applyTableCellDisplayStyle(token: any, fieldId: any, schema: any
       ? omitHighlightControlledStyles({ ...displayStyle })
       : { ...displayStyle };
   delete tokenStyle.textAlign;
+  delete tokenStyle.backgroundColor;
 
   applyFieldDisplayStyle(token, tokenStyle);
+  applyTableCellBackground(td, displayStyle);
 
   if (td) {
     if (align) {

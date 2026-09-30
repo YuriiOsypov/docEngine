@@ -12,6 +12,10 @@ import {
   htmlToPdfBlocks,
   plainTextToPdfText,
 } from './html-text.js';
+import {
+  buildPdfHorizontalRuleBlock,
+  buildPdfSectionBorderRuleBlock,
+} from './pdf-horizontal-rule.js';
 
 const HR_SPLIT_RE = /<hr\b[^>]*\/?>/gi;
 
@@ -127,6 +131,14 @@ function buildFieldTokenStyleAttr(token: any): string {
     if (fontStyle === 'italic') styles.push('font-style: italic');
   }
 
+  const hasBackground = styles.some((rule) => rule.toLowerCase().startsWith('background-color'));
+  if (!hasBackground) {
+    const bg = token.style?.backgroundColor || computed?.backgroundColor;
+    if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+      styles.push(`background-color: ${bg}`);
+    }
+  }
+
   // Intentional underline/strike from displayStyle is already on the inline attribute.
   // Do not copy text-decoration from computed style (fill-mode highlight CSS).
 
@@ -239,33 +251,6 @@ export function serializePreviewBodyHtml(bodyEl: any, ctx: PdfCtx = {} as PdfCtx
   return clone.innerHTML;
 }
 
-function buildHorizontalRuleBlock(options: { lineColor?: string; lineWidth?: number; margin?: number[] } = {}): Record<string, any> {
-  const lineColor = options.lineColor ?? '#cccccc';
-  const lineWidth = options.lineWidth ?? 0.5;
-  const margin = options.margin ?? [0, 6, 0, 6];
-  return {
-    margin,
-    canvas: [{
-      type: 'line',
-      x1: 0,
-      y1: 0,
-      x2: 515,
-      y2: 0,
-      lineWidth,
-      lineColor,
-    }],
-  };
-}
-
-/** Matches `.document-section--border-top` / `--border-bottom` preview CSS. */
-function buildSectionBorderRuleBlock(side: 'top' | 'bottom'): Record<string, any> {
-  return buildHorizontalRuleBlock({
-    lineColor: '#000000',
-    lineWidth: 1,
-    margin: side === 'top' ? [0, 0, 0, 6] : [0, 6, 0, 0],
-  });
-}
-
 function convertSerializedHtmlToPdfBlocks(html: string, ctx: PdfCtx): Record<string, any>[] {
   const source = String(html ?? '');
   if (!source.trim()) return [];
@@ -289,7 +274,7 @@ function convertSerializedHtmlToPdfBlocks(html: string, ctx: PdfCtx): Record<str
       }
     }
     if (index < chunks.length - 1) {
-      blocks.push(buildHorizontalRuleBlock());
+      blocks.push(buildPdfHorizontalRuleBlock());
     }
   }
 
@@ -562,8 +547,21 @@ function convertVisionTableCell(td: any, ctx: PdfCtx): Record<string, any> {
   walkInlineNodes(td, [{}], ctx, parts);
   const tokenAlign = td.querySelector('.field-token')?.style?.textAlign ?? '';
   const cellAlign = (td.style?.textAlign || tokenAlign || '').trim().toLowerCase();
+  const cellBg = parseCssColor(
+    td.style?.backgroundColor
+    || domInlineStyleToPdf(td.getAttribute('style') ?? '', ctx.baseFontSize).background,
+  );
+  // Prefer full-cell fill; strip text-level background so padding looks filled.
+  const cleanedParts = cellBg
+    ? parts.map((part: any) => {
+        if (!part || typeof part !== 'object') return part;
+        const next = { ...part };
+        delete next.background;
+        return next;
+      })
+    : parts;
   const cell: Record<string, any> = {
-    text: finalizePdfInlineParts(parts.length ? parts : [''], {
+    text: finalizePdfInlineParts(cleanedParts.length ? cleanedParts : [''], {
       font: ctx.defaultFont,
       inlineStyle: { lineHeight: TABLE_PDF_LINE_HEIGHT },
     }),
@@ -574,6 +572,7 @@ function convertVisionTableCell(td: any, ctx: PdfCtx): Record<string, any> {
   if (['left', 'center', 'right', 'justify'].includes(cellAlign)) {
     cell.alignment = cellAlign;
   }
+  if (cellBg) cell.fillColor = cellBg;
   return cell;
 }
 
@@ -641,7 +640,7 @@ function convertSectionWrap(sectionWrap: any, ctx: PdfCtx): Record<string, any> 
   const borderBottom = sectionWrap.classList?.contains('document-section--border-bottom') === true;
 
   if (borderTop) {
-    stack.push(buildSectionBorderRuleBlock('top'));
+    stack.push(buildPdfSectionBorderRuleBlock('top'));
   }
 
   const labelEl = sectionWrap.querySelector('.document-section__header .document-section__label-text');
@@ -662,7 +661,7 @@ function convertSectionWrap(sectionWrap: any, ctx: PdfCtx): Record<string, any> 
   }
 
   if (borderBottom) {
-    stack.push(buildSectionBorderRuleBlock('bottom'));
+    stack.push(buildPdfSectionBorderRuleBlock('bottom'));
   }
 
   if (!stack.length) return null;

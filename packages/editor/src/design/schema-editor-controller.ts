@@ -617,6 +617,13 @@ export function createSchemaEditorController({
           <input type="checkbox" data-field="hideBorders" ${schema.hideBorders ? 'checked' : ''} />
           <span>Hide borders</span>
         </label>
+        <label class="schema-form__row schema-form__row--checkbox">
+          <input type="checkbox" data-field="allowAddRows" ${schema.allowAddRows ? 'checked' : ''} />
+          <span class="schema-form__label-row">
+            <span>Allow adding rows when filling</span>
+            ${infoTipHtml('Shows Add row, Paste rows, and Import under the table in fill mode. Off by default. The panel is always available in design mode.')}
+          </span>
+        </label>
       `;
     } else if (schema.type === 'child') {
       extra.innerHTML = `
@@ -732,11 +739,13 @@ export function createSchemaEditorController({
         <span>Field type</span>
         <select data-field="type">${typeOptions}</select>
       </label>
+      ${schema.type === 'pivotTable' ? '' : `
       <label class="schema-form__row schema-form__row--checkbox">
         <input type="checkbox" data-field="required"${schema.required ? ' checked' : ''} />
         <span>Required value</span>
       </label>
-      ${schema.type === 'computed' ? '' : `
+      `}
+      ${schema.type === 'computed' || schema.type === 'pivotTable' ? '' : `
       <label class="schema-form__row schema-form__row--checkbox">
         <input type="checkbox" data-field="readonly"${schema.readonly ? ' checked' : ''} />
         <span class="schema-form__label-row">
@@ -910,18 +919,27 @@ export function createSchemaEditorController({
       } else {
         delete result.hideBorders;
       }
+      if (body.querySelector('[data-field="allowAddRows"]')?.checked) {
+        result.allowAddRows = true;
+      } else {
+        delete result.allowAddRows;
+      }
     } else if (result.type === 'child' && currentSchema.type === 'child') {
       result.fieldSchemas = currentSchema.fieldSchemas ?? result.fieldSchemas;
     }
 
     result.required = body.querySelector('[data-field="required"]')?.checked ?? false;
 
-    if (result.type === 'computed') {
+    if (result.type === 'computed' || result.type === 'pivotTable') {
       delete result.readonly;
     } else if (body.querySelector('[data-field="readonly"]')?.checked) {
       result.readonly = true;
     } else {
       delete result.readonly;
+    }
+
+    if (result.type === 'pivotTable') {
+      result.required = false;
     }
 
     const liveSchema = registry()?.getFieldSchemas()?.[currentFieldId];

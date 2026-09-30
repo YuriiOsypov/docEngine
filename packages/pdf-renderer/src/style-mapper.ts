@@ -75,6 +75,11 @@ export function fieldStyleToPdfmake(
   else if (style.fontWeight === 'normal') out.bold = false;
   if (style.fontStyle === 'italic') out.italics = true;
   if (style.color) out.color = style.color;
+  if (style.backgroundColor) {
+    // Inline fields: pdfmake text `background`. Table cells: `fillColor` on the td.
+    out.background = style.backgroundColor;
+    out.fillColor = style.backgroundColor;
+  }
   if (style.textDecoration === 'underline') out.decoration = 'underline';
   if (style.textDecoration === 'line-through') out.decoration = 'lineThrough';
   if (style.textAlign) out.alignment = style.textAlign;

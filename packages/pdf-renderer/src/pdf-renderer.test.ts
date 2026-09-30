@@ -268,6 +268,91 @@ describe('renderDocumentToPdfDefinition', () => {
     assert.ok(typeof def.footer === 'function');
   });
 
+  it('renders pivotTable values as a pdfmake matrix (not an empty table)', () => {
+    const doc = {
+      fieldSchemas: {
+        sales_pivot: {
+          type: 'pivotTable',
+          name: 'Sales Pivot',
+          label: 'Sales',
+          rowProperty: 'Region',
+          columnProperty: 'Product',
+          valueProperty: 'Amount',
+          aggregation: 'sum',
+          showRowTotals: true,
+          showColumnTotals: true,
+          showGrandTotal: true,
+        },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'Main',
+            label: 'Main',
+            segments: [{ type: 'table', id: 'sales_pivot' }],
+            fieldValues: {
+              sales_pivot: {
+                columns: [
+                  { key: 'a', label: 'A' },
+                  { key: 'b', label: 'B' },
+                ],
+                rows: [
+                  { key: 'west', label: 'West', cells: { a: 13, b: 5 }, rowTotal: 18 },
+                  { key: 'east', label: 'East', cells: { a: 7, b: null }, rowTotal: 7 },
+                ],
+                columnTotals: { a: 20, b: 5 },
+                grandTotal: 25,
+              },
+            },
+          },
+        },
+      ],
+    };
+    const content = renderDocumentToPdfContent(doc as any, {
+      resolveFontName: (n?: string | null) => n || 'Roboto',
+      defaultFont: 'Roboto',
+    });
+    const tableBlock = findPdfTable(content);
+    assert.ok(tableBlock, 'expected a pivot pdf table');
+    assert.ok(tableBlock.table.body.length >= 3, 'header + data rows');
+    assert.equal(tableBlock.table.body[0][1].text, 'A');
+    assert.equal(tableBlock.table.body[1][0].text, 'West');
+    assert.equal(tableBlock.table.body[1][1].text, '13');
+    assert.equal(String(tableBlock.table.body[tableBlock.table.body.length - 1][3].text), '25');
+  });
+
+  it('omits empty pivotTable when hideEmptyValues is true', () => {
+    const doc = {
+      fieldSchemas: {
+        sales_pivot: {
+          type: 'pivotTable',
+          name: 'Sales Pivot',
+          label: 'Sales',
+        },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'Main',
+            label: 'Main',
+            segments: [{ type: 'table', id: 'sales_pivot' }],
+            fieldValues: {
+              sales_pivot: { columns: [], rows: [] },
+            },
+          },
+        },
+      ],
+    };
+    const content = renderDocumentToPdfContent(doc as any, {
+      resolveFontName: (n?: string | null) => n || 'Roboto',
+      defaultFont: 'Roboto',
+      hideEmptyValues: true,
+    });
+    assert.equal(findPdfTable(content), null);
+  });
+
   it('uses pageSetup saved on the document', () => {
     const doc = mergeTemplateAndDocument(makeTemplate(), makeDocument());
     doc.pageSetup = { format: 'letter', margin: 10 };
@@ -283,6 +368,34 @@ describe('renderDocumentToPdfDefinition', () => {
     const { docDefinition } = renderDocumentToPdfDefinition(doc, {});
     assert.equal(docDefinition.pageSize, resolvePageSize('a4'));
     assert.equal(docDefinition.pageOrientation, 'landscape');
+  });
+
+  it('emits canvas rules for section borderTop/borderBottom', () => {
+    const doc = {
+      fieldSchemas: {
+        note: { type: 'text', name: 'note', label: 'Note' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'Anamnesis',
+            borderTop: true,
+            borderBottom: true,
+            segments: [{ type: 'field', id: 'note' }],
+            fieldValues: { note: 'Headache' },
+          },
+        },
+      ],
+    };
+    const { docDefinition } = renderDocumentToPdfDefinition(doc, {});
+    const section = (docDefinition as any).content.find((node: any) => Array.isArray(node?.stack));
+    assert.ok(section);
+    const canvasNodes = section.stack.filter((node: any) => Array.isArray(node.canvas));
+    assert.equal(canvasNodes.length, 2);
+    assert.equal(canvasNodes[0].canvas[0].lineColor, '#000000');
+    assert.equal(canvasNodes[0].canvas[0].lineWidth, 1);
+    assert.equal(canvasNodes[1].canvas[0].lineColor, '#000000');
   });
 
   it('keeps table headers independent of column cell alignment styles', () => {
@@ -536,6 +649,79 @@ describe('renderDocumentToPdfDefinition', () => {
     assertEmptyPdfTableCell(table.table.body[1][0], 'right');
     assert.equal(table.table.body[1][1].text?.[0]?.text ?? table.table.body[1][1].text, '111');
     assert.equal(table.table.body[1][1].alignment, 'left');
+  });
+
+  it('emits fillColor from cell displayStyle backgroundColor', () => {
+    const localTableId = 'fill_color_table';
+    const labelCell = cellFieldId(localTableId, 'row1', 'label');
+    const valueCell = cellFieldId(localTableId, 'row1', 'value');
+    const fieldSchemas = {
+      [localTableId]: {
+        type: 'table',
+        hideHeader: true,
+        columns: [
+          { key: 'label', label: 'Label' },
+          { key: 'value', label: 'Value' },
+        ],
+        rows: [{ key: 'row1', label: 'Row 1' }],
+      },
+      [labelCell]: {
+        type: 'text',
+        label: 'Label',
+        displayStyle: { backgroundColor: '#e8eef5' },
+      },
+      [valueCell]: { type: 'text', label: 'Value' },
+    };
+    const table = buildPdfTable(localTableId, {
+      fieldSchemas,
+      blocks: [],
+      fieldValues: {
+        [labelCell]: 'Patient',
+        [valueCell]: 'Alice',
+      },
+      resolveFontName: (name: any) => name ?? 'Roboto',
+      fieldValueStyle: {},
+    }, fieldSchemas[localTableId].rows);
+
+    assert.ok(table);
+    assert.equal(table.table.body[0][0].fillColor, '#e8eef5');
+    assert.equal(table.table.body[0][1].fillColor, undefined);
+  });
+
+  it('applies text background for inline fields with backgroundColor', () => {
+    const content = renderSegmentsToPdfContent(
+      [
+        { type: 'text', content: 'Complaints: ' },
+        { type: 'field', id: 'complaints' },
+      ],
+      {
+        fieldSchemas: {
+          complaints: {
+            type: 'text',
+            label: 'Complaints',
+            displayStyle: { backgroundColor: '#e8eef5' },
+          },
+        },
+        fieldValues: { complaints: 'Vision disturbance' },
+        blocks: [],
+        resolveFontName: (name: any) => name ?? 'Roboto',
+        fieldValueStyle: {},
+        bodyPdfStyle: {},
+        defaultFont: 'Roboto',
+      },
+    );
+
+    assert.ok(content.length >= 1);
+    const row = content[0];
+    assert.ok(row.text, 'label + field stay in one prose paragraph');
+    assert.equal(row.columns, undefined, 'no fill-chip columns layout');
+    const parts = Array.isArray(row.text) ? row.text : [row.text];
+    const fieldPart = parts.find((p: any) =>
+      typeof p === 'object' && String(p?.text ?? '').includes('Vision disturbance'),
+    );
+    assert.ok(fieldPart);
+    assert.equal(fieldPart.background, '#e8eef5');
+    assert.equal(fieldPart.fillColor, undefined);
   });
 
   it('uses vision-table grid layout for pdf tables', () => {

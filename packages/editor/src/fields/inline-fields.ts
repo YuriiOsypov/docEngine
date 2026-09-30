@@ -38,6 +38,13 @@ import {
   clearFieldHighlightOverriddenStyles,
     resolveTokenDisplayStyle,
 } from './field-display-style.js';
+import { encodeBarcodeToDataUrl } from './barcode-encode.js';
+import {
+  renderPivotTableSegment,
+  readPivotValueFromDom,
+  wirePivotRowLabelResize,
+  refreshPivotTableInDom,
+} from './pivot-table-field.js';
 import {
   buildTableElement,
   buildPreviewTableElement,
@@ -47,6 +54,7 @@ import {
   addTableRowToWrapper,
   addTableRowsFromText,
   removeTableRowFromWrapper,
+  shouldShowTableRowActions,
 } from './table-field.js';
 import {
   schemaWidthToColCss,
@@ -607,6 +615,7 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
   token.textContent = '';
   token.classList.remove(
     'field-token--image',
+    'field-token--barcode',
     'field-token--logical',
     'field-token--logical-yes',
     'field-token--logical-no',
@@ -619,6 +628,7 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
   );
   token.style.removeProperty('--field-image-max-width');
   if (token.dataset) delete token.dataset.maxWidth;
+  if (token.dataset) delete token.dataset.barcodeError;
 
   if (def?.picker === 'computed') {
     token.classList.add('field-token--computed');
@@ -655,12 +665,55 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
     const maxW = Number(def.maxWidth) > 0 ? Number(def.maxWidth) : 320;
     token.style.setProperty('--field-image-max-width', `${maxW}px`);
     token.dataset.maxWidth = String(maxW);
+  } else if (schema?.type === 'barcode' || def?.picker === 'barcode') {
+    const maxW = Number(schema?.maxWidth ?? def?.maxWidth) > 0
+      ? Number(schema?.maxWidth ?? def?.maxWidth)
+      : 180;
+    token.style.setProperty('--field-image-max-width', `${maxW}px`);
+    token.dataset.maxWidth = String(maxW);
   } else if (def?.picker === 'logical' || schema?.type === 'logical') {
     token.classList.add('field-token--logical');
   }
 
   if (schema?.type === 'child') {
     /* rendered above */
+  } else if (schema?.type === 'barcode' || def?.picker === 'barcode') {
+    const maxW = Number(schema?.maxWidth ?? def?.maxWidth) > 0
+      ? Number(schema?.maxWidth ?? def?.maxWidth)
+      : 180;
+    const code = value == null || value === '' ? '' : String(value);
+    token.classList.add('field-token--barcode');
+    if (!code) {
+      if (showEmptyPlaceholder) token.textContent = label;
+    } else {
+      const encoded = encodeBarcodeToDataUrl(code, {
+        symbology: schema?.symbology ?? def?.symbology ?? 'code128',
+        maxWidth: maxW,
+        height: schema?.height ?? def?.height ?? 10,
+        displayValue: schema?.displayValue !== false && def?.displayValue !== false,
+        quietZone: schema?.quietZone !== false && def?.quietZone !== false,
+      });
+      if (encoded.dataUrl) {
+        token.classList.add('field-token--image');
+        const thumb = document.createElement('img');
+        thumb.className = 'field-token__thumb';
+        thumb.draggable = false;
+        thumb.src = encoded.dataUrl;
+        thumb.alt = code;
+        thumb.setAttribute('width', String(maxW));
+        thumb.style.maxWidth = `${maxW}px`;
+        thumb.style.width = `${maxW}px`;
+        thumb.style.height = 'auto';
+        token.appendChild(thumb);
+      } else {
+        token.dataset.barcodeError = encoded.error || 'Invalid barcode';
+        token.textContent = code;
+        const err = document.createElement('span');
+        err.className = 'field-token__barcode-error';
+        err.textContent = encoded.error || 'Invalid barcode';
+        token.appendChild(err);
+      }
+    }
   } else if (
     (def?.picker === 'image' || def?.picker === 'signature') &&
     !isImageValueEmpty(value)
@@ -1286,6 +1339,11 @@ function renderColumnsSegment(seg: any, fieldValues: any, options: any = {}) {
 function renderTableSegment(seg: any, fieldValues: any, options: any = {}) {
   const { designMode, previewMode } = options;
   const tableSchema = getTableSchema(seg.id, options);
+
+  if (tableSchema?.type === 'pivotTable') {
+    return renderPivotTableSegment(seg, fieldValues, options);
+  }
+
   const tableRows = resolveTableInstanceRows(seg.rows, tableSchema);
   const wrapper = document.createElement('div');
   wrapper.className = 'document-table';
@@ -1333,7 +1391,7 @@ function renderTableSegment(seg: any, fieldValues: any, options: any = {}) {
     if (!previewMode) pruneTableCellCaretAnchors(tableEl);
   }
 
-  if (!previewMode && !options.mappingMode && (designMode || !isSchemaReadonly(tableSchema))) {
+  if (!previewMode && !options.mappingMode && shouldShowTableRowActions(tableSchema, !!designMode)) {
     const actions = document.createElement('div');
     actions.className = 'document-table__row-actions';
     const addBtn = document.createElement('button');
@@ -1641,7 +1699,7 @@ export function createEmptyColumnsSegment(overrides: any = {}) {
 }
 
 export function applyColumnWidthsToElement(columnsEl: any, widths: any) {
-  const grid = columnsEl?.querySelector?.('.document-columns__grid');
+  const grid = columnsEl?.querySelector?.(':scope > .document-columns__grid');
   if (!grid) return;
   const withSplitter = !!grid.querySelector(':scope > .document-columns__col-resizer');
   grid.style.gridTemplateColumns = resolveColumnGridTracks(widths, { withSplitter });
@@ -1665,8 +1723,17 @@ function readColumnsSegmentMeta(columnsEl: any) {
   return meta;
 }
 
+function getDirectColumnEls(columnsEl: any) {
+  // Must not use descendant querySelectorAll — nested columns also use
+  // .document-columns__col and would steal the outer right column on save.
+  return [
+    ...(columnsEl?.querySelectorAll?.(':scope > .document-columns__grid > .document-columns__col') ??
+      []),
+  ];
+}
+
 function readColumnsSegmentFromDom(columnsEl: any) {
-  const cols = columnsEl.querySelectorAll('.document-columns__col');
+  const cols = getDirectColumnEls(columnsEl);
   return {
     type: 'columns',
     ...readColumnsSegmentMeta(columnsEl),
@@ -1954,6 +2021,11 @@ export function extractFieldValuesFromDom(container: any) {
       : readTokenValue(token);
     value = normalizeTableCellTokenValue(token, value, token.dataset.placeholder);
     values[token.dataset.fieldId] = value;
+  });
+  container.querySelectorAll('.document-table--pivot[data-pivot-field-id]').forEach((el: any) => {
+    const fieldId = el.dataset.pivotFieldId;
+    if (!fieldId) return;
+    values[fieldId] = readPivotValueFromDom(el);
   });
   return values;
 }
@@ -2532,15 +2604,25 @@ export function insertColumnsAtPoint(sectionBody: any, clientX: any, clientY: an
 
 export async function insertPaletteTableAtPoint(sectionBody: any, clientX: any, clientY: any, options: any = {}) {
   const registry = registryFrom(options);
-  const schema = createDefaultSchema('table', 'Table', 'Table');
+  const fieldType = options.fieldType === 'pivotTable' ? 'pivotTable' : 'table';
+  const defaultLabel = fieldType === 'pivotTable' ? 'Pivot Table' : 'Table';
+  const schema = createDefaultSchema(fieldType, defaultLabel, defaultLabel);
   const { fieldId, fieldName } = allocateFieldIdentity(sectionBody, registry, schema.name as string);
   schema.name = fieldName;
   registry?.updateFieldSchema(fieldId, schema);
-  const seedRows = [{ key: 'row1', label: '' }];
-  const merged = ensureCellSchemasForRows(schema, fieldId, registry?.getFieldSchemas() ?? {}, seedRows);
-  registry?.setFieldSchemas?.(merged);
 
-  const tableEl = renderTableSegment({ type: 'table', id: fieldId, rows: seedRows }, {}, options);
+  let seedRows: Array<{ key: string; label: string }> | undefined;
+  if (fieldType === 'table') {
+    seedRows = [{ key: 'row1', label: '' }];
+    const merged = ensureCellSchemasForRows(schema, fieldId, registry?.getFieldSchemas() ?? {}, seedRows);
+    registry?.setFieldSchemas?.(merged);
+  }
+
+  const tableEl = renderTableSegment(
+    { type: 'table', id: fieldId, rows: seedRows },
+    {},
+    options,
+  );
   placeNodeAtPoint(sectionBody, tableEl, clientX, clientY);
   wireTableRegions(sectionBody, options);
   sectionBody.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2582,15 +2664,25 @@ function wirePaletteDropGuard(element: any) {
 
 export function insertTableAtCaret(sectionBody: any, options: any = {}) {
   const registry = registryFrom(options);
-  const schema = createDefaultSchema('table', 'Table', 'Table');
+  const fieldType = options.fieldType === 'pivotTable' ? 'pivotTable' : 'table';
+  const defaultLabel = fieldType === 'pivotTable' ? 'Pivot Table' : 'Table';
+  const schema = createDefaultSchema(fieldType, defaultLabel, defaultLabel);
   const { fieldId, fieldName } = allocateFieldIdentity(sectionBody, registry, schema.name as string);
   schema.name = fieldName;
   registry?.updateFieldSchema(fieldId, schema);
-  const seedRows = [{ key: 'row1', label: '' }];
-  const merged = ensureCellSchemasForRows(schema, fieldId, registry?.getFieldSchemas() ?? {}, seedRows);
-  registry?.setFieldSchemas?.(merged);
 
-  const tableEl = renderTableSegment({ type: 'table', id: fieldId, rows: seedRows }, {}, options);
+  let seedRows: Array<{ key: string; label: string }> | undefined;
+  if (fieldType === 'table') {
+    seedRows = [{ key: 'row1', label: '' }];
+    const merged = ensureCellSchemasForRows(schema, fieldId, registry?.getFieldSchemas() ?? {}, seedRows);
+    registry?.setFieldSchemas?.(merged);
+  }
+
+  const tableEl = renderTableSegment(
+    { type: 'table', id: fieldId, rows: seedRows },
+    {},
+    options,
+  );
   insertBlockAtCaret(sectionBody, tableEl);
   return { fieldId, tableEl };
 }
@@ -3296,14 +3388,23 @@ export function wireTableRegions(container: any, options: any = {}) {
 
       const visionTable = tableEl.querySelector('.vision-table');
       if (visionTable) {
-        wireTableColumnResize(visionTable, {
-          tableId,
-          getRegistry: options.getRegistry,
-          onSchemaChange: options.onSchemaChange,
-          onTableColumnWidthsChange: options.onTableColumnWidthsChange,
-          onTableColumnWidthsPreview: options.onTableColumnWidthsPreview,
-          onTableColumnResizeStart: options.onTableColumnResizeStart,
-        });
+        if (tableEl.classList.contains('document-table--pivot') || visionTable.classList.contains('pivot-table')) {
+          wirePivotRowLabelResize(visionTable, {
+            tableId,
+            getRegistry: options.getRegistry,
+            onSchemaChange: options.onSchemaChange,
+            onTableColumnResizeStart: options.onTableColumnResizeStart,
+          });
+        } else {
+          wireTableColumnResize(visionTable, {
+            tableId,
+            getRegistry: options.getRegistry,
+            onSchemaChange: options.onSchemaChange,
+            onTableColumnWidthsChange: options.onTableColumnWidthsChange,
+            onTableColumnWidthsPreview: options.onTableColumnWidthsPreview,
+            onTableColumnResizeStart: options.onTableColumnResizeStart,
+          });
+        }
       }
     }
   });
@@ -3340,6 +3441,15 @@ export function refreshFieldSchemaInDom(fieldId: any, context: any, root: any = 
   const schema = registry?.getFieldSchemas()?.[fieldId];
   const label = schema?.label ?? fieldId;
   const scope = root?.querySelector ? root : document;
+
+  if (schema?.type === 'pivotTable') {
+    refreshPivotTableInDom(fieldId, {
+      ...context,
+      getRegistry: context?.getRegistry ?? (() => registry),
+      fieldSchemas: registry?.getFieldSchemas?.() ?? context?.fieldSchemas,
+      designMode: context?.designMode !== false,
+    }, scope);
+  }
 
   for (const wrapper of scope.querySelectorAll('.template-block')) {
     if (!wrapper.querySelector(`.field-token[data-field-id="${fieldId}"]`)) continue;

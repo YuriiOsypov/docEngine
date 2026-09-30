@@ -12,9 +12,16 @@ export type FieldType =
   | 'tree'
   | 'image'
   | 'signature'
+  | 'barcode'
   | 'table'
+  | 'pivotTable'
   | 'child'
   | 'computed';
+
+export type BarcodeSymbology = 'qr' | 'code128' | 'ean13' | 'code39';
+
+export type PivotAggregation = 'sum' | 'count' | 'avg' | 'min' | 'max' | 'first';
+export type PivotSort = 'asc' | 'desc' | 'none';
 
 export type TextAlign = 'left' | 'center' | 'right';
 
@@ -28,6 +35,7 @@ export type FieldValue =
   | string[]
   | boolean
   | ImageValue
+  | PivotTableValue
   | RepeaterValue
   | null
   | undefined;
@@ -53,6 +61,8 @@ export interface FieldDisplayStyle {
   fontWeight?: 'normal' | 'bold';
   fontStyle?: 'normal' | 'italic';
   color?: string;
+  /** Cell / field background fill (e.g. table column shading). */
+  backgroundColor?: string;
   textDecoration?: 'none' | 'underline' | 'line-through';
   textAlign?: TextAlign;
 }
@@ -214,6 +224,62 @@ export interface SignatureFieldSchema extends FieldSchemaBase {
   maxWidth?: number;
 }
 
+export interface BarcodeFieldSchema extends FieldSchemaBase {
+  type: 'barcode';
+  symbology?: BarcodeSymbology;
+  maxWidth?: number;
+  /** 1D bar height (bwip-js units); ignored for QR. */
+  height?: number;
+  /** Human-readable text under 1D bars. */
+  displayValue?: boolean;
+  quietZone?: boolean;
+}
+
+export interface PivotTableFieldSchema extends FieldSchemaBase {
+  type: 'pivotTable';
+  rowProperty?: string;
+  columnProperty?: string;
+  valueProperty?: string;
+  aggregation?: PivotAggregation;
+  showRowTotals?: boolean;
+  showColumnTotals?: boolean;
+  showGrandTotal?: boolean;
+  emptyCell?: string;
+  sortRows?: PivotSort;
+  sortColumns?: PivotSort;
+  /** Display format for aggregation / total cells (same as Number fields). */
+  displayFormat?: 'plain' | 'number' | 'currency';
+  /** ISO 4217 code when `displayFormat` is `currency`. Default: `EUR`. */
+  currencyCode?: string;
+  fractionDigits?: number;
+  /** Optional unit suffix for plain/number cells (e.g. `kg`). */
+  suffix?: string;
+  /** Horizontal alignment for aggregation value cells (not row labels). */
+  valueAlign?: TextAlign;
+  /** Width of the first (row-label) column, e.g. `8em` or `120px`. */
+  rowLabelWidth?: string;
+}
+
+export interface PivotColumnDef {
+  key: string;
+  label: string;
+}
+
+export interface PivotRowValue {
+  key: string;
+  label: string;
+  cells: Record<string, number | string | null>;
+  rowTotal?: number | string | null;
+}
+
+/** Structured value written by auto-pivot mapping. */
+export interface PivotTableValue {
+  columns: PivotColumnDef[];
+  rows: PivotRowValue[];
+  columnTotals?: Record<string, number | string | null>;
+  grandTotal?: number | string | null;
+}
+
 export interface TableColumnDef {
   key: string;
   label: string;
@@ -240,6 +306,11 @@ export interface TableFieldSchema extends FieldSchemaBase {
   hideBorders?: boolean;
   /** When true, show a leading column of row labels (e.g. OD / OS). */
   showRowLabels?: boolean;
+  /**
+   * When true, show Add row / Paste / Import controls while filling.
+   * Off by default — design mode still shows the panel for editing.
+   */
+  allowAddRows?: boolean;
 }
 
 export interface RepeaterInstanceDef {
@@ -293,7 +364,9 @@ export type FieldSchema =
   | TreeFieldSchema
   | ImageFieldSchema
   | SignatureFieldSchema
+  | BarcodeFieldSchema
   | TableFieldSchema
+  | PivotTableFieldSchema
   | RepeaterFieldSchema
   | ComputedFieldSchema;
 

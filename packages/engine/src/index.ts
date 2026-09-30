@@ -108,6 +108,18 @@ export {
 } from './core/field-io/table-field-io.js';
 
 export {
+  pivotExpand,
+  isPivotTableValue,
+  createEmptyPivotValue,
+  type PivotAggregation,
+  type PivotSort,
+  type PivotTableSchemaLike,
+  type PivotColumn,
+  type PivotRow,
+  type PivotTableValue,
+} from './core/pivot.js';
+
+export {
   buildSectionedDocumentFromValues,
   expandSectionedDocument,
   findRepeatableSectionBlock,

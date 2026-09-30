@@ -3,12 +3,13 @@ import {
   normalizeFieldDisplayStyle,
 } from '../fields/field-display-style.js';
 import { FORMAT_ICONS } from './format-icons.js';
-import { ACTION_ICONS } from './action-icons.js';
 import {
   createFontSizeSpinInput,
   readFontSizeSpinValue,
   setFontSizeSpinValue,
+  toColorPickerValue,
 } from '../design/style-toolbar-shared.js';
+import { readRecentFillColors, rememberFillColor } from './recent-fill-colors.js';
 
 const COMMANDS = [
   { command: 'bold', title: 'Bold' },
@@ -57,6 +58,7 @@ function createIconButton({ command, title: btnTitle }: any) {
 }
 
 const FONT_SUGGESTIONS = [
+  'Inter',
   'Tahoma',
   'Times New Roman',
   'Arial',
@@ -106,15 +108,31 @@ function setFontSelectValue(fontSelect: any,fontCustomInput: any,fontFamily: any
     fontCustomInput.hidden = true;
     fontCustomInput.disabled = true;
     fontCustomInput.value = '';
-  } else {
-    fontSelect.value = '__custom__';
-    fontCustomInput.hidden = false;
-    fontCustomInput.disabled = false;
-    fontCustomInput.value = fontFamily;
+    return;
   }
+
+  // Match stacks like `Inter, ui-sans-serif, …` to the primary family option
+  // (avoid the custom input looking like "Arial, sans-serif" when truncated).
+  const primary = String(fontFamily)
+    .split(',')[0]
+    .trim()
+    .replace(/^["']|["']$/g, '');
+  const knownPrimary = [...fontSelect.options].some((opt: any) => opt.value === primary);
+  if (knownPrimary) {
+    fontSelect.value = primary;
+    fontCustomInput.hidden = true;
+    fontCustomInput.disabled = true;
+    fontCustomInput.value = '';
+    return;
+  }
+
+  fontSelect.value = '__custom__';
+  fontCustomInput.hidden = false;
+  fontCustomInput.disabled = false;
+  fontCustomInput.value = fontFamily;
 }
 
-export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() => void) | null } = {}) {
+export function createRichTextToolbar(_options: { onPreview?: (() => void) | null } = {}) {
   const bar = document.createElement('div');
   bar.className = 'rich-text-toolbar';
 
@@ -126,24 +144,9 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
   let savedRange: any = null;
   let selectionListener: any = null;
   let fieldMode: any = null;
-  let previewHandler: (() => void) | null = onPreview ?? null;
   const buttons: any[] = [];
   const alignButtons: any[] = [];
   const commandButtons = new Map();
-
-  const btnPreview = document.createElement('button');
-  btnPreview.type = 'button';
-  btnPreview.className = 'btn btn-sm rich-text-toolbar__preview';
-  btnPreview.innerHTML = `${ACTION_ICONS.preview}<span>Preview</span>`;
-  btnPreview.title = 'Preview document';
-  btnPreview.setAttribute('aria-label', 'Preview document');
-  btnPreview.hidden = !previewHandler;
-  btnPreview.addEventListener('click', (e: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    previewHandler?.();
-  });
-  bar.appendChild(btnPreview);
 
   for (const item of COMMANDS) {
     const btn = createIconButton(item);
@@ -211,6 +214,125 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
   applyBtn.disabled = true;
   fontGroup.appendChild(applyBtn);
 
+  const bgColorControl = document.createElement('div');
+  bgColorControl.className = 'rich-text-toolbar__bg-color';
+  bgColorControl.title = 'Background color';
+
+  const bgColorToggle = document.createElement('button');
+  bgColorToggle.type = 'button';
+  bgColorToggle.className = 'rich-text-toolbar__bg-color-toggle';
+  bgColorToggle.setAttribute('aria-label', 'Background color');
+  bgColorToggle.setAttribute('aria-haspopup', 'true');
+  bgColorToggle.setAttribute('aria-expanded', 'false');
+  bgColorToggle.disabled = true;
+  bgColorToggle.innerHTML = `
+    <span class="rich-text-toolbar__bg-color-swatch" data-role="bg-color-swatch" aria-hidden="true"></span>
+    <span class="rich-text-toolbar__bg-color-label">Fill</span>
+    <span class="rich-text-toolbar__bg-color-chevron">${FORMAT_ICONS.chevronDown}</span>
+  `;
+  bgColorControl.appendChild(bgColorToggle);
+
+  const bgColorPanel = document.createElement('div');
+  bgColorPanel.className = 'rich-text-toolbar__bg-color-panel';
+  bgColorPanel.hidden = true;
+  bgColorPanel.innerHTML = `
+    <div class="rich-text-toolbar__bg-color-recent" data-role="bg-color-recent" hidden>
+      <div class="rich-text-toolbar__bg-color-recent-label">Recent</div>
+      <div class="rich-text-toolbar__bg-color-recent-list" data-role="bg-color-recent-list"></div>
+    </div>
+    <label class="rich-text-toolbar__bg-color-custom">
+      <span class="rich-text-toolbar__bg-color-custom-label">Custom</span>
+    </label>
+  `;
+  const bgColorInput = document.createElement('input');
+  bgColorInput.type = 'color';
+  bgColorInput.className = 'rich-text-toolbar__bg-color-input';
+  bgColorInput.setAttribute('aria-label', 'Custom background color');
+  bgColorInput.value = '#ffffff';
+  bgColorInput.disabled = true;
+  bgColorPanel.querySelector('.rich-text-toolbar__bg-color-custom')?.appendChild(bgColorInput);
+  // Panel is portaled to document.body so toolbar overflow does not clip it.
+  document.body.appendChild(bgColorPanel);
+  fontGroup.appendChild(bgColorControl);
+  const bgColorSwatch = bgColorToggle.querySelector('[data-role="bg-color-swatch"]') as HTMLElement | null;
+  const bgColorRecentWrap = bgColorPanel.querySelector('[data-role="bg-color-recent"]') as HTMLElement | null;
+  const bgColorRecentList = bgColorPanel.querySelector('[data-role="bg-color-recent-list"]') as HTMLElement | null;
+
+  function closeBgColorPanel() {
+    bgColorPanel.hidden = true;
+    bgColorToggle.setAttribute('aria-expanded', 'false');
+    bgColorPanel.style.top = '';
+    bgColorPanel.style.left = '';
+    bgColorPanel.style.right = '';
+    bgColorPanel.style.bottom = '';
+  }
+
+  function renderRecentFillSwatches() {
+    if (!bgColorRecentList || !bgColorRecentWrap) return;
+    const recent = readRecentFillColors();
+    bgColorRecentList.innerHTML = '';
+    if (!recent.length) {
+      bgColorRecentWrap.hidden = true;
+      return;
+    }
+    bgColorRecentWrap.hidden = false;
+    for (const hex of recent) {
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.className = 'rich-text-toolbar__bg-color-recent-swatch';
+      swatch.title = hex;
+      swatch.setAttribute('aria-label', `Use background ${hex}`);
+      swatch.style.backgroundColor = hex;
+      swatch.dataset.color = hex;
+      bgColorRecentList.appendChild(swatch);
+    }
+  }
+
+  function positionBgColorPanel() {
+    const rect = bgColorToggle.getBoundingClientRect();
+    const gap = 4;
+    const panelWidth = Math.max(bgColorPanel.offsetWidth || 168, 168);
+    const panelHeight = bgColorPanel.offsetHeight || 120;
+    const viewportPad = 8;
+
+    let left = rect.left;
+    if (left + panelWidth > window.innerWidth - viewportPad) {
+      left = Math.max(viewportPad, rect.right - panelWidth);
+    }
+    left = Math.max(viewportPad, left);
+
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const openBelow = spaceBelow >= panelHeight || spaceBelow >= spaceAbove;
+    let top = openBelow ? rect.bottom + gap : rect.top - panelHeight - gap;
+    top = Math.max(viewportPad, Math.min(top, window.innerHeight - panelHeight - viewportPad));
+
+    bgColorPanel.style.top = `${Math.round(top)}px`;
+    bgColorPanel.style.left = `${Math.round(left)}px`;
+    bgColorPanel.style.right = 'auto';
+    bgColorPanel.style.bottom = 'auto';
+  }
+
+  function openBgColorPanel() {
+    if (bgColorToggle.disabled) return;
+    renderRecentFillSwatches();
+    bgColorPanel.hidden = false;
+    bgColorToggle.setAttribute('aria-expanded', 'true');
+    positionBgColorPanel();
+  }
+
+  function applyBackgroundColor(hex: any, { remember = true }: { remember?: boolean } = {}) {
+    if (!fieldMode || bgColorToggle.disabled) return;
+    const pickerValue = toColorPickerValue(hex);
+    const override = normalizeFieldDisplayStyle(fieldMode.getOverrideStyle?.() ?? {});
+    override.backgroundColor = pickerValue;
+    bgColorInput.value = pickerValue;
+    if (bgColorSwatch) bgColorSwatch.style.backgroundColor = pickerValue;
+    if (remember) rememberFillColor(pickerValue);
+    fieldMode.onStyleChange?.(normalizeFieldDisplayStyle(override));
+    refreshFieldModeControls();
+  }
+
   bar.appendChild(fontGroup);
   bar.appendChild(hint);
 
@@ -247,6 +369,9 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
 
     setFontSelectValue(fontSelect, fontCustomInput, resolved.fontFamily ?? '');
     setFontSizeSpinValue(sizeInput, resolved.fontSize ?? '');
+    const pickerValue = toColorPickerValue(resolved.backgroundColor ?? '#ffffff');
+    bgColorInput.value = pickerValue;
+    if (bgColorSwatch) bgColorSwatch.style.backgroundColor = pickerValue;
   }
 
   function setAlignControlsVisible(visible: any,enabled: any = true) {
@@ -262,6 +387,10 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
     fontSelect.disabled = !enabled;
     sizeInput.disabled = !enabled;
     applyBtn.disabled = !enabled;
+    bgColorInput.disabled = true;
+    bgColorToggle.disabled = true;
+    bgColorControl.classList.add('rich-text-toolbar__bg-color--disabled');
+    closeBgColorPanel();
     if (!enabled) {
       fontCustomInput.disabled = true;
       fontCustomInput.hidden = true;
@@ -286,7 +415,11 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
     fontSelect.disabled = !enabled;
     sizeInput.disabled = !enabled;
     applyBtn.disabled = !enabled;
+    bgColorInput.disabled = !enabled;
+    bgColorToggle.disabled = !enabled;
+    bgColorControl.classList.toggle('rich-text-toolbar__bg-color--disabled', !enabled);
     if (!enabled) {
+      closeBgColorPanel();
       fontCustomInput.disabled = true;
       fontCustomInput.hidden = true;
       fontSelect.value = '';
@@ -416,8 +549,6 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
   }
 
   bar.addEventListener('mousedown', (e: any) => {
-    // Don't suppress Preview — preventDefault on mousedown can block its click under LWS.
-    if (e.target.closest('.rich-text-toolbar__preview')) return;
     if (e.target.closest('input, select')) {
       refreshSavedRange();
       return;
@@ -450,6 +581,53 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
   applyBtn.addEventListener('click', (e: any) => {
     e.preventDefault();
     applyFontAndSizeFromControls();
+  });
+
+  bgColorToggle.addEventListener('click', (e: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (bgColorToggle.disabled) return;
+    if (bgColorPanel.hidden) openBgColorPanel();
+    else closeBgColorPanel();
+  });
+
+  bgColorRecentList?.addEventListener('click', (e: any) => {
+    const swatch = e.target?.closest?.('[data-color]');
+    if (!swatch || !bgColorRecentList.contains(swatch)) return;
+    e.preventDefault();
+    applyBackgroundColor(swatch.dataset.color);
+    closeBgColorPanel();
+  });
+
+  bgColorInput.addEventListener('input', () => {
+    if (!fieldMode || bgColorInput.disabled) return;
+    applyBackgroundColor(bgColorInput.value, { remember: false });
+  });
+
+  bgColorInput.addEventListener('change', () => {
+    if (!fieldMode || bgColorInput.disabled) return;
+    applyBackgroundColor(bgColorInput.value, { remember: true });
+    closeBgColorPanel();
+  });
+
+  document.addEventListener('pointerdown', (e: any) => {
+    if (bgColorPanel.hidden) return;
+    if (bgColorControl.contains(e.target) || bgColorPanel.contains(e.target)) return;
+    closeBgColorPanel();
+  });
+
+  window.addEventListener('resize', () => {
+    if (!bgColorPanel.hidden) positionBgColorPanel();
+  });
+
+  window.addEventListener('scroll', () => {
+    if (!bgColorPanel.hidden) positionBgColorPanel();
+  }, true);
+
+  document.addEventListener('keydown', (e: any) => {
+    if (e.key === 'Escape' && !bgColorPanel.hidden) {
+      closeBgColorPanel();
+    }
   });
 
   fontSelect.addEventListener('change', () => {
@@ -531,6 +709,7 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
     setTextControlsEnabled(false);
     setAlignControlsVisible(false);
     detachSelectionListener();
+    closeBgColorPanel();
     bar.classList.add('rich-text-toolbar--inactive');
   }
 
@@ -546,16 +725,6 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
     return !!fieldMode;
   }
 
-  function setOnPreview(handler: (() => void) | null) {
-    previewHandler = handler;
-    btnPreview.hidden = !handler;
-  }
-
-  function setPreviewBusy(busy: any) {
-    btnPreview.disabled = !!busy;
-    btnPreview.title = busy ? 'Generating preview…' : 'Preview document';
-  }
-
   clearActive();
 
   return {
@@ -567,7 +736,5 @@ export function createRichTextToolbar({ onPreview = null }: { onPreview?: (() =>
     clearFieldMode,
     attach,
     isFieldModeActive,
-    setOnPreview,
-    setPreviewBusy,
   };
 }
