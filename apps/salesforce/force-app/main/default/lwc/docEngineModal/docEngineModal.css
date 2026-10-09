@@ -20,6 +20,7 @@
 }
 
 .doc-shell--preview-only .fill-chrome,
+.doc-shell--preview-only .scenario-toggle,
 .doc-shell--preview-only .scenario-row,
 .doc-shell--preview-only .editor-root {
   position: absolute;
@@ -72,9 +73,22 @@
   min-height: 4rem;
 }
 
-/* Format panel — pinned above the document */
+/* Format panel / Preview — pinned above the document; scenario toggle shares the row */
 .chrome-row {
   flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding-bottom: 0.25rem;
+}
+
+.chrome-row__editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .doc-actions {
@@ -85,7 +99,8 @@
 
 .scenario-toggle {
   flex: 0 0 auto;
-  padding: 0.15rem 0 0.25rem;
+  padding: 0;
+  margin: 0;
 }
 
 .scenario-toggle lightning-input {
@@ -104,6 +119,41 @@
 .scenario-combobox {
   flex: 1 1 12rem;
   min-width: 10rem;
+}
+
+/*
+ * SLDS resets ul/ol to list-style: none. Restore markers for fill + preview
+ * (rich-text HTML field values and section lists).
+ */
+.doc-shell .document-section__body ul,
+.doc-shell .preview-document ul,
+.doc-shell .field-token--html ul,
+.doc-shell .html-text-modal__editor ul {
+  list-style: disc outside !important;
+  padding-left: 1.5em !important;
+  margin: 0.25em 0;
+}
+
+.doc-shell .document-section__body ol,
+.doc-shell .preview-document ol,
+.doc-shell .field-token--html ol,
+.doc-shell .html-text-modal__editor ol {
+  list-style: decimal outside !important;
+  padding-left: 1.5em !important;
+  margin: 0.25em 0;
+}
+
+/* Full-width HTML values so center/right align against the page, not shrink-wrap. */
+.doc-shell .field-token--html:has(div, ul, ol, h1, h2, h3, p, br) {
+  display: block !important;
+  width: 100% !important;
+  white-space: normal !important;
+}
+
+.doc-shell .field-token--html .document-align,
+.doc-shell .field-token--html div[style*='text-align'] {
+  display: block !important;
+  width: 100% !important;
 }
 
 /* Document body — sole vertical scroller */

@@ -1,186 +1,279 @@
 <template>
-  <lightning-card title="Document template builder" icon-name="standard:draft">
-    <div class="builder-body">
-      <div class="meta-grid">
-        <lightning-input
-          label="Template name"
-          value={templateName}
-          onchange={handleNameChange}
-          required
-          class="meta-field--name"
-        ></lightning-input>
-        <lightning-input
-          label="Description"
-          value={description}
-          onchange={handleDescriptionChange}
-          class="meta-field--desc"
-        ></lightning-input>
-        <lightning-input
-          label="Object API name"
-          value={objectApiName}
-          onchange={handleObjectApiNameChange}
-          placeholder="Account"
-          required
-          disabled={objectApiNameLocked}
-          class="meta-field--object"
-        ></lightning-input>
-        <lightning-input
-          type="toggle"
-          label="Active"
-          checked={isActive}
-          onchange={handleActiveChange}
-          class="meta-field--toggle"
-        ></lightning-input>
-        <lightning-combobox
-          label="Access Public Group"
-          value={accessGroupId}
-          options={accessGroupOptions}
-          onchange={handleAccessGroupIdChange}
-          placeholder="None — all users with access"
-          field-level-help="Optional. Restrict fill access to members of this Public Group."
-          dropdown-alignment="auto"
-          class="meta-field--group"
-        ></lightning-combobox>
-        <lightning-combobox
-          label="Output format"
-          value={outputFormat}
-          options={outputFormatOptions}
-          onchange={handleOutputFormatChange}
-          field-level-help="Finish attaches a PDF or HTML file for documents from this template."
-          dropdown-alignment="auto"
-          class="meta-field--picklist"
-        ></lightning-combobox>
-        <lightning-input
-          type="toggle"
-          label="Hide empty fields"
-          checked={hideEmpty}
-          onchange={handleHideEmptyChange}
-          field-level-help="When on, preview and export omit empty field values."
-          class="meta-field--toggle-wide"
-        ></lightning-input>
-        <lightning-combobox
-          label="Template version"
-          value={versionId}
-          options={versionOptions}
-          onchange={handleVersionChange}
-          placeholder="Current version"
-          disabled={versionPickerDisabled}
-          field-level-help={versionPickerHelp}
-          dropdown-alignment="auto"
-          class="meta-field--version"
-        ></lightning-combobox>
-      </div>
+  <div class="builder-body">
+      <div class={metaPanelClass}>
+        <!-- Always-visible summary: collapse toggle + title (when collapsed) + Preview/Save -->
+        <div class="de-meta-summary">
+          <button
+            type="button"
+            class="de-meta-collapse-btn"
+            onclick={handleToggleMetaPanel}
+            aria-expanded={metaPanelAriaExpanded}
+            title={metaPanelToggleTitle}
+          >
+            <svg
+              class="de-meta-collapse-btn__icon"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2.5"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-      <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-m-bottom_small toolbar-row">
-        <div class="slds-text-body_small slds-text-color_weak">{modeHint}</div>
+          <button
+            type="button"
+            class="de-meta-summary__title"
+            onclick={handleToggleMetaPanel}
+            title={metaPanelToggleTitle}
+          >
+            {metaPanelTitle}
+          </button>
 
-        <div class="toolbar-actions">
-          <lightning-input
-            type="toggle"
-            label="Filling mode"
-            checked={fillingMode}
-            onchange={handleFillingModeChange}
-            class="filling-toggle"
-            disabled={editorBusy}
-          ></lightning-input>
+          <div class="de-meta-summary__actions">
+            <label class="de-meta-switch" title={modeHint}>
+              <input
+                type="checkbox"
+                class="de-meta-toggle-input"
+                data-meta="filling-mode"
+                checked={fillingMode}
+                onchange={handleFillingModeChange}
+                disabled={editorBusy}
+              />
+              <span class="de-meta-toggle" aria-hidden="true"></span>
+              <span class="de-meta-switch__label">Filling mode</span>
+            </label>
 
-          <div class="io-group" title="Full document JSON (structure + values)">
-            <span class="io-group__label">Full document</span>
-            <lightning-button-icon
-              icon-name="utility:download"
-              alternative-text="Export full document"
-              title="Export full document"
-              onclick={handleExportFullDocument}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <lightning-button-icon
-              icon-name="utility:upload"
-              alternative-text="Import full document"
-              title="Import full document"
-              onclick={handleImportFullDocumentClick}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <input
-              type="file"
-              class="file-input"
-              accept="application/json,.json"
-              data-import="full"
-              onchange={handleImportFile}
-            />
-          </div>
-
-          <div class="io-group" title="Template JSON (layout + schemas)">
-            <span class="io-group__label">Template</span>
-            <lightning-button-icon
-              icon-name="utility:download"
-              alternative-text="Export template"
-              title="Export template"
-              onclick={handleExportTemplate}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <lightning-button-icon
-              icon-name="utility:upload"
-              alternative-text="Import template"
-              title="Import template"
-              onclick={handleImportTemplateClick}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <input
-              type="file"
-              class="file-input"
-              accept="application/json,.json"
-              data-import="template"
-              onchange={handleImportFile}
-            />
-          </div>
-
-          <div class="io-group" title="Field values JSON only">
-            <span class="io-group__label">Values</span>
-            <lightning-button-icon
-              icon-name="utility:download"
-              alternative-text="Export values"
-              title="Export values (all fields)"
-              onclick={handleExportValues}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <lightning-button-icon
-              icon-name="utility:filter"
-              alternative-text="Export scenario values"
-              title="Export scenario values (excludes mapped fields)"
-              onclick={handleExportScenarioValues}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <lightning-button-icon
-              icon-name="utility:upload"
-              alternative-text="Import values"
-              title="Import values (mapped fields ignored)"
-              onclick={handleImportValuesClick}
-              disabled={editorBusy}
-            ></lightning-button-icon>
-            <input
-              type="file"
-              class="file-input"
-              accept="application/json,.json"
-              data-import="values"
-              onchange={handleImportFile}
-            />
-          </div>
-
-          <lightning-button-group>
-            <lightning-button
-              label="Field mapping"
-              onclick={handleFieldMapping}
-              disabled={editorBusy}
-            ></lightning-button>
-            <lightning-button
-              label="Save template"
-              variant="brand"
+            <div lwc:dom="manual" class="doc-editor-host__actions doc-actions"></div>
+            <button
+              type="button"
+              class="de-btn-cobalt"
               onclick={handleSave}
               disabled={editorBusy}
-            ></lightning-button>
-          </lightning-button-group>
+              title="Save template to Salesforce"
+            >
+              <svg class="de-btn-icon de-btn-icon--on-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              Save Template
+            </button>
+          </div>
+        </div>
 
-          <div lwc:dom="manual" class="doc-editor-host__actions doc-actions"></div>
+        <!-- Collapsible details -->
+        <div class="de-meta-details">
+          <!-- Top row: template identity -->
+          <div class="de-meta-row de-meta-row--identity">
+            <div class="de-meta-field">
+              <label class="de-meta-label" for="de-meta-name">Template Name *</label>
+              <input
+                id="de-meta-name"
+                type="text"
+                class="de-meta-input"
+                value={templateName}
+                onchange={handleNameChange}
+                placeholder="e.g. ophthalmology-template"
+                required
+              />
+            </div>
+            <div class="de-meta-field">
+              <label class="de-meta-label" for="de-meta-desc">Description</label>
+              <input
+                id="de-meta-desc"
+                type="text"
+                class="de-meta-input"
+                value={description}
+                onchange={handleDescriptionChange}
+                placeholder="Optional layout description..."
+              />
+            </div>
+            <div class="de-meta-field">
+              <label class="de-meta-label" for="de-meta-object">Object API Name</label>
+              <input
+                id="de-meta-object"
+                type="text"
+                class="de-meta-input"
+                value={objectApiName}
+                onchange={handleObjectApiNameChange}
+                placeholder="Account"
+                data-meta="object-api"
+                required
+              />
+            </div>
+            <div class="de-meta-field">
+              <label class="de-meta-label" for="de-meta-group">Access Public Group</label>
+              <select
+                id="de-meta-group"
+                class="de-meta-select"
+                onchange={handleAccessGroupIdChange}
+                title="Optional. Restrict fill access to members of this Public Group."
+              >
+                <template for:each={accessGroupSelectOptions} for:item="opt">
+                  <option key={opt.key} value={opt.value}>{opt.label}</option>
+                </template>
+              </select>
+            </div>
+          </div>
+
+          <!-- Bottom row: output, toggles, version | export group -->
+          <div class="de-meta-row de-meta-row--controls">
+            <div class="de-meta-controls">
+              <label
+                class="de-meta-switch"
+                title="When on, Finish attaches a PDF or HTML file to the document and source record."
+              >
+                <input
+                  type="checkbox"
+                  class="de-meta-toggle-input"
+                  data-meta="attach-file"
+                  onchange={handleAttachFileChange}
+                />
+                <span class="de-meta-toggle" aria-hidden="true"></span>
+                <span class="de-meta-switch__label">Attach file</span>
+              </label>
+
+              <div class="de-meta-inline">
+                <span class="de-meta-label de-meta-label--inline">Output Format:</span>
+                <select
+                  class="de-meta-select de-meta-select-sm"
+                  onchange={handleOutputFormatChange}
+                  title={outputFormatHelp}
+                  data-meta="output-format"
+                  disabled={outputFormatDisabled}
+                >
+                  <template for:each={outputFormatSelectOptions} for:item="opt">
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  </template>
+                </select>
+              </div>
+
+              <label class="de-meta-switch">
+                <input
+                  type="checkbox"
+                  class="de-meta-toggle-input"
+                  data-meta="active"
+                  onchange={handleActiveChange}
+                />
+                <span class="de-meta-toggle" aria-hidden="true"></span>
+                <span class="de-meta-switch__label">Active</span>
+              </label>
+
+              <label class="de-meta-switch" title="When on, preview and export omit empty field values.">
+                <input
+                  type="checkbox"
+                  class="de-meta-toggle-input"
+                  data-meta="hide-empty"
+                  onchange={handleHideEmptyChange}
+                />
+                <span class="de-meta-toggle" aria-hidden="true"></span>
+                <span class="de-meta-switch__label">Hide empty fields</span>
+              </label>
+
+              <div class="de-meta-version">
+                <svg
+                  class="de-meta-version__icon"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span class="de-meta-version__prefix">Version:</span>
+                <select
+                  class="de-meta-select de-meta-select-sm de-meta-version__select"
+                  onchange={handleVersionChange}
+                  title={versionPickerHelp}
+                  data-meta="version"
+                >
+                  <template for:each={versionSelectOptions} for:item="opt">
+                    <option key={opt.key} value={opt.value}>{opt.label}</option>
+                  </template>
+                </select>
+              </div>
+            </div>
+
+            <div class="de-meta-actions">
+              <div class="de-btn-group" role="group" aria-label="Export and mapping">
+                <button
+                  type="button"
+                  class="de-group-btn de-group-btn--first"
+                  onclick={handleExportTemplate}
+                  disabled={editorBusy}
+                  title="Export template JSON (layout + schemas)"
+                >
+                  <svg class="de-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Template
+                </button>
+                <button
+                  type="button"
+                  class="de-group-btn"
+                  onclick={handleExportValues}
+                  disabled={editorBusy}
+                  title="Export field values JSON"
+                >
+                  <svg class="de-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Values
+                </button>
+                <button
+                  type="button"
+                  class="de-group-btn"
+                  onclick={handleExportFullDocument}
+                  disabled={editorBusy}
+                  title="Export full document JSON (structure + values)"
+                >
+                  <svg class="de-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Full document
+                </button>
+                <button
+                  type="button"
+                  class="de-group-btn de-group-btn--last"
+                  onclick={handleFieldMapping}
+                  disabled={editorBusy}
+                  title="Map template fields to Salesforce object fields"
+                >
+                  <svg class="de-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  Field Mapping
+                </button>
+              </div>
+
+              <div class="de-meta-actions__divider" aria-hidden="true"></div>
+
+              <button
+                type="button"
+                class="de-group-btn de-group-btn--solo"
+                onclick={handleImportClick}
+                disabled={editorBusy}
+                title="Import JSON — auto-detects document, template, or values"
+              >
+                <svg class="de-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Import
+              </button>
+              <input
+                type="file"
+                class="file-input"
+                accept="application/json,.json"
+                data-import="auto"
+                onchange={handleImportFile}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -189,6 +282,5 @@
         lwc:dom="manual"
         class="doc-editor-root doc-editor-host doc-editor-host__surface editor-root"
       ></div>
-    </div>
-  </lightning-card>
+  </div>
 </template>

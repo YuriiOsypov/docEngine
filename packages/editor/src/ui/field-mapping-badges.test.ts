@@ -36,6 +36,32 @@ describe('field-mapping-badges', () => {
     );
   });
 
+  it('shows _source badge on section header', () => {
+    const holder = document.createElement('div');
+    holder.innerHTML = `
+      <div class="document-section" data-section-name="main">
+        <div class="document-section__header">
+          <span class="document-section__label-text">main</span>
+        </div>
+      </div>
+    `;
+    applyMappingBadges(holder, [
+      {
+        section: 'main',
+        field: '_source',
+        sourcePath: '$payload.Contacts',
+        sourceArrayPath: '$payload.Contacts',
+      },
+    ]);
+    const header = holder.querySelector('.document-section__header');
+    assert.ok(header?.classList.contains('document-section__header--sourced'));
+    assert.equal(header?.dataset.sectionSource, '$payload.Contacts');
+    assert.match(
+      header?.querySelector('.document-section__source-badge')?.textContent ?? '',
+      /_source:\s*Contacts/,
+    );
+  });
+
   it('findRuleForMappedToken resolves simple and column rules', () => {
     const holder = document.createElement('div');
     holder.innerHTML = `

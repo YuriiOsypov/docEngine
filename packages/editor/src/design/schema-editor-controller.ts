@@ -705,10 +705,17 @@ export function createSchemaEditorController({
     const form = document.createElement('div');
     form.className = 'schema-form';
 
-    const typeOptions = getFieldTypes().map(
-      ({ type, label }: any) =>
-        `<option value="${type}"${type === schema.type ? ' selected' : ''}>${label}</option>`
-    ).join('');
+    const lockedFieldTypes = new Set(['table', 'pivotTable', 'child']);
+    const typeLocked = lockedFieldTypes.has(schema.type);
+    const typeOptions = getFieldTypes()
+      .filter(({ type }: any) =>
+        typeLocked ? type === schema.type : !lockedFieldTypes.has(type)
+      )
+      .map(
+        ({ type, label }: any) =>
+          `<option value="${type}"${type === schema.type ? ' selected' : ''}>${label}</option>`
+      )
+      .join('');
 
     const nameFields = editingCellField
       ? ''
@@ -737,7 +744,7 @@ export function createSchemaEditorController({
       <p class="schema-form__hint" data-role="id-error" hidden></p>
       <label class="schema-form__row">
         <span>Field type</span>
-        <select data-field="type">${typeOptions}</select>
+        <select data-field="type"${typeLocked ? ' disabled' : ''}>${typeOptions}</select>
       </label>
       ${schema.type === 'pivotTable' ? '' : `
       <label class="schema-form__row schema-form__row--checkbox">
@@ -1022,6 +1029,25 @@ export function createSchemaEditorController({
     return true;
   }
 
+  function syncTableColumns(columns: any) {
+    if (currentSchema?.type !== 'table') return false;
+    if (!Array.isArray(columns)) return false;
+    currentSchema = { ...currentSchema, columns };
+    const labelsInput = body.querySelector('[data-field="columns"]');
+    const namesInput = body.querySelector('[data-field="columnNames"]');
+    const widthsInput = body.querySelector('[data-field="columnWidths"]');
+    if (labelsInput) {
+      labelsInput.value = columns.map((col: any) => col.label ?? '').join(', ');
+    }
+    if (namesInput) {
+      namesInput.value = columns.map((col: any) => col.name ?? col.label ?? '').join(', ');
+    }
+    if (widthsInput) {
+      widthsInput.value = columns.map((col: any) => col.width ?? '').join(', ');
+    }
+    return true;
+  }
+
   function isLoaded() {
     return Boolean(currentFieldId && currentSchema);
   }
@@ -1085,7 +1111,7 @@ export function createSchemaEditorController({
   }
   void _validateFieldIdInput;
 
-  return { load, trySave, clear, getCurrentFieldId, isLoaded, syncTableColumnWidths, applyColumnWidthsInput, applyColumnWidthsInputFromDom };
+  return { load, trySave, clear, getCurrentFieldId, isLoaded, syncTableColumnWidths, syncTableColumns, applyColumnWidthsInput, applyColumnWidthsInputFromDom };
 }
 
 function escapeAttr(str: any) {

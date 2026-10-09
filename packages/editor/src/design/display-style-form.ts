@@ -29,9 +29,9 @@ function effectiveDisplayStyle(overrides: any) {
 }
 
 /**
- * @param {{ legend: string, prefix?: string, previewText?: string }} options
+ * @param {{ legend: string }} options
  */
-export function createDisplayStyleForm({ legend, previewText = 'Sample text' }: any) {
+export function createDisplayStyleForm({ legend }: any) {
   /** @type {import('../types.js').FieldDisplayStyle} */
   let currentStyle: any = {};
 
@@ -125,12 +125,6 @@ export function createDisplayStyleForm({ legend, previewText = 'Sample text' }: 
 
   const colorSwatch = colorControl.querySelector('[data-role="color-swatch"]') as HTMLElement | null;
 
-  const preview = document.createElement('div');
-  preview.className = 'display-style-form__preview';
-  preview.textContent = previewText;
-  preview.setAttribute('aria-hidden', 'true');
-  root.appendChild(preview);
-
   function syncColorFromStyle(resolved: any) {
     const color = resolved.color ?? DEFAULT_DOCUMENT_BODY_STYLE.color ?? '#000000';
     const pickerValue = toColorPickerValue(color);
@@ -144,22 +138,14 @@ export function createDisplayStyleForm({ legend, previewText = 'Sample text' }: 
     syncColorFromStyle(resolved);
   }
 
-  function refreshPreview() {
-    const resolved = effectiveDisplayStyle(currentStyle);
-    preview.style.fontFamily = resolved.fontFamily ?? '';
-    preview.style.fontSize = resolved.fontSize ?? '';
-    // Explicit normal/none so design-shell inherited textStyle cannot keep bold/italic on.
-    preview.style.fontWeight = resolved.fontWeight ?? 'normal';
-    preview.style.fontStyle = resolved.fontStyle ?? 'normal';
-    preview.style.color = resolved.color ?? '';
-    preview.style.textDecoration = resolved.textDecoration ?? 'none';
-    refreshStyleCommandButtons(resolved, commandButtons);
+  function refreshToolbarState() {
+    refreshStyleCommandButtons(effectiveDisplayStyle(currentStyle), commandButtons);
   }
 
   function applyStyle(style: any) {
     currentStyle = compactPageSetupStyle(normalizeFieldDisplayStyle(style)) ?? {};
     syncControlsFromStyle(effectiveDisplayStyle(currentStyle));
-    refreshPreview();
+    refreshToolbarState();
   }
 
   function commitFromFontControls() {
@@ -179,7 +165,7 @@ export function createDisplayStyleForm({ legend, previewText = 'Sample text' }: 
     else delete next.fontSize;
 
     currentStyle = compactPageSetupStyle(normalizeFieldDisplayStyle(next)) ?? {};
-    refreshPreview();
+    refreshToolbarState();
   }
 
   fontSelect.addEventListener('change', () => {

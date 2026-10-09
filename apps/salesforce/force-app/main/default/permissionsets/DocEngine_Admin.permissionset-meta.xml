@@ -100,6 +100,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocEngine_Template__c.Attach_File__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocEngine_Template__c.Access_Group_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>

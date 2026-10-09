@@ -150,6 +150,32 @@ export function applyDocumentBodyTextStyle(
   }
 }
 
+/**
+ * Set document typography CSS variables on the template canvas host only.
+ * UI chrome must keep using `--me-font-family`, not these vars.
+ */
+export function applyDocumentTextStyleCssVars(
+  element: HTMLElement | null | undefined,
+  style: FieldDisplayStyle | null | undefined,
+): void {
+  if (!element) return;
+  const resolved = resolvePageSetupTextStyle({ textStyle: style ?? undefined });
+  const setOrClear = (name: string, value: string | undefined) => {
+    if (value != null && value !== '') {
+      element.style.setProperty(name, value);
+    } else {
+      element.style.removeProperty(name);
+    }
+  };
+  setOrClear('--me-document-font-family', resolved.fontFamily);
+  setOrClear('--me-document-font-size', resolved.fontSize);
+  const weight = resolved.fontWeight;
+  setOrClear(
+    '--me-document-font-weight',
+    weight === 'bold' ? '700' : weight,
+  );
+}
+
 export function compactPageSetupStyle(
   style: FieldDisplayStyle | null | undefined,
 ): FieldDisplayStyle | undefined {

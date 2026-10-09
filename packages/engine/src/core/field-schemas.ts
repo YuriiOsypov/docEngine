@@ -139,26 +139,75 @@ function renameCellKeyInMap( map: any, oldId: any, newId: any) {
   delete map[oldId];
 }
 
+/**
+ * Clear cell values that only echoed the previous column label/name.
+ * Those are design-mode placeholders; after a rename they must not stick as
+ * real values (e.g. "Column 1" under a column now named "name").
+ */
+function clearStaleColumnPlaceholderValue(map: any, cellId: any, oldPlaceholders: any) {
+  if (!map || !Object.prototype.hasOwnProperty.call(map, cellId)) return;
+  const value = map[cellId];
+  if (typeof value !== 'string') return;
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  for (const placeholder of oldPlaceholders ?? []) {
+    if (placeholder && trimmed === placeholder) {
+      map[cellId] = '';
+      return;
+    }
+  }
+}
+
+function columnPlaceholderStrings(col: any) {
+  const labels = [
+    String(col?.label ?? '').trim(),
+    String(col?.name ?? '').trim(),
+  ];
+  return [...new Set(labels.filter(Boolean))];
+}
+
 /** Rename cell schemas and values when table column keys change. */
 export function syncTableColumnKeyChanges( tableFieldId: any, oldColumns: any, newColumns: any, fieldSchemas: any, blocks: any) {
   const keyRenames = [];
   const nameRenames = [];
+  const labelUpdates = [];
   const maxLen = Math.max(oldColumns?.length ?? 0, newColumns?.length ?? 0);
 
   for (let i = 0; i < maxLen; i += 1) {
     const oldCol = oldColumns?.[i];
     const newCol = newColumns?.[i];
     if (oldCol?.key && newCol?.key && oldCol.key !== newCol.key) {
-      keyRenames.push({ oldKey: oldCol.key, newKey: newCol.key, label: newCol.label });
+      keyRenames.push({
+        oldKey: oldCol.key,
+        newKey: newCol.key,
+        label: newCol.label,
+        name: newCol.name ?? newCol.label,
+        oldPlaceholders: columnPlaceholderStrings(oldCol),
+      });
     }
     const oldName = String(oldCol?.name ?? oldCol?.label ?? '').trim();
     const newName = String(newCol?.name ?? newCol?.label ?? '').trim();
     if (oldName && newName && oldName !== newName) {
       nameRenames.push({ oldName, newName });
     }
+    // Same key, but display label/name changed — drop stale placeholder values.
+    if (
+      oldCol?.key &&
+      newCol?.key &&
+      oldCol.key === newCol.key &&
+      (String(oldCol.label ?? '') !== String(newCol.label ?? '') ||
+        String(oldCol.name ?? oldCol.label ?? '') !== String(newCol.name ?? newCol.label ?? ''))
+    ) {
+      labelUpdates.push({
+        colKey: oldCol.key,
+        label: newCol.label,
+        name: newCol.name ?? newCol.label,
+        oldPlaceholders: columnPlaceholderStrings(oldCol),
+      });
+    }
   }
 
-  if (!keyRenames.length && !nameRenames.length) {
+  if (!keyRenames.length && !nameRenames.length && !labelUpdates.length) {
     return { fieldSchemas: { ...(fieldSchemas ?? {}) }, blocks: JSON.parse(JSON.stringify(blocks ?? [])) };
   }
 
@@ -180,7 +229,7 @@ export function syncTableColumnKeyChanges( tableFieldId: any, oldColumns: any, n
     }
   }
 
-  for (const { oldKey, newKey, label } of keyRenames) {
+  for (const { oldKey, newKey, label, name, oldPlaceholders } of keyRenames) {
     const rowKeys = collectRowKeysForTableColumn(tableFieldId, oldKey, nextSchemas, nextBlocks);
     if (!rowKeys.size) rowKeys.add('row1');
 
@@ -189,16 +238,46 @@ export function syncTableColumnKeyChanges( tableFieldId: any, oldColumns: any, n
       const newId = cellFieldId(tableFieldId, rowKey, newKey);
 
       if (nextSchemas[oldId]) {
-        nextSchemas[newId] = { ...nextSchemas[oldId], label: label ?? nextSchemas[oldId].label };
+        nextSchemas[newId] = {
+          ...nextSchemas[oldId],
+          label: label ?? nextSchemas[oldId].label,
+          name: name ?? nextSchemas[oldId].name ?? label ?? nextSchemas[oldId].label,
+        };
         delete nextSchemas[oldId];
       }
 
       for (const block of nextBlocks) {
         if (block.type === 'documentSection' && block.data?.fieldValues) {
           renameCellKeyInMap(block.data.fieldValues, oldId, newId);
+          clearStaleColumnPlaceholderValue(block.data.fieldValues, newId, oldPlaceholders);
         }
         if (block.data?.cells && typeof block.data.cells === 'object') {
           renameCellKeyInMap(block.data.cells, oldId, newId);
+          clearStaleColumnPlaceholderValue(block.data.cells, newId, oldPlaceholders);
+        }
+      }
+    }
+  }
+
+  for (const { colKey, label, name, oldPlaceholders } of labelUpdates) {
+    const rowKeys = collectRowKeysForTableColumn(tableFieldId, colKey, nextSchemas, nextBlocks);
+    if (!rowKeys.size) rowKeys.add('row1');
+
+    for (const rowKey of rowKeys) {
+      const cellId = cellFieldId(tableFieldId, rowKey, colKey);
+      if (nextSchemas[cellId]) {
+        nextSchemas[cellId] = {
+          ...nextSchemas[cellId],
+          label: label ?? nextSchemas[cellId].label,
+          name: name ?? nextSchemas[cellId].name ?? label ?? nextSchemas[cellId].label,
+        };
+      }
+      for (const block of nextBlocks) {
+        if (block.type === 'documentSection' && block.data?.fieldValues) {
+          clearStaleColumnPlaceholderValue(block.data.fieldValues, cellId, oldPlaceholders);
+        }
+        if (block.data?.cells && typeof block.data.cells === 'object') {
+          clearStaleColumnPlaceholderValue(block.data.cells, cellId, oldPlaceholders);
         }
       }
     }
@@ -436,7 +515,7 @@ function createBuiltinDefaultSchema(type: any, label: any = 'New field', name: a
     case 'image':
       return { ...base, maxWidth: 320, altText: '' };
     case 'logical':
-      return { ...base, defaultValue: null };
+      return { ...base, defaultValue: null, trueMark: 'yesNo' };
     case 'signature':
       return { ...base, maxWidth: 320 };
     case 'barcode':
@@ -921,9 +1000,12 @@ export function findColumnDisplayStyle( tableFieldId: any, colKey: any, fieldSch
 
 function createDefaultCellSchema( tableSchema: any, col: any, tableFieldId: any, fieldSchemas: any): SoftSchema {
   const cellType = tableSchema.cellType ?? 'text';
+  const columnLabel = col.label ?? col.name ?? col.key;
+  const columnName = col.name ?? col.label ?? col.key;
   const cellSchema: SoftSchema = {
     type: cellType,
-    label: col.label,
+    label: columnLabel,
+    name: columnName,
     multi: false,
     required: false,
   };
@@ -1142,19 +1224,26 @@ export function extractRowKeysFromTableValues( tableId: any, tableSchema: any, v
   const columns = [...(tableSchema?.columns ?? [])].sort(
     (a, b) => String(b.key).length - String(a.key).length,
   );
-  if (!columns.length) return new Set();
-
   const prefix = `${tableId}_`;
-  const rowKeys = new Set();
+  const rowKeys = new Set<string>();
 
   for (const key of Object.keys(values ?? {})) {
-    if (!key.startsWith(prefix)) continue;
+    if (!key.startsWith(prefix) || key === tableId) continue;
+    const rest = key.slice(prefix.length);
+    let matched = false;
     for (const col of columns) {
       const suffix = `_${col.key}`;
-      if (!key.endsWith(suffix)) continue;
-      const rowKey = key.slice(prefix.length, key.length - suffix.length);
+      if (!rest.endsWith(suffix)) continue;
+      const rowKey = rest.slice(0, rest.length - suffix.length);
       if (rowKey) rowKeys.add(rowKey);
+      matched = true;
       break;
+    }
+    // Fallback: payload keys that were not projected onto schema columns
+    // (e.g. `table_1_row2_name` while the column key is still `column_1`).
+    if (!matched) {
+      const rowMatch = rest.match(/^(row\d+)(?:_|$)/i);
+      if (rowMatch?.[1]) rowKeys.add(rowMatch[1]);
     }
   }
 

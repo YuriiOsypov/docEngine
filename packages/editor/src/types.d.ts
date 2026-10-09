@@ -217,6 +217,8 @@ export interface ImageFieldSchema extends FieldSchemaBase {
 export interface LogicalFieldSchema extends FieldSchemaBase {
   type: 'logical';
   defaultValue?: boolean | null;
+  /** How true values are shown: Yes/No (default), X, or ✓. False is blank for mark modes. */
+  trueMark?: 'yesNo' | 'x' | 'check';
 }
 
 export interface SignatureFieldSchema extends FieldSchemaBase {
@@ -404,9 +406,13 @@ export type Segment =
   | RepeaterSegment;
 
 export interface TemplatePageSetup {
-  format?: 'a4' | 'letter';
+  format?: 'a4' | 'letter' | 'custom';
   /** Page orientation. Defaults to portrait. */
   orientation?: 'portrait' | 'landscape';
+  /** Custom page width in mm (portrait base). Used when format is "custom". */
+  widthMm?: number;
+  /** Custom page height in mm (portrait base). Used when format is "custom". */
+  heightMm?: number;
   margin?: number | [number, number, number, number];
   title?: string;
   /** Default font and style for static text in document sections. */
@@ -466,6 +472,11 @@ export interface DocumentSectionData {
   borderTop?: boolean;
   /** When true, draw a horizontal rule below the section (editor + preview/PDF). */
   borderBottom?: boolean;
+  /**
+   * When true and the section repeats from a source array (`_source` / loaded instances),
+   * each row starts on a new PDF/print page.
+   */
+  eachRowOnNewPage?: boolean;
   /** Optional rule that controls whether the section is visible for current field values. */
   visibility?: SectionVisibilityRule | null;
   segments: Segment[];
@@ -547,6 +558,28 @@ export interface FieldMappingRule {
   fieldId?: string;
   childFieldId?: string;
 }
+
+/** Reserved section-map key / rule field for array-sourced (repeatable) sections. */
+export const SECTION_SOURCE_KEY: '_source';
+
+/**
+ * Unresolved Mapping result shape for a table field (`_source` + relative `items`).
+ * Legacy `source` is still accepted when reading.
+ */
+export interface TableMappingResult {
+  _source: string;
+  /** @deprecated Prefer `_source` (same key as section maps). */
+  source?: string;
+  items: Record<string, string>;
+}
+
+/**
+ * Unresolved section mapping may include `_source` (payload array path) next to field maps.
+ * Resolved sections with `_source` become an array of per-item field maps.
+ */
+export type SectionMappingResult = Record<string, unknown> & {
+  _source?: string;
+};
 
 export interface FieldMappingValidationIssue {
   section: string;
@@ -876,6 +909,8 @@ export interface CreateEditorOptions {
   mappingMode?: boolean;
   /** Called when a source path is dropped onto a template field. */
   onMappingRuleChange?: (rule: FieldMappingRule) => void;
+  /** Current mapping rules (used in mapping mode for section `_source` relative paths). */
+  getMappingRules?: () => FieldMappingRule[];
   tools?: Array<'documentSection' | 'templateBlock' | 'visionTable'>;
   visionTableTool?: new (args: { data: unknown; config: EditorToolConfig }) => unknown;
   visionTableFieldId?: string;
@@ -901,6 +936,8 @@ export interface EditorToolConfig extends PickerCallbacks {
   designMode: boolean;
   mappingMode?: boolean;
   onMappingRuleChange?: (rule: FieldMappingRule) => void;
+  /** Current mapping rules (used in mapping mode for section `_source` relative paths). */
+  getMappingRules?: () => FieldMappingRule[];
   designPropertiesPanel?: boolean;
   onEditSchema: (fieldId: string) => void;
   onDeleteSchema: (fieldId: string) => void;
@@ -1018,6 +1055,19 @@ export function validateRequiredFields(doc: EditorDocument): ValidationResult;
 
 export const FIELD_MAPPING_KIND: 'fieldMapping';
 export const FIELD_MAPPING_VERSION: 1;
+export function isSectionSourceRule(rule: unknown): boolean;
+export function isAbsoluteMappingPath(sourcePath: string): boolean;
+export function isRelativeMappingPath(sourcePath: string): boolean;
+export function createSectionSourceRule(sectionName: string, sourceArrayPath: string): FieldMappingRule;
+export function resolvePathForSectionItem(
+  sourcePath: string,
+  payload: unknown,
+  item: unknown,
+): unknown;
+export function applySectionSourceRepeatable(
+  blocks: EditorBlock[],
+  rules: FieldMappingRule[] | null | undefined,
+): EditorBlock[];
 export function isFieldMappingSpec(data: unknown): data is FieldMappingSpec;
 export function getPayloadByPath(path: string, data: unknown): unknown;
 export function payloadPathExists(path: string, data: unknown): boolean;
@@ -1085,6 +1135,10 @@ export function parseMappingResultToRules(
   blocks: EditorBlock[],
   fieldSchemas: Record<string, FieldSchema>,
 ): FieldMappingRule[];
+export function isTableMappingObject(value: unknown): value is TableMappingResult;
+export function getTableMappingSourcePath(value: unknown): string;
+export function toRelativeItemPath(sourcePath: string, sourceArrayPath: string): string;
+export function toAbsoluteColumnPath(source: string, itemPath: string): string;
 export function resolveRulesToFieldsExport(
   rules: FieldMappingRule[],
   payload: unknown,
@@ -1132,7 +1186,26 @@ export function resolveFieldMappingTarget(
   blocks: EditorBlock[],
   fieldSchemas: Record<string, FieldSchema>,
   childFieldId?: string | null,
-): { section: string; field: string; childField?: string; fieldId: string; childFieldId?: string } | null;
+): {
+  section: string;
+  field: string;
+  childField?: string;
+  childFieldPath?: string;
+  fieldId: string;
+  childFieldId?: string;
+} | null;
+export function syncMappingRulesToSchema(
+  rules: FieldMappingRule[],
+  blocks: EditorBlock[],
+  fieldSchemas: Record<string, FieldSchema>,
+  options?: { fieldIdRenames?: Record<string, string> | Map<string, string> },
+): FieldMappingRule[];
+export function syncFieldMappingSpecToSchema(
+  spec: FieldMappingSpec | null | undefined,
+  blocks: EditorBlock[],
+  fieldSchemas: Record<string, FieldSchema>,
+  options?: { fieldIdRenames?: Record<string, string> | Map<string, string> },
+): FieldMappingSpec;
 
 export function collectAllValues(blocks: EditorBlock[]): Record<string, FieldValue>;
 export function applyDocumentValues(
@@ -1223,7 +1296,11 @@ export function rebuildFieldIdsForSection(
   block: EditorBlock,
   fieldSchemas: Record<string, FieldSchema>,
   allBlocks: EditorBlock[],
-): { fieldSchemas: Record<string, FieldSchema>; blocks: EditorBlock[] };
+): {
+  fieldSchemas: Record<string, FieldSchema>;
+  blocks: EditorBlock[];
+  idRenames: Record<string, string>;
+};
 export function migrateFieldIds(
   blocks: EditorBlock[],
   fieldSchemas: Record<string, FieldSchema>,
@@ -1565,7 +1642,7 @@ export interface PreviewArtifact {
 
 export interface PdfExportOptions extends PreviewExportOptions {
   filename?: string;
-  format?: 'a4' | 'letter';
+  format?: 'a4' | 'letter' | 'custom';
   margin?: number | [number, number, number, number];
   title?: string;
   /** Clone of visible preview DOM (e.g. from preview modal) for reliable capture. */

@@ -10,6 +10,7 @@ private class DocEngineTemplateControllerTest {
     dto.description = 'Test';
     dto.pdfFilename = 'agreement.pdf';
     dto.hideEmpty = true;
+    dto.attachFile = false;
     dto.outputFormat = 'html';
 
     Test.startTest();
@@ -21,6 +22,7 @@ private class DocEngineTemplateControllerTest {
     System.assertEquals(1, saved.version);
     System.assertNotEquals(null, saved.versionId);
     System.assertEquals(true, saved.hideEmpty);
+    System.assertEquals(false, saved.attachFile);
     System.assertEquals('html', saved.outputFormat);
 
     DocEngineTemplateController.TemplateDTO loaded = DocEngineTemplateController.getTemplate(saved.id);
@@ -28,6 +30,7 @@ private class DocEngineTemplateControllerTest {
     System.assert(loaded.templateJson.contains('template'));
     System.assert(loaded.templateJson.contains('fieldMapping'));
     System.assertEquals(true, loaded.hideEmpty);
+    System.assertEquals(false, loaded.attachFile);
     System.assertEquals('html', loaded.outputFormat);
 
     List<DocEngine_Template_Version__c> versions = [

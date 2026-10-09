@@ -8,12 +8,13 @@ import {
   parseCellFieldId,
   pruneTableCellDataForRows,
 } from './field-schemas.js';
-import { walkSegments } from './segment-tree.js';
+import { mapSegments, walkSegments } from './segment-tree.js';
 import {
   expandTableArraysInValues,
   clearTableFlatKeysInRecord,
   expandedValuesIncludeTable,
   isTableRowArray,
+  assignRowKeysForImport,
 } from './field-io/table-field-io.js';
 import {
   buildSectionedDocumentFromValues,
@@ -545,7 +546,6 @@ export function applyDocumentValues(
 
     if (block.type === 'documentSection') {
       const fieldValues = { ...(data.fieldValues ?? {}) } as ValueMap;
-      const segments = [...(data.segments ?? [])];
 
       for (const key of Object.keys(fieldValues)) {
         if (!Object.prototype.hasOwnProperty.call(expandedValues, key)) continue;
@@ -554,12 +554,12 @@ export function applyDocumentValues(
         appliedKeys.add(key);
       }
 
-      for (let segIndex = 0; segIndex < segments.length; segIndex += 1) {
-        const seg = segments[segIndex];
-
-        if (seg.type === 'field' && Object.prototype.hasOwnProperty.call(expandedValues, seg.id)) {
+      // Walk nested columns so tables/fields inside a 2-column layout still
+      // receive mapped row expansions (master-detail $values).
+      const segments = mapSegments(data.segments ?? [], (seg) => {
+        if (seg.type === 'field' && seg.id && Object.prototype.hasOwnProperty.call(expandedValues, seg.id)) {
           const fieldSchema = nextFieldSchemas[seg.id];
-          if (fieldSchema?.type === 'computed') continue;
+          if (fieldSchema?.type === 'computed') return seg;
           let nextValue = expandedValues[seg.id];
           if (fieldSchema?.type === 'child') {
             nextValue = normalizeRepeaterValue(nextValue, fieldSchema);
@@ -572,7 +572,7 @@ export function applyDocumentValues(
           }
           fieldValues[seg.id] = nextValue;
           appliedKeys.add(seg.id);
-          continue;
+          return seg;
         }
 
         if (seg.type === 'child' && seg.id && Object.prototype.hasOwnProperty.call(expandedValues, seg.id)) {
@@ -588,24 +588,25 @@ export function applyDocumentValues(
             );
             appliedKeys.add(seg.id);
           }
-          continue;
+          return seg;
         }
 
-        if (seg.type !== 'table' || !seg.id) continue;
+        if (seg.type !== 'table' || !seg.id) return seg;
 
         const tableSchema = nextFieldSchemas[seg.id] as TableSchema | undefined;
-        if (!tableSchema) continue;
+        if (!tableSchema) return seg;
 
         if ((tableSchema as any).type === 'pivotTable') {
           if (Object.prototype.hasOwnProperty.call(expandedValues, seg.id)) {
             fieldValues[seg.id] = expandedValues[seg.id];
             appliedKeys.add(seg.id);
           }
-          continue;
+          return seg;
         }
 
+        const rawTableRows = values?.[seg.id];
         const replacingTable =
-          isTableRowArray(values?.[seg.id]) || expandedValuesIncludeTable(seg.id, expandedValues);
+          isTableRowArray(rawTableRows) || expandedValuesIncludeTable(seg.id, expandedValues);
         if (replacingTable) {
           clearTableFlatKeysInRecord(seg.id, fieldValues, tableSchema as any);
         }
@@ -615,14 +616,24 @@ export function applyDocumentValues(
           tableSchema,
           expandedValues,
         ) as Set<string>;
-        const mergedRows: TableRowInstance[] = replacingTable
+        let mergedRows: TableRowInstance[] = replacingTable
           ? [...discoveredRowKeys]
               .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
               .map((key) => ({ key, label: '' }))
           : (mergeTableInstanceRows(seg.rows, discoveredRowKeys, tableSchema) as TableRowInstance[]);
 
+        // When flat keys were missing but the payload still has a row array,
+        // force instance rows from that array length (nested-column tables).
+        if (replacingTable && mergedRows.length === 0 && isTableRowArray(rawTableRows)) {
+          mergedRows = assignRowKeysForImport(tableSchema, rawTableRows.length).map((key) => ({
+            key,
+            label: '',
+          }));
+        }
+
+        let nextSeg = seg;
         if (mergedRows.length > 0) {
-          segments[segIndex] = { ...seg, rows: mergedRows };
+          nextSeg = { ...seg, rows: mergedRows };
           nextFieldSchemas = ensureCellSchemasForRows(
             tableSchema,
             seg.id,
@@ -637,6 +648,27 @@ export function applyDocumentValues(
             if (Object.prototype.hasOwnProperty.call(expandedValues, cellId)) {
               fieldValues[cellId] = expandedValues[cellId];
               appliedKeys.add(cellId);
+              continue;
+            }
+            // Fallback when flat keys still use payload property names
+            // (`table_1_row2_name`) but the column key is `column_1`.
+            const rowPrefix = `${seg.id}_${row.key}_`;
+            const label = String(col.label ?? col.name ?? '')
+              .trim()
+              .toLowerCase();
+            for (const [key, value] of Object.entries(expandedValues)) {
+              if (!key.startsWith(rowPrefix)) continue;
+              const prop = key.slice(rowPrefix.length);
+              if (!prop) continue;
+              if (
+                prop === col.key ||
+                (label && prop.toLowerCase() === label) ||
+                prop.toLowerCase() === String(col.key).toLowerCase()
+              ) {
+                fieldValues[cellId] = value;
+                appliedKeys.add(cellId);
+                break;
+              }
             }
           }
         }
@@ -651,7 +683,9 @@ export function applyDocumentValues(
           Object.assign(fieldValues, pruned.fieldValues);
           nextFieldSchemas = pruned.fieldSchemas;
         }
-      }
+
+        return nextSeg;
+      });
 
       block.data = { ...data, segments, fieldValues };
       continue;

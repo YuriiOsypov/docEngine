@@ -36,6 +36,86 @@ export function isTableRowArray(value: unknown): value is TableRow[] {
   );
 }
 
+/**
+ * Match a table column to a source-row property (exact key, then case-insensitive
+ * key, then case-insensitive label). Used when a whole array is mapped onto a
+ * table whose column keys differ from the payload keys (e.g. column_1 ← name).
+ */
+function matchSourcePropertyForColumn(
+  sourceKeys: string[],
+  column: TableColumn,
+  used: Set<string>,
+): string | null {
+  const available = sourceKeys.filter((key) => !used.has(key));
+  if (!available.length) return null;
+
+  if (available.includes(column.key)) return column.key;
+
+  const keyLower = String(column.key ?? '').toLowerCase();
+  const byKey = available.find((key) => key.toLowerCase() === keyLower);
+  if (byKey) return byKey;
+
+  const label = String(column.label ?? '').trim();
+  if (label) {
+    const labelLower = label.toLowerCase();
+    const byLabel = available.find((key) => key.toLowerCase() === labelLower);
+    if (byLabel) return byLabel;
+  }
+
+  return null;
+}
+
+/**
+ * Remap raw payload row objects onto table column keys when keys differ.
+ * No-op when rows already use the schema column keys (or schema has no columns).
+ */
+export function projectTableRowsOntoColumns(
+  rows: unknown,
+  tableSchema: TableSchema | null | undefined,
+): TableRow[] {
+  if (!isTableRowArray(rows)) return [];
+  const columns = tableSchema?.columns ?? [];
+  if (!columns.length) return rows.map((row) => ({ ...row }));
+
+  const sample =
+    rows.find((row) => row && typeof row === 'object' && Object.keys(row).length > 0) ?? {};
+  const sourceKeys = Object.keys(sample);
+  if (!sourceKeys.length) return rows.map((row) => ({ ...row }));
+
+  // Already aligned with schema — keep as-is (preserves extra keys).
+  if (columns.every((col) => sourceKeys.includes(col.key))) {
+    return rows.map((row) => ({ ...row }));
+  }
+
+  const keyMap = new Map<string, string>();
+  const used = new Set<string>();
+  for (const col of columns) {
+    const sourceKey = matchSourcePropertyForColumn(sourceKeys, col, used);
+    if (sourceKey) {
+      keyMap.set(col.key, sourceKey);
+      used.add(sourceKey);
+    }
+  }
+
+  // Single-column table with no label/key match: take the first unused source key.
+  if (columns.length === 1 && !keyMap.has(columns[0].key)) {
+    const fallback = sourceKeys.find((key) => !used.has(key));
+    if (fallback) keyMap.set(columns[0].key, fallback);
+  }
+
+  if (!keyMap.size) return rows.map((row) => ({ ...row }));
+
+  return rows.map((row) => {
+    const next: TableRow = {};
+    for (const [colKey, sourceKey] of keyMap) {
+      if (Object.prototype.hasOwnProperty.call(row, sourceKey)) {
+        next[colKey] = row[sourceKey];
+      }
+    }
+    return next;
+  });
+}
+
 export function collectTableInstancesInBlocks(
   blocks: EditorBlock[] | null | undefined,
   fieldSchemas: FieldSchemaMap = {},
@@ -241,8 +321,10 @@ export function expandTableArraysInValues(
     if (schema?.type !== 'table') continue;
     if (!isTableRowArray(next[fieldId])) continue;
 
-    const rows = next[fieldId] as TableRow[];
     const tableSchema = schema as TableSchema;
+    // Always project payload keys onto column keys before flattening so
+    // `$values` arrays ({ name }) bind to columns like column_1 / "Name".
+    const rows = projectTableRowsOntoColumns(next[fieldId], tableSchema);
     stripFlatKeysForTable(fieldId, next, tableSchema);
     delete next[fieldId];
 

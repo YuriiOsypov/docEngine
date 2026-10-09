@@ -5,6 +5,7 @@ import {
   expandTableArraysInValues,
   isTableRowArray,
   filterTableRowsWithContent,
+  projectTableRowsOntoColumns,
 } from './table-field-io.js';
 import { normalizeRepeaterValue, repeaterHasContent } from '../repeater-io.js';
 import { resolveSchemaDefaultValue } from '../field-schemas.js';
@@ -78,6 +79,23 @@ export function isRepeatableSectionName(
   return false;
 }
 
+/**
+ * When a mapped field name does not resolve, fall back to the only table in the
+ * section so master-detail `$values` arrays still bind.
+ */
+function findSoleTableFieldId(
+  sectionBlock: EditorBlock,
+  fieldSchemas: FieldSchemaMap,
+): string | null {
+  const ids: string[] = [];
+  walkSegments(sectionBlock.data?.segments ?? [], (seg) => {
+    if (seg.type === 'table' && seg.id && fieldSchemas[seg.id]?.type === 'table') {
+      ids.push(seg.id);
+    }
+  });
+  return ids.length === 1 ? ids[0] : null;
+}
+
 export function expandSectionFieldMap(
   fieldMap: SectionFieldMap | null | undefined,
   sectionBlock: EditorBlock,
@@ -86,14 +104,18 @@ export function expandSectionFieldMap(
 ): ValueMap {
   const flat: ValueMap = {};
   const sectionName = resolveSectionName(sectionBlock.data ?? {});
+  const soleTableId = findSoleTableFieldId(sectionBlock, fieldSchemas);
 
   for (const [fieldName, value] of Object.entries(fieldMap ?? {})) {
-    const fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
+    let fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
+    if (!fieldId && soleTableId && isTableRowArray(value)) {
+      fieldId = soleTableId;
+    }
     if (!fieldId) continue;
 
     const schema = fieldSchemas[fieldId];
     if (schema?.type === 'table' && isTableRowArray(value)) {
-      flat[fieldId] = value;
+      flat[fieldId] = projectTableRowsOntoColumns(value, schema as TableSchema);
     } else if (schema?.type === 'pivotTable') {
       flat[fieldId] = value;
     } else if (
@@ -261,7 +283,7 @@ export function expandSectionedDocument(
 
       const schema = fieldSchemas[fieldId];
       if (schema?.type === 'table' && isTableRowArray(value)) {
-        flat[fieldId] = value;
+        flat[fieldId] = projectTableRowsOntoColumns(value, schema as TableSchema);
       } else if (
         schema?.type === 'child' &&
         value != null &&
@@ -403,6 +425,27 @@ export function findAdjacentTableBlock(
   return null;
 }
 
+/**
+ * Find a section that has multiple loaded instances (e.g. from `_source` mapping),
+ * even when the block is not yet flagged `repeatable`.
+ */
+function findSectionWithInstanceArray(
+  blocks: EditorBlock[] | null | undefined,
+  loadedSections: Record<string, DocumentSectionValues> | null | undefined,
+): { index: number; block: EditorBlock; sectionName: string; instances: SectionFieldMap[] } | null {
+  if (!loadedSections) return null;
+  for (let index = 0; index < (blocks ?? []).length; index += 1) {
+    const block = blocks![index];
+    if (block.type !== 'documentSection') continue;
+    const sectionName = resolveSectionName(block.data);
+    const raw = loadedSections[sectionName];
+    if (isSectionInstanceArray(raw) && raw.length > 1) {
+      return { index, block, sectionName, instances: raw };
+    }
+  }
+  return null;
+}
+
 export function resolveRepeatablePagePlan(
   blocks: EditorBlock[],
   _fieldSchemas: FieldSchemaMap,
@@ -410,15 +453,27 @@ export function resolveRepeatablePagePlan(
   loadedSections: Record<string, DocumentSectionValues> | null | undefined,
 ): RepeatablePagePlan | null {
   const repeatable = findRepeatableSectionBlock(blocks);
-  if (!repeatable) return null;
+  if (repeatable) {
+    const sectionName = repeatable.sectionName;
+    const rawLoaded = loadedSections?.[sectionName];
+    if (isSectionInstanceArray(rawLoaded) && rawLoaded.length > 1) {
+      return {
+        sectionName,
+        repeatableBlockIndex: repeatable.index,
+        instances: rawLoaded,
+        companionBlockIndex: null,
+        companionTableRows: null,
+      };
+    }
+  }
 
-  const sectionName = repeatable.sectionName;
-  const rawLoaded = loadedSections?.[sectionName];
-  if (isSectionInstanceArray(rawLoaded) && rawLoaded.length > 1) {
+  // `_source` mapping stores instance arrays before/without the repeatable flag.
+  const fromInstances = findSectionWithInstanceArray(blocks, loadedSections);
+  if (fromInstances) {
     return {
-      sectionName,
-      repeatableBlockIndex: repeatable.index,
-      instances: rawLoaded,
+      sectionName: fromInstances.sectionName,
+      repeatableBlockIndex: fromInstances.index,
+      instances: fromInstances.instances,
       companionBlockIndex: null,
       companionTableRows: null,
     };

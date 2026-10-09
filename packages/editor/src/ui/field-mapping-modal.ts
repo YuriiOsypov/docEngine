@@ -785,7 +785,7 @@ export function createFieldMappingModal({ getTemplate, onSave }: any = {}) {
 
   function updateResultJsonTextarea() {
     if (document.activeElement === resultJsonEl) return;
-    const mappingResult = buildMappingResultFromRules(currentRules);
+    const mappingResult = buildMappingResultFromRules(currentRules, getTemplateContext());
     resultJsonEl.value = JSON.stringify(mappingResult, null, 2);
     resultJsonEl.dataset.dirty = 'false';
     issueHighlights?.sync?.();
@@ -984,6 +984,7 @@ export function createFieldMappingModal({ getTemplate, onSave }: any = {}) {
           },
           mappingMode: true,
           onMappingRuleChange: handleRuleAssigned,
+          getMappingRules: () => currentRules,
           designMode: false,
           ui: {
             embedded: true,
@@ -1227,7 +1228,8 @@ export function createFieldMappingModal({ getTemplate, onSave }: any = {}) {
         throw new Error('Map at least one field before applying.');
       }
       onSave?.(spec);
-      await applyHandler?.(payload);
+      // Pass the fresh modal spec so Apply does not race against stale documentFieldMapping.
+      await applyHandler?.(payload, spec);
       resolveSession(spec);
       await close();
     } catch (err: any) {

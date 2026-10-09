@@ -21,13 +21,25 @@ import {
   getSourceFieldsAtPath,
   sourcePathExists,
   resolveMappedSourceValue,
+  resolveSourcePath,
   parseMappingSourcePath,
   formatDateValue,
   formatCurrencyValue,
   omitMappedFields,
   collectMappedSectionFieldKeys,
+  syncMappingRulesToSchema,
+  syncFieldMappingSpecToSchema,
+  SECTION_SOURCE_KEY,
+  createSectionSourceRule,
+  isSectionSourceRule,
+  applySectionSourceRepeatable,
+  resolvePathForSectionItem,
 } from './field-mapping.js';
-import { applyDocumentValues, normalizeDocumentValues } from './document-io.js';
+import {
+  applyDocumentValues,
+  applySectionInstanceToBlocks,
+  normalizeDocumentValues,
+} from './document-io.js';
 import { formatNumericDisplay } from './currency-format.js';
 
 describe('field-mapping', () => {
@@ -421,6 +433,80 @@ describe('field-mapping', () => {
     assert.ok(itemNode.children?.some((node) => node.key === 'price'));
   });
 
+  it('builds nested children for array columns in table-style arrays', () => {
+    const tablePayload = {
+      sections: {
+        items: {
+          Table: [
+            {
+              name: 'Test name 2',
+              amount: '2',
+              values: [
+                { name: 'value1', amount: '1' },
+                { name: 'value2', amount: '2' },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const tree = buildSourcePayloadTree(tablePayload);
+    const valuesNode = tree
+      .find((node) => node.key === 'sections')
+      ?.children
+      ?.find((node) => node.key === 'items')
+      ?.children
+      ?.find((node) => node.key === 'Table')
+      ?.children
+      ?.find((node) => node.key === 'values');
+
+    assert.ok(valuesNode);
+    assert.strictEqual(valuesNode.type, 'array');
+    assert.ok(
+      valuesNode.children?.some(
+        (node) => node.key === 'name' && node.path === '$payload.sections.items.Table.values.name',
+      ),
+    );
+    assert.ok(
+      valuesNode.children?.some(
+        (node) => node.key === 'amount' && node.path === '$payload.sections.items.Table.values.amount',
+      ),
+    );
+    assert.ok(!valuesNode.children?.some((node) => /^\[\d+\]$/.test(node.key)));
+  });
+
+  it('resolves nested values array despite Array.prototype.values', () => {
+    const tablePayload = {
+      sections: {
+        items: {
+          Table: [
+            {
+              name: 'Test name 2',
+              amount: '2',
+              values: [
+                { name: 'value1', amount: '1' },
+                { name: 'value2', amount: '2' },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const nested = resolveSourcePath('$payload.sections.items.Table.values', tablePayload);
+    assert.ok(Array.isArray(nested), 'must not return Array.prototype.values');
+    assert.equal(nested.length, 2);
+    assert.equal(
+      resolveSourcePath('$payload.sections.items.Table.values.amount', tablePayload),
+      '1',
+    );
+    assert.equal(
+      resolveSourcePath('$payload.sections.items.Table.values.name', tablePayload),
+      'value1',
+    );
+  });
+
   it('parses mapping result JSON back into rules', () => {
     const rules = [
       {
@@ -505,12 +591,13 @@ describe('field-mapping', () => {
     ];
 
     const mappingResult = buildMappingResultFromRules(tableRules);
-    assert.deepEqual(mappingResult.sections.items.Table, [
-      {
-        name: '$payload.sections.items.Table.name',
-        amount: '$payload.sections.items.Table.amount',
+    assert.deepEqual(mappingResult.sections.items.Table, {
+      [SECTION_SOURCE_KEY]: '$payload.sections.items.Table',
+      items: {
+        name: '$name',
+        amount: '$amount',
       },
-    ]);
+    });
 
     const preview = previewFieldMapping(
       tablePayload,
@@ -544,7 +631,12 @@ describe('field-mapping', () => {
 
     const parsed = parseMappingResultToRules(mappingResult, tableBlocks, tableFieldSchemas);
     assert.strictEqual(parsed.length, 2);
+    assert.strictEqual(parsed[0].columnKey, 'name');
+    assert.strictEqual(parsed[0].sourcePath, '$payload.sections.items.Table.name');
+    assert.strictEqual(parsed[0].sourceArrayPath, '$payload.sections.items.Table');
     assert.strictEqual(parsed[1].columnKey, 'amount');
+    assert.strictEqual(parsed[1].sourcePath, '$payload.sections.items.Table.amount');
+    assert.strictEqual(parsed[1].sourceArrayPath, '$payload.sections.items.Table');
 
     const applied = applyFieldMapping(
       tablePayload,
@@ -555,6 +647,140 @@ describe('field-mapping', () => {
     const sectionValues = applied.blocks[0].data.fieldValues;
     assert.strictEqual(sectionValues.items_table_row1_amount, '2');
     assert.strictEqual(sectionValues.items_table_row2_amount, '3');
+  });
+
+  it('parses legacy table mapping array template-row format', () => {
+    const tableFieldSchemas = {
+      items_table: {
+        type: 'table',
+        name: 'Table',
+        columns: [
+          { key: 'name', label: 'Name' },
+          { key: 'amount', label: 'Amount' },
+        ],
+        rows: [{ key: 'row1', label: 'Row1' }],
+      },
+    };
+    const tableBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'items',
+          label: 'items',
+          segments: [{ type: 'table', id: 'items_table' }],
+          fieldValues: { items_table: [] },
+        },
+      },
+    ];
+
+    const legacyResult = {
+      kind: 'field',
+      version: 2,
+      sections: {
+        items: {
+          Table: [
+            {
+              name: '$payload.sections.items.Table.name',
+              amount: '$payload.sections.items.Table.amount',
+            },
+          ],
+        },
+      },
+    };
+
+    const parsed = parseMappingResultToRules(legacyResult, tableBlocks, tableFieldSchemas);
+    assert.strictEqual(parsed.length, 2);
+    assert.strictEqual(parsed[0].columnKey, 'name');
+    assert.strictEqual(parsed[0].sourceArrayPath, '$payload.sections.items.Table');
+    assert.strictEqual(parsed[1].columnKey, 'amount');
+  });
+
+  it('round-trips relative table item paths with format suffixes', () => {
+    const tableFieldSchemas = {
+      visits_table: {
+        type: 'table',
+        name: 'Table',
+        columns: [
+          { key: 'name', label: 'Name' },
+          { key: 'start', label: 'Start' },
+        ],
+        rows: [{ key: 'row1', label: 'Row1' }],
+      },
+    };
+    const tableBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'list',
+          label: 'list',
+          segments: [{ type: 'table', id: 'visits_table' }],
+          fieldValues: { visits_table: [] },
+        },
+      },
+    ];
+
+    // Legacy `source` key is still accepted when parsing.
+    const mappingResult = {
+      kind: 'field',
+      version: 2,
+      sections: {
+        list: {
+          Table: {
+            source: '$payload.records',
+            items: {
+              name: '$name',
+              start: '$date_visit_start#DD-MM-YY',
+            },
+          },
+        },
+      },
+    };
+
+    const parsed = parseMappingResultToRules(mappingResult, tableBlocks, tableFieldSchemas);
+    assert.strictEqual(parsed.length, 2);
+    assert.deepEqual(
+      parsed.map((rule) => ({
+        columnKey: rule.columnKey,
+        sourcePath: rule.sourcePath,
+        sourceArrayPath: rule.sourceArrayPath,
+      })),
+      [
+        {
+          columnKey: 'name',
+          sourcePath: '$payload.records.name',
+          sourceArrayPath: '$payload.records',
+        },
+        {
+          columnKey: 'start',
+          sourcePath: '$payload.records.date_visit_start#DD-MM-YY',
+          sourceArrayPath: '$payload.records',
+        },
+      ],
+    );
+
+    const rebuilt = buildMappingResultFromRules(parsed);
+    assert.deepEqual(rebuilt.sections.list.Table, {
+      [SECTION_SOURCE_KEY]: '$payload.records',
+      items: {
+        name: '$name',
+        start: '$date_visit_start#DD-MM-YY',
+      },
+    });
+
+    const preview = previewFieldMapping(
+      {
+        records: [
+          { name: 'Visit A', date_visit_start: '2026-07-22' },
+          { name: 'Visit B', date_visit_start: '2026-01-05' },
+        ],
+      },
+      { kind: 'fieldMapping', version: 1, rules: parsed },
+      { blocks: tableBlocks, fieldSchemas: tableFieldSchemas },
+    );
+    assert.deepEqual(preview.fieldsExport.sections?.list?.Table, [
+      { name: 'Visit A', start: '22-07-26' },
+      { name: 'Visit B', start: '05-01-26' },
+    ]);
   });
 
   it('resolves nested object fields on table rows (child → parent lookup)', () => {
@@ -621,6 +847,50 @@ describe('field-mapping', () => {
     assert.strictEqual(values.products_table_row1_model, 'SKU-1');
     assert.strictEqual(values.products_table_row1_product, 'Widget');
     assert.strictEqual(values.products_table_row2_model, 'SKU-2');
+  });
+
+  it('does not treat child-field objects as table mapping', () => {
+    const fieldSchemas = {
+      items_child: {
+        type: 'child',
+        name: 'Child',
+        fieldSchemas: {
+          note_f: { type: 'text', name: 'Note' },
+          city_f: { type: 'text', name: 'City' },
+        },
+      },
+    };
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'items',
+          label: 'items',
+          segments: [{ type: 'child', id: 'items_child' }],
+          fieldValues: { items_child: {} },
+        },
+      },
+    ];
+
+    const mappingResult = {
+      kind: 'field',
+      version: 2,
+      sections: {
+        items: {
+          Child: {
+            Note: '$payload.header.note',
+            City: '$payload.header.city',
+          },
+        },
+      },
+    };
+
+    const rules = parseMappingResultToRules(mappingResult, blocks, fieldSchemas);
+    assert.strictEqual(rules.length, 2);
+    assert.ok(rules.every((rule) => !rule.columnKey && !rule.sourceArrayPath));
+    assert.strictEqual(rules[0].childFieldPath, 'Note');
+    assert.strictEqual(rules[0].sourcePath, '$payload.header.note');
+    assert.strictEqual(rules[1].childFieldPath, 'City');
   });
 
   it('maps nested child fields and bulk-assigns child leaves', () => {
@@ -911,6 +1181,732 @@ describe('omitMappedFields', () => {
     const filtered = omitMappedFields(fieldsExport, { kind: 'fieldMapping', rules: [] });
     assert.deepEqual(filtered.sections, { Exam: { notes: 'x' } });
     assert.notEqual(filtered, fieldsExport);
+  });
+
+  it('syncs mapping rule section and field names after renames', () => {
+    const fieldSchemas = {
+      main_start: { type: 'text', name: 'Start', label: 'Start' },
+      main_name: { type: 'text', name: 'Name', label: 'Name' },
+      main_patient: { type: 'text', name: 'Patient', label: 'Patient' },
+    };
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Main',
+          label: 'Main',
+          segments: [
+            { type: 'field', id: 'main_start' },
+            { type: 'field', id: 'main_name' },
+            { type: 'field', id: 'main_patient' },
+          ],
+          fieldValues: {},
+        },
+      },
+    ];
+
+    const staleRules = [
+      {
+        section: 'Untitled',
+        field: 'Date Visit Start',
+        fieldId: 'main_start',
+        sourcePath: '$payload.meta.parent.date_visit_start',
+      },
+      {
+        section: 'Main',
+        field: 'Name_2',
+        fieldId: 'main_name',
+        sourcePath: '$payload.meta.parent.name',
+      },
+      {
+        section: 'Untitled',
+        field: 'Name',
+        fieldId: 'main_patient',
+        sourcePath: '$payload.meta.parent.patient.name',
+      },
+    ];
+
+    const synced = syncMappingRulesToSchema(staleRules, blocks, fieldSchemas);
+    assert.deepEqual(
+      synced.map((rule) => ({ section: rule.section, field: rule.field, fieldId: rule.fieldId })),
+      [
+        { section: 'Main', field: 'Start', fieldId: 'main_start' },
+        { section: 'Main', field: 'Name', fieldId: 'main_name' },
+        { section: 'Main', field: 'Patient', fieldId: 'main_patient' },
+      ],
+    );
+
+    const mappingResult = buildMappingResultFromRules(synced);
+    assert.deepEqual(mappingResult.sections, {
+      Main: {
+        Start: '$payload.meta.parent.date_visit_start',
+        Name: '$payload.meta.parent.name',
+        Patient: '$payload.meta.parent.patient.name',
+      },
+    });
+  });
+
+  it('syncs mapping rule fieldIds through rename map and child paths', () => {
+    const fieldSchemas = {
+      main_child: {
+        type: 'child',
+        name: 'Patient',
+        fieldSchemas: {
+          city_f: { type: 'text', name: 'City' },
+        },
+      },
+    };
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Visit',
+          label: 'Visit',
+          segments: [{ type: 'child', id: 'main_child' }],
+          fieldValues: {},
+        },
+      },
+    ];
+
+    const staleRules = [
+      {
+        section: 'Untitled',
+        field: 'Person',
+        childField: 'Town',
+        childFieldPath: 'Town',
+        fieldId: 'old_child',
+        childFieldId: 'city_f',
+        sourcePath: '$payload.city',
+      },
+    ];
+
+    const synced = syncMappingRulesToSchema(staleRules, blocks, fieldSchemas, {
+      fieldIdRenames: { old_child: 'main_child' },
+    });
+    assert.equal(synced[0].section, 'Visit');
+    assert.equal(synced[0].field, 'Patient');
+    assert.equal(synced[0].fieldId, 'main_child');
+    assert.equal(synced[0].childField, 'City');
+    assert.equal(synced[0].childFieldPath, 'City');
+
+    const spec = syncFieldMappingSpecToSchema(
+      { kind: 'fieldMapping', version: 1, rules: staleRules },
+      blocks,
+      fieldSchemas,
+      { fieldIdRenames: { old_child: 'main_child' } },
+    );
+    assert.equal(spec.rules[0].field, 'Patient');
+  });
+});
+
+describe('section _source mapping', () => {
+  const fieldSchemas = {
+    contact_name: { type: 'text', name: 'Name', label: 'Name', defaultValue: '' },
+    contact_phone: { type: 'text', name: 'Phone', label: 'Phone', defaultValue: '' },
+    line_items: {
+      type: 'table',
+      name: 'Lines',
+      label: 'Lines',
+      columns: [
+        { key: 'sku', label: 'SKU' },
+        { key: 'qty', label: 'Qty' },
+      ],
+    },
+  };
+  const blocks = [
+    {
+      type: 'documentSection',
+      data: {
+        name: 'main',
+        label: 'main',
+        repeatable: false,
+        segments: [
+          { type: 'field', id: 'contact_name' },
+          { type: 'field', id: 'contact_phone' },
+          { type: 'table', id: 'line_items' },
+        ],
+        fieldValues: {},
+      },
+    },
+  ];
+  const template = { blocks, fieldSchemas };
+
+  it('round-trips _source through build/parse', () => {
+    const rules = [
+      createSectionSourceRule('main', '$payload.Contacts'),
+      {
+        section: 'main',
+        field: 'Name',
+        fieldId: 'contact_name',
+        sourcePath: '$payload.Contacts.Name',
+        sourceArrayPath: '$payload.Contacts',
+      },
+      {
+        section: 'main',
+        field: 'Phone',
+        fieldId: 'contact_phone',
+        sourcePath: '$payload.AccountPhone',
+      },
+    ];
+    const result = buildMappingResultFromRules(rules);
+    assert.equal(result.sections.main[SECTION_SOURCE_KEY], '$payload.Contacts');
+    assert.equal(result.sections.main.Name, '$Name');
+    assert.equal(result.sections.main.Phone, '$payload.AccountPhone');
+
+    const parsed = parseMappingResultToRules(result, blocks, fieldSchemas);
+    assert.ok(parsed.some(isSectionSourceRule));
+    assert.equal(
+      parsed.find(isSectionSourceRule)?.sourceArrayPath,
+      '$payload.Contacts',
+    );
+    assert.equal(parsed.find((r) => r.field === 'Name')?.sourcePath, '$Name');
+    assert.equal(parsed.find((r) => r.field === 'Phone')?.sourcePath, '$payload.AccountPhone');
+  });
+
+  it('resolves relative and absolute paths into N instances', () => {
+    const preview = previewFieldMapping(
+      {
+        AccountPhone: '111',
+        Contacts: [
+          { Name: 'Ada', Phone: '555' },
+          { Name: 'Bob', Phone: '666' },
+        ],
+      },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('main', '$payload.Contacts'),
+          {
+            section: 'main',
+            field: 'Name',
+            fieldId: 'contact_name',
+            sourcePath: '$Name',
+          },
+          {
+            section: 'main',
+            field: 'Phone',
+            fieldId: 'contact_phone',
+            sourcePath: '$payload.AccountPhone',
+          },
+        ],
+      },
+      template,
+    );
+    assert.equal(preview.validation.valid, true, JSON.stringify(preview.validation));
+    assert.deepEqual(preview.fieldsExport.sections.main, [
+      { Name: 'Ada', Phone: '111' },
+      { Name: 'Bob', Phone: '111' },
+    ]);
+  });
+
+  it('emits empty array when source array is empty', () => {
+    const preview = previewFieldMapping(
+      { Contacts: [], AccountPhone: 'x' },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('main', '$payload.Contacts'),
+          {
+            section: 'main',
+            field: 'Name',
+            fieldId: 'contact_name',
+            sourcePath: '$Name',
+          },
+        ],
+      },
+      template,
+    );
+    assert.deepEqual(preview.fieldsExport.sections.main, []);
+  });
+
+  it('resolves nested table under a sourced section', () => {
+    const preview = previewFieldMapping(
+      {
+        Contacts: [
+          {
+            Name: 'Ada',
+            Lines: [
+              { Sku: 'A1', Qty: 2 },
+              { Sku: 'A2', Qty: 1 },
+            ],
+          },
+        ],
+      },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('main', '$payload.Contacts'),
+          {
+            section: 'main',
+            field: 'Name',
+            fieldId: 'contact_name',
+            sourcePath: '$Name',
+          },
+          {
+            section: 'main',
+            field: 'Lines',
+            fieldId: 'line_items',
+            columnKey: 'sku',
+            sourcePath: '$payload.Contacts.Lines.Sku',
+            sourceArrayPath: '$payload.Contacts.Lines',
+          },
+          {
+            section: 'main',
+            field: 'Lines',
+            fieldId: 'line_items',
+            columnKey: 'qty',
+            sourcePath: '$payload.Contacts.Lines.Qty',
+            sourceArrayPath: '$payload.Contacts.Lines',
+          },
+        ],
+      },
+      template,
+    );
+    assert.equal(preview.validation.valid, true, JSON.stringify(preview.validation));
+    const instances = preview.fieldsExport.sections.main;
+    assert.equal(instances.length, 1);
+    assert.equal(instances[0].Name, 'Ada');
+    assert.deepEqual(instances[0].Lines, [
+      { sku: 'A1', qty: 2 },
+      { sku: 'A2', qty: 1 },
+    ]);
+  });
+
+  it('projects nested $values when mapping field name case differs from schema', () => {
+    const detailSchemas = {
+      amount: { type: 'text', name: 'amount', label: 'amount', defaultValue: '' },
+      table_1: {
+        type: 'table',
+        name: 'Table',
+        label: 'Table',
+        columns: [{ key: 'column_1', label: 'Name' }],
+      },
+    };
+    const detailBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'letter',
+          label: 'Letter',
+          repeatable: false,
+          segments: [
+            { type: 'field', id: 'amount' },
+            { type: 'table', id: 'table_1' },
+          ],
+          fieldValues: {},
+        },
+      },
+    ];
+    const preview = previewFieldMapping(
+      {
+        sections: {
+          items: {
+            Table: [
+              {
+                name: 'Test name 2',
+                values: [
+                  { name: 'value1' },
+                  { name: 'value2' },
+                  { name: 'value3' },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('letter', '$payload.sections.items.Table'),
+          {
+            section: 'letter',
+            field: 'amount',
+            fieldId: 'amount',
+            sourcePath: '$name',
+          },
+          // Lowercase field name as in edited Mapping result JSON
+          {
+            section: 'letter',
+            field: 'table',
+            sourcePath: '$values',
+          },
+        ],
+      },
+      { blocks: detailBlocks, fieldSchemas: detailSchemas },
+    );
+    assert.equal(preview.validation.valid, true, JSON.stringify(preview.validation));
+    assert.deepEqual(preview.fieldsExport.sections.letter[0].table, [
+      { column_1: 'value1' },
+      { column_1: 'value2' },
+      { column_1: 'value3' },
+    ]);
+  });
+
+  it('projects nested $values array onto table columns by label (master-detail)', () => {
+    const detailSchemas = {
+      amount: { type: 'text', name: 'amount', label: 'amount', defaultValue: '' },
+      table_1: {
+        type: 'table',
+        name: 'Table',
+        label: 'Table',
+        columns: [{ key: 'column_1', label: 'Name' }],
+      },
+    };
+    const detailBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'letter',
+          label: 'Letter',
+          repeatable: false,
+          segments: [
+            { type: 'field', id: 'amount' },
+            { type: 'table', id: 'table_1' },
+          ],
+          fieldValues: {},
+        },
+      },
+    ];
+    const preview = previewFieldMapping(
+      {
+        sections: {
+          items: {
+            Table: [
+              {
+                name: 'Test name 2',
+                values: [
+                  { name: 'value1', amount: '1' },
+                  { name: 'value2', amount: '2' },
+                  { name: 'value3', amount: '3' },
+                ],
+              },
+              {
+                name: 'Test name 5',
+                values: [
+                  { name: 'valueA', amount: '4' },
+                  { name: 'valueB', amount: '5' },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('letter', '$payload.sections.items.Table'),
+          {
+            section: 'letter',
+            field: 'amount',
+            fieldId: 'amount',
+            sourcePath: '$name',
+          },
+          {
+            section: 'letter',
+            field: 'Table',
+            fieldId: 'table_1',
+            sourcePath: '$values',
+          },
+        ],
+      },
+      { blocks: detailBlocks, fieldSchemas: detailSchemas },
+    );
+    assert.equal(preview.validation.valid, true, JSON.stringify(preview.validation));
+    const instances = preview.fieldsExport.sections.letter;
+    assert.equal(instances.length, 2);
+    assert.equal(instances[0].amount, 'Test name 2');
+    assert.deepEqual(instances[0].Table, [
+      { column_1: 'value1' },
+      { column_1: 'value2' },
+      { column_1: 'value3' },
+    ]);
+    assert.equal(instances[1].amount, 'Test name 5');
+    assert.deepEqual(instances[1].Table, [
+      { column_1: 'valueA' },
+      { column_1: 'valueB' },
+    ]);
+  });
+
+  it('expands nested $values rows when the table sits inside columns', () => {
+    const detailSchemas = {
+      amount: { type: 'text', name: 'amount', label: 'amount', defaultValue: '' },
+      table_1: {
+        type: 'table',
+        name: 'Table',
+        label: 'Table',
+        columns: [{ key: 'column_1', label: 'Name' }],
+      },
+    };
+    const detailBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Letter',
+          label: 'Letter',
+          segments: [
+            { type: 'field', id: 'amount' },
+            {
+              type: 'columns',
+              id: 'cols_1',
+              columns: [
+                [{ type: 'table', id: 'table_1', rows: [{ key: 'row1', label: '' }] }],
+                [],
+              ],
+            },
+          ],
+          fieldValues: {
+            amount: '',
+            table_1_row1_column_1: '',
+          },
+        },
+      },
+    ];
+    const payload = {
+      tests: [
+        {
+          name: 'Test name 2',
+          values: [{ name: 'value1' }, { name: 'value2' }, { name: 'value3' }],
+        },
+      ],
+    };
+    const result = applyFieldMapping(
+      payload,
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('Letter', '$payload.tests'),
+          {
+            section: 'Letter',
+            field: 'amount',
+            fieldId: 'amount',
+            sourcePath: '$name',
+          },
+          {
+            section: 'Letter',
+            field: 'Table',
+            fieldId: 'table_1',
+            sourcePath: '$values',
+          },
+        ],
+      },
+      { blocks: detailBlocks, fieldSchemas: detailSchemas },
+    );
+    assert.deepEqual(result.fieldsExport.sections.Letter[0].Table, [
+      { column_1: 'value1' },
+      { column_1: 'value2' },
+      { column_1: 'value3' },
+    ]);
+
+    const applied = applySectionInstanceToBlocks(
+      detailBlocks,
+      detailSchemas,
+      0,
+      result.fieldsExport.sections.Letter[0],
+    );
+    const nestedTable = applied.blocks[0].data.segments[1].columns[0].find(
+      (seg) => seg.type === 'table',
+    );
+    assert.equal(nestedTable.rows.length, 3);
+    assert.equal(applied.blocks[0].data.fieldValues.table_1_row1_column_1, 'value1');
+    assert.equal(applied.blocks[0].data.fieldValues.table_1_row2_column_1, 'value2');
+    assert.equal(applied.blocks[0].data.fieldValues.table_1_row3_column_1, 'value3');
+  });
+
+  it('shortens absolute nested column paths to $amount beside $name under $values', () => {
+    const detailSchemas = {
+      table_1: {
+        type: 'table',
+        name: 'Table',
+        label: 'Table',
+        columns: [
+          { key: 'name', label: 'Name' },
+          { key: 'amount', label: 'Amount' },
+        ],
+      },
+    };
+    const detailBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Letter',
+          label: 'Letter',
+          segments: [{ type: 'table', id: 'table_1' }],
+          fieldValues: {},
+        },
+      },
+    ];
+    const mappingResult = buildMappingResultFromRules(
+      [
+        createSectionSourceRule('Letter', '$payload.sections.items.Table'),
+        {
+          section: 'Letter',
+          field: 'Table',
+          fieldId: 'table_1',
+          columnKey: 'name',
+          sourcePath: '$name',
+          sourceArrayPath: '$values',
+        },
+        {
+          section: 'Letter',
+          field: 'Table',
+          fieldId: 'table_1',
+          columnKey: 'amount',
+          sourcePath: '$payload.sections.items.Table.values.amount',
+          sourceArrayPath: '$payload.sections.items.Table.values',
+        },
+      ],
+      { blocks: detailBlocks, fieldSchemas: detailSchemas },
+    );
+    assert.deepEqual(mappingResult.sections.Letter.Table, {
+      [SECTION_SOURCE_KEY]: '$values',
+      items: {
+        name: '$name',
+        amount: '$amount',
+      },
+    });
+  });
+
+  it('heals cell-drop of $values array bound into one column (master-detail)', () => {
+    const detailSchemas = {
+      amount: { type: 'text', name: 'amount', label: 'amount', defaultValue: '' },
+      table_1: {
+        type: 'table',
+        name: 'Table',
+        label: 'Table',
+        columns: [{ key: 'column_1', label: 'Name' }],
+      },
+    };
+    const detailBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Letter',
+          label: 'Letter',
+          repeatable: false,
+          segments: [
+            { type: 'field', id: 'amount' },
+            { type: 'table', id: 'table_1' },
+          ],
+          fieldValues: {},
+        },
+      },
+    ];
+    // Broken shape from dropping $values onto a Name cell:
+    // items.column_1 = "$values" (array itself) instead of "$name".
+    const preview = previewFieldMapping(
+      {
+        sections: {
+          items: {
+            Table: [
+              {
+                name: 'Test name 2',
+                values: [{ name: 'value1' }, { name: 'value2' }, { name: 'value3' }],
+              },
+            ],
+          },
+        },
+      },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [
+          createSectionSourceRule('Letter', '$payload.sections.items.Table'),
+          {
+            section: 'Letter',
+            field: 'amount',
+            fieldId: 'amount',
+            sourcePath: '$name',
+          },
+          {
+            section: 'Letter',
+            field: 'Table',
+            fieldId: 'table_1',
+            columnKey: 'column_1',
+            sourcePath: '$values',
+            sourceArrayPath: '$values',
+          },
+        ],
+      },
+      { blocks: detailBlocks, fieldSchemas: detailSchemas },
+    );
+    assert.equal(preview.validation.valid, true, JSON.stringify(preview.validation));
+    assert.deepEqual(preview.fieldsExport.sections.Letter[0].Table, [
+      { column_1: 'value1' },
+      { column_1: 'value2' },
+      { column_1: 'value3' },
+    ]);
+  });
+
+  it('createMappingRulesFromDrop maps array drops on cells onto all table columns', () => {
+    const detailSchemas = {
+      table_1: {
+        type: 'table',
+        name: 'Table',
+        label: 'Table',
+        columns: [{ key: 'column_1', label: 'Name' }],
+      },
+    };
+    const detailBlocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'Letter',
+          label: 'Letter',
+          segments: [{ type: 'table', id: 'table_1' }],
+          fieldValues: {},
+        },
+      },
+    ];
+    const rules = createMappingRulesFromDrop(
+      'table_1_row1_column_1',
+      '$values',
+      detailBlocks,
+      detailSchemas,
+      { sourceType: 'array' },
+    );
+    assert.equal(rules.length, 1);
+    assert.equal(rules[0].columnKey, 'column_1');
+    assert.equal(rules[0].sourceArrayPath, '$values');
+    assert.equal(rules[0].sourcePath, '$values.name');
+  });
+
+  it('resolvePathForSectionItem supports relative and absolute', () => {
+    const payload = { AccountPhone: '111', Contacts: [{ Name: 'Ada' }] };
+    const item = payload.Contacts[0];
+    assert.equal(resolvePathForSectionItem('$Name', payload, item), 'Ada');
+    assert.equal(resolvePathForSectionItem('Name', payload, item), 'Ada');
+    assert.equal(resolvePathForSectionItem('$payload.AccountPhone', payload, item), '111');
+  });
+
+  it('applySectionSourceRepeatable does not flip repeatable from _source', () => {
+    const localBlocks = JSON.parse(JSON.stringify(blocks));
+    assert.equal(localBlocks[0].data.repeatable, false);
+    applySectionSourceRepeatable(localBlocks, [
+      createSectionSourceRule('main', '$payload.Contacts'),
+    ]);
+    assert.equal(localBlocks[0].data.repeatable, false);
+  });
+
+  it('warns when _source path is not an array', () => {
+    const preview = previewFieldMapping(
+      { Contacts: { Name: 'Ada' } },
+      {
+        kind: 'fieldMapping',
+        version: 1,
+        rules: [createSectionSourceRule('main', '$payload.Contacts')],
+      },
+      template,
+    );
+    assert.ok(
+      preview.validation.warnings.some((w) => /is not an array/.test(w.message)),
+      JSON.stringify(preview.validation.warnings),
+    );
   });
 });
 

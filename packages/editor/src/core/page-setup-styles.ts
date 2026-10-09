@@ -8,6 +8,7 @@ import {
   compactPageSetupStyle,
   applyFieldHighlightCssVars,
   applyDocumentBodyTextStyle,
+  applyDocumentTextStyleCssVars,
 } from '@docengine/engine';
 import { readTokenValue, updateFieldToken } from '../fields/inline-fields.js';
 
@@ -21,17 +22,45 @@ export {
   compactPageSetupStyle,
   applyFieldHighlightCssVars,
   applyDocumentBodyTextStyle,
+  applyDocumentTextStyleCssVars,
 };
+
+const CUSTOM_PAGE_MIN_MM = 20;
+const CUSTOM_PAGE_MAX_MM = 1200;
+const DEFAULT_CUSTOM_WIDTH_MM = 210;
+const DEFAULT_CUSTOM_HEIGHT_MM = 297;
+
+/** Clamp custom page dimension (mm); invalid → fallback. */
+export function normalizeCustomPageMm(
+  value: unknown,
+  fallback: number,
+): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(CUSTOM_PAGE_MAX_MM, Math.max(CUSTOM_PAGE_MIN_MM, +n.toFixed(2)));
+}
 
 /** Physical page size from Page Setup format (mm). */
 export function resolvePageFormatSizeMm(
-  pageSetup: { format?: string; orientation?: string } | null | undefined,
+  pageSetup: {
+    format?: string;
+    orientation?: string;
+    widthMm?: number;
+    heightMm?: number;
+  } | null | undefined,
 ) {
   const format = String(pageSetup?.format ?? 'a4').toLowerCase();
-  const portrait =
-    format === 'letter'
-      ? { widthMm: 215.9, heightMm: 279.4 }
-      : { widthMm: 210, heightMm: 297 };
+  let portrait: { widthMm: number; heightMm: number };
+  if (format === 'custom') {
+    portrait = {
+      widthMm: normalizeCustomPageMm(pageSetup?.widthMm, DEFAULT_CUSTOM_WIDTH_MM),
+      heightMm: normalizeCustomPageMm(pageSetup?.heightMm, DEFAULT_CUSTOM_HEIGHT_MM),
+    };
+  } else if (format === 'letter') {
+    portrait = { widthMm: 215.9, heightMm: 279.4 };
+  } else {
+    portrait = { widthMm: 210, heightMm: 297 };
+  }
   if (String(pageSetup?.orientation ?? 'portrait').toLowerCase() === 'landscape') {
     return { widthMm: portrait.heightMm, heightMm: portrait.widthMm };
   }
@@ -62,7 +91,13 @@ function resolvePageMarginMm(pageSetup: { margin?: number | number[] } | null | 
 
 /** Printable content width (page width minus left/right margins), in mm. */
 export function resolvePageContentWidthMm(
-  pageSetup: { format?: string; orientation?: string; margin?: number | number[] } | null | undefined,
+  pageSetup: {
+    format?: string;
+    orientation?: string;
+    widthMm?: number;
+    heightMm?: number;
+    margin?: number | number[];
+  } | null | undefined,
 ) {
   const { widthMm } = resolvePageFormatSizeMm(pageSetup);
   const [, rightMm, , leftMm] = resolvePageMarginsMm(pageSetup);
@@ -84,7 +119,13 @@ export type ApplyPageFormatOptions = {
  */
 export function applyPageFormatCssVars(
   element: HTMLElement | null | undefined,
-  pageSetup: { format?: string; orientation?: string; margin?: number | number[] } | null | undefined,
+  pageSetup: {
+    format?: string;
+    orientation?: string;
+    widthMm?: number;
+    heightMm?: number;
+    margin?: number | number[];
+  } | null | undefined,
   options: ApplyPageFormatOptions = {}
 ) {
   if (!element) return;
@@ -134,36 +175,15 @@ export function applyFieldFormTextStyle(element, style) {
   }
 }
 
-const DESIGN_PANEL_ROOT_SELECTOR = [
-  '.properties-panel',
-  '.field-palette',
-  '.design-panel__toolbar',
-  '.editor-top-chrome',
-  '.modal--schema-designer',
-].join(', ');
-
 /**
- * Apply page-setup default text typography to design panels, property forms,
- * palette chrome, and schema designer modals (font only; not color).
- * @param {ParentNode | null} root
- * @param {import('../types.js').TemplatePageSetup | null | undefined} pageSetup
+ * No-op: Default text style must stay on the template document only.
+ * Design panels, palette, and schema modals use UI `--me-font-family`.
+ * Kept for call-site compatibility.
+ * @param {ParentNode | null} _root
+ * @param {import('../types.js').TemplatePageSetup | null | undefined} _pageSetup
  */
-export function applyDesignPanelTextStyle(root, pageSetup) {
-  if (!root) return;
-  const style = resolvePageSetupTextStyle(pageSetup);
-
-  const targets =
-    root instanceof HTMLElement && root.matches?.(DESIGN_PANEL_ROOT_SELECTOR)
-      ? [root]
-      : [...root.querySelectorAll(DESIGN_PANEL_ROOT_SELECTOR)];
-
-  if (root instanceof HTMLElement && !targets.includes(root)) {
-    applyFieldFormTextStyle(root, style);
-  }
-
-  for (const el of targets) {
-    applyFieldFormTextStyle(el, style);
-  }
+export function applyDesignPanelTextStyle(_root, _pageSetup) {
+  // Intentionally empty — do not push pageSetup.textStyle onto Interface chrome.
 }
 
 /**

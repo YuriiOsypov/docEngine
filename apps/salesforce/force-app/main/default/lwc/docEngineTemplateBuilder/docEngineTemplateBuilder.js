@@ -34,6 +34,8 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   accessGroupId = '';
   accessGroupOptions = [{ label: 'None — all users with access', value: '' }];
   hideEmpty = false;
+  /** When true, Finish attaches a file using outputFormat. */
+  attachFile = true;
   outputFormat = 'pdf';
   outputFormatOptions = [
     { label: 'PDF', value: 'pdf' },
@@ -47,6 +49,8 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   _versionDetailById = {};
   editorBusy = false;
   fillingMode = false;
+  /** When true, hide identity/controls rows; keep summary bar with Preview + Save */
+  metaPanelCollapsed = false;
 
   _editor = null;
   _editorInitialized = false;
@@ -83,6 +87,42 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     return Boolean(this._templateId && this.objectApiName);
   }
 
+  get accessGroupSelectOptions() {
+    return (this.accessGroupOptions || []).map((o, i) => ({
+      key: o.value || `__none_${i}`,
+      label: o.label,
+      value: o.value
+    }));
+  }
+
+  get outputFormatSelectOptions() {
+    return (this.outputFormatOptions || []).map((o) => ({
+      label: o.label,
+      value: o.value
+    }));
+  }
+
+  get outputFormatDisabled() {
+    return this.attachFile !== true;
+  }
+
+  get outputFormatHelp() {
+    return this.attachFile === true
+      ? 'Finish attaches a PDF or HTML file for documents from this template.'
+      : 'Turn on Attach file to choose PDF or HTML.';
+  }
+
+  get versionSelectOptions() {
+    if (!this.versionOptions || !this.versionOptions.length) {
+      return [{ key: '__empty', label: 'Current version', value: '' }];
+    }
+    return this.versionOptions.map((o) => ({
+      key: o.value || '__empty',
+      label: o.label,
+      value: o.value
+    }));
+  }
+
   get versionPickerDisabled() {
     return this.editorBusy || !this._templateId || !this.versionOptions.length;
   }
@@ -112,6 +152,29 @@ export default class DocEngineTemplateBuilder extends LightningElement {
       : 'Design mode — place fields, then map Salesforce fields if needed.';
   }
 
+  get metaPanelClass() {
+    return this.metaPanelCollapsed
+      ? 'de-meta-panel de-meta-panel--collapsed'
+      : 'de-meta-panel';
+  }
+
+  get metaPanelAriaExpanded() {
+    return String(!this.metaPanelCollapsed);
+  }
+
+  get metaPanelToggleTitle() {
+    return this.metaPanelCollapsed ? 'Show template settings' : 'Hide template settings';
+  }
+
+  get metaPanelTitle() {
+    const name = (this.templateName || '').trim();
+    return name || 'Untitled template';
+  }
+
+  handleToggleMetaPanel() {
+    this.metaPanelCollapsed = !this.metaPanelCollapsed;
+  }
+
   connectedCallback() {
     if (this.defaultObjectApiName && !this.objectApiName) {
       this.objectApiName = this.defaultObjectApiName;
@@ -119,6 +182,7 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   }
 
   renderedCallback() {
+    this._syncMetaSelects();
     if (this._editorInitialized || this._loadingTemplate) {
       return;
     }
@@ -129,6 +193,53 @@ export default class DocEngineTemplateBuilder extends LightningElement {
       return;
     }
     this._bootstrap(editorRoot, stickyChrome, docActions);
+  }
+
+  _syncMetaSelects() {
+    const group = this.template.querySelector('#de-meta-group');
+    if (group && group.value !== (this.accessGroupId || '')) {
+      group.value = this.accessGroupId || '';
+    }
+    const format = this.template.querySelector('[data-meta="output-format"]');
+    if (format) {
+      format.disabled = this.outputFormatDisabled;
+      if (format.value !== (this.outputFormat || 'pdf')) {
+        format.value = this.outputFormat || 'pdf';
+      }
+    }
+    const objectApi = this.template.querySelector('[data-meta="object-api"]');
+    if (objectApi) {
+      const locked = this.objectApiNameLocked;
+      objectApi.disabled = locked;
+      objectApi.classList.toggle('de-meta-input--locked', locked);
+      if (objectApi.value !== (this.objectApiName || '')) {
+        objectApi.value = this.objectApiName || '';
+      }
+    }
+    const version = this.template.querySelector('[data-meta="version"]');
+    if (version) {
+      const next = this.versionId || '';
+      if (version.value !== next) {
+        version.value = next;
+      }
+      version.disabled = this.versionPickerDisabled;
+    }
+    const active = this.template.querySelector('[data-meta="active"]');
+    if (active && active.checked !== this.isActive) {
+      active.checked = this.isActive === true;
+    }
+    const attachFile = this.template.querySelector('[data-meta="attach-file"]');
+    if (attachFile && attachFile.checked !== this.attachFile) {
+      attachFile.checked = this.attachFile === true;
+    }
+    const hideEmpty = this.template.querySelector('[data-meta="hide-empty"]');
+    if (hideEmpty && hideEmpty.checked !== this.hideEmpty) {
+      hideEmpty.checked = this.hideEmpty === true;
+    }
+    const filling = this.template.querySelector('[data-meta="filling-mode"]');
+    if (filling && filling.checked !== this.fillingMode) {
+      filling.checked = this.fillingMode === true;
+    }
   }
 
   disconnectedCallback() {
@@ -169,11 +280,50 @@ export default class DocEngineTemplateBuilder extends LightningElement {
         this._editor.setFieldMapping(initialData.fieldMapping);
       }
 
+      // Always refresh Source payload from live Object describe when opening a template.
+      await this._ensureSourceSample({ force: true });
+
       this._editorInitialized = true;
     } catch (err) {
       this._showError('Failed to load template builder', err);
     } finally {
       this._loadingTemplate = false;
+    }
+  }
+
+  /**
+   * Refresh fieldMapping.sourceSample from the current Object API Name describe.
+   * Preserves mapping rules/expression. Call with force:true on template open.
+   */
+  async _ensureSourceSample({ force = true } = {}) {
+    if (!this._editor || typeof this._editor.setFieldMapping !== 'function') {
+      return;
+    }
+    const objectApiName = (this.objectApiName || '').trim();
+    if (!objectApiName) {
+      return;
+    }
+    const existing =
+      typeof this._editor.getFieldMapping === 'function'
+        ? this._editor.getFieldMapping()
+        : null;
+    if (!force && existing && existing.sourceSample != null) {
+      return;
+    }
+    try {
+      const sampleJson = await buildSourceSampleJson({ objectApiName });
+      if (!sampleJson) {
+        return;
+      }
+      this._editor.setFieldMapping({
+        kind: 'fieldMapping',
+        version: 1,
+        rules: (existing && existing.rules) || [],
+        expression: existing && existing.expression,
+        sourceSample: JSON.parse(sampleJson)
+      });
+    } catch (err) {
+      // Non-blocking: user can still Upload JSON or open Field Mapping.
     }
   }
 
@@ -185,6 +335,7 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     this.description = dto.description || '';
     this.accessGroupId = dto.accessGroupId || '';
     this.hideEmpty = dto.hideEmpty === true;
+    this.attachFile = dto.attachFile !== false;
     this.outputFormat = dto.outputFormat === 'html' ? 'html' : 'pdf';
     this.isActive = dto.isActive !== false;
     this.version = dto.version;
@@ -269,7 +420,7 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   }
 
   async handleVersionChange(event) {
-    const nextId = event.detail.value;
+    const nextId = event.target.value;
     if (!nextId || !this._editor || nextId === this.versionId) {
       return;
     }
@@ -285,6 +436,7 @@ export default class DocEngineTemplateBuilder extends LightningElement {
       } else if (typeof this._editor.setFieldMapping === 'function') {
         this._editor.setFieldMapping(null);
       }
+      await this._ensureSourceSample({ force: true });
       this._showToast('Version loaded', `Editing v${dto.version}. Save creates a new version.`, 'info');
     } catch (err) {
       this._showError('Failed to load version', err);
@@ -313,8 +465,10 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     this.templateName = event.target.value;
   }
 
-  handleObjectApiNameChange(event) {
+  async handleObjectApiNameChange(event) {
     this.objectApiName = event.target.value;
+    // Refresh Database tab paths when Source Object changes.
+    await this._ensureSourceSample({ force: true });
   }
 
   handleDescriptionChange(event) {
@@ -322,23 +476,27 @@ export default class DocEngineTemplateBuilder extends LightningElement {
   }
 
   handleAccessGroupIdChange(event) {
-    this.accessGroupId = event.detail.value || '';
+    this.accessGroupId = event.target.value || '';
   }
 
   handleHideEmptyChange(event) {
-    this.hideEmpty = event.detail.checked === true;
+    this.hideEmpty = event.target.checked === true;
+  }
+
+  handleAttachFileChange(event) {
+    this.attachFile = event.target.checked === true;
   }
 
   handleOutputFormatChange(event) {
-    this.outputFormat = event.detail.value === 'html' ? 'html' : 'pdf';
+    this.outputFormat = event.target.value === 'html' ? 'html' : 'pdf';
   }
 
   handleActiveChange(event) {
-    this.isActive = event.target.checked;
+    this.isActive = event.target.checked === true;
   }
 
   async handleFillingModeChange(event) {
-    this.fillingMode = event.target.checked;
+    this.fillingMode = event.target.checked === true;
     if (!this._editor || typeof this._editor.setDesignMode !== 'function') {
       return;
     }
@@ -348,6 +506,8 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     } catch (err) {
       this._showError('Mode switch failed', err);
       this.fillingMode = !this.fillingMode;
+      const filling = this.template.querySelector('[data-meta="filling-mode"]');
+      if (filling) filling.checked = this.fillingMode;
     } finally {
       this.editorBusy = false;
     }
@@ -435,21 +595,40 @@ export default class DocEngineTemplateBuilder extends LightningElement {
     }
   }
 
-  handleImportFullDocumentClick() {
-    this._openFilePicker('full');
+  handleImportClick() {
+    this._openFilePicker('auto');
   }
 
-  handleImportTemplateClick() {
-    this._openFilePicker('template');
-  }
-
-  handleImportValuesClick() {
-    this._openFilePicker('values');
+  /**
+   * Detect import payload type from export `kind` (or structure fallbacks).
+   * @returns {'document' | 'template' | 'values'}
+   */
+  _detectImportKind(data) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('File is not valid JSON.');
+    }
+    const kind = data.kind;
+    if (kind === 'template') return 'template';
+    if (kind === 'field') return 'values';
+    if (kind === 'document') {
+      // Values packs may misuse document kind without blocks.
+      if (!Array.isArray(data.blocks) && (data.values || data.sections)) {
+        return 'values';
+      }
+      return 'document';
+    }
+    if (Array.isArray(data.blocks)) {
+      return data.fieldSchemas || data.time || data.pageSetup ? 'document' : 'template';
+    }
+    if (data.values || data.sections) return 'values';
+    if (data.fieldSchemas) return 'template';
+    throw new Error(
+      'Unrecognized JSON. Expected a DocEngine export with kind "document", "template", or "field".'
+    );
   }
 
   async handleImportFile(event) {
     const input = event.target;
-    const kind = input.dataset.import;
     const file = input.files && input.files[0];
     input.value = '';
     if (!file || !this._editor) return;
@@ -461,16 +640,15 @@ export default class DocEngineTemplateBuilder extends LightningElement {
         throw new Error('File is not valid JSON.');
       }
 
-      if (kind === 'full') {
-        if (data.kind === 'field') {
-          throw new Error('This is a values file. Use Values → Import instead.');
-        }
+      const detected = this._detectImportKind(data);
+
+      if (detected === 'document') {
         await this._editor.load(data);
         this._showToast('Imported', 'Full document loaded into the editor.', 'success');
-      } else if (kind === 'template') {
-        if (data.kind && data.kind !== 'template') {
-          throw new Error(`Expected a template file (kind: "template"), got "${data.kind}".`);
-        }
+        return;
+      }
+
+      if (detected === 'template') {
         const confirmed = await LightningConfirm.open({
           message: 'Load template? Current layout and field schemas will be replaced.',
           variant: 'header',
@@ -485,23 +663,19 @@ export default class DocEngineTemplateBuilder extends LightningElement {
           this._editor.setFieldMapping(data.fieldMapping);
         }
         this._showToast('Imported', 'Template loaded. Save to persist on the record.', 'success');
-      } else if (kind === 'values') {
-        const isValues =
-          data.kind === 'field' || (data.kind === 'document' && !Array.isArray(data.blocks));
-        if (data.kind && !isValues) {
-          throw new Error(`Expected a values file (kind: "field"), got "${data.kind}".`);
-        }
-        if (!data.values && !data.sections) {
-          throw new Error('Values file has no values or sections.');
-        }
-        // Scenario / value packs must not overwrite Salesforce-mapped fields.
-        await this._editor.load(data, { omitMappedFields: true });
-        this._showToast(
-          'Imported',
-          'Values applied (mapped fields left for merge).',
-          'success'
-        );
+        return;
       }
+
+      // values
+      if (!data.values && !data.sections) {
+        throw new Error('Values file has no values or sections.');
+      }
+      await this._editor.load(data, { omitMappedFields: true });
+      this._showToast(
+        'Imported',
+        'Values applied (mapped fields left for merge).',
+        'success'
+      );
     } catch (err) {
       this._showError('Import failed', err);
     } finally {
@@ -624,6 +798,7 @@ export default class DocEngineTemplateBuilder extends LightningElement {
         description: this.description || '',
         pdfFilename: this.pdfFilename || '',
         hideEmpty: this.hideEmpty === true,
+        attachFile: this.attachFile !== false,
         outputFormat: this.outputFormat === 'html' ? 'html' : 'pdf'
       };
       if (this._templateId) {

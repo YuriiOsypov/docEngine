@@ -22,7 +22,9 @@ public with sharing class DocEngineTemplateController {
     @AuraEnabled public String pdfFilename { get; set; }
     /** When true, preview / export hide empty field values. */
     @AuraEnabled public Boolean hideEmpty { get; set; }
-    /** Finish attach format: pdf (default) or html. */
+    /** When true, Finish attaches a file (format from outputFormat). Default true. */
+    @AuraEnabled public Boolean attachFile { get; set; }
+    /** Finish attach format: pdf (default) or html. Used only when attachFile is true. */
     @AuraEnabled public String outputFormat { get; set; }
     /** Public Group Id; blank = no group restriction. */
     @AuraEnabled public String accessGroupId { get; set; }
@@ -101,6 +103,7 @@ public with sharing class DocEngineTemplateController {
         Description__c,
         PDF_Filename__c,
         Hide_Empty__c,
+        Attach_File__c,
         Output_Format__c,
         Access_Group_Id__c
       FROM DocEngine_Template__c
@@ -135,6 +138,7 @@ public with sharing class DocEngineTemplateController {
         Template__r.Description__c,
         Template__r.PDF_Filename__c,
         Template__r.Hide_Empty__c,
+        Template__r.Attach_File__c,
         Template__r.Output_Format__c,
         Template__r.Access_Group_Id__c,
         Template__r.Current_Version__c,
@@ -161,6 +165,7 @@ public with sharing class DocEngineTemplateController {
     dto.description = ver.Template__r.Description__c;
     dto.pdfFilename = ver.Template__r.PDF_Filename__c;
     dto.hideEmpty = ver.Template__r.Hide_Empty__c == true;
+    dto.attachFile = ver.Template__r.Attach_File__c != false;
     dto.outputFormat = normalizeOutputFormat(ver.Template__r.Output_Format__c);
     dto.accessGroupId = ver.Template__r.Access_Group_Id__c;
     return dto;
@@ -333,6 +338,8 @@ public with sharing class DocEngineTemplateController {
     dto.pdfFilename = (String) raw.get('pdfFilename');
     Object hideEmpty = raw.get('hideEmpty');
     dto.hideEmpty = hideEmpty == null ? false : (Boolean) hideEmpty;
+    Object attachFile = raw.get('attachFile');
+    dto.attachFile = attachFile == null ? true : (Boolean) attachFile;
     dto.outputFormat = normalizeOutputFormat((String) raw.get('outputFormat'));
     Object idVal = raw.get('id');
     if (idVal != null && String.isNotBlank(String.valueOf(idVal))) {
@@ -365,6 +372,7 @@ public with sharing class DocEngineTemplateController {
       DocEngine_Template__c.Description__c,
       DocEngine_Template__c.PDF_Filename__c,
       DocEngine_Template__c.Hide_Empty__c,
+      DocEngine_Template__c.Attach_File__c,
       DocEngine_Template__c.Output_Format__c,
       DocEngine_Template__c.Access_Group_Id__c,
       DocEngine_Template__c.Current_Version__c
@@ -452,6 +460,7 @@ public with sharing class DocEngineTemplateController {
     out.description = dto.description;
     out.pdfFilename = dto.pdfFilename;
     out.hideEmpty = head != null ? head.Hide_Empty__c == true : dto.hideEmpty == true;
+    out.attachFile = head != null ? head.Attach_File__c != false : dto.attachFile != false;
     out.outputFormat = head != null
       ? normalizeOutputFormat(head.Output_Format__c)
       : normalizeOutputFormat(dto.outputFormat);
@@ -480,6 +489,7 @@ public with sharing class DocEngineTemplateController {
     dto.description = row.Description__c;
     dto.pdfFilename = row.PDF_Filename__c;
     dto.hideEmpty = row.Hide_Empty__c == true;
+    dto.attachFile = row.Attach_File__c != false;
     dto.outputFormat = normalizeOutputFormat(row.Output_Format__c);
     dto.accessGroupId = row.Access_Group_Id__c;
     return dto;

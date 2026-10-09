@@ -3,9 +3,9 @@ import { resolveSectionName, findFieldPlacement } from './field-id.js';
 import { resolveFieldIdByName } from './field-id.js';
 import { walkSegments } from './segment-tree.js';
 import { getRepeaterFieldSchemas } from './repeater-io.js';
-import { isTableRowArray } from './field-io/table-field-io.js';
+import { isTableRowArray, projectTableRowsOntoColumns } from './field-io/table-field-io.js';
 import { normalizeDocumentValues, applyDocumentValues } from './document-io.js';
-import { parseCellFieldId } from './field-schemas.js';
+import { parseCellFieldId, labelToFieldKey } from './field-schemas.js';
 import { parseMappingSourcePath } from './date-format.js';
 import { applyMappingFormatSuffix, looksLikeMappingFormatSuffix } from './mapping-format.js';
 import { pivotExpand, isPivotTableValue } from './pivot.js';
@@ -46,6 +46,9 @@ export { applyMappingFormatSuffix, looksLikeMappingFormatSuffix } from './mappin
 
 export const FIELD_MAPPING_KIND = 'fieldMapping';
 export const FIELD_MAPPING_VERSION = 1;
+
+/** Reserved section-map key / rule field for array-sourced (repeatable) sections. */
+export const SECTION_SOURCE_KEY = '_source';
 
 type SoftSchema = FieldSchema & Record<string, any>;
 type FieldMappingRule = {
@@ -100,10 +103,11 @@ export function getPayloadByPath( path: any, data: any) {
       rest = rest.slice(bracket[1].length).replace(/^\./, '');
       continue;
     }
-    const dot = rest.match(/^([^.\[]+)(?:\.|$)/);
-    if (dot) {
-      parts.push(dot[1]);
-      rest = rest.slice(dot[1].length).replace(/^\./, '');
+    // Allow `Table[0]` (identifier immediately followed by subscript).
+    const ident = rest.match(/^([^.\[]+)/);
+    if (ident) {
+      parts.push(ident[1]);
+      rest = rest.slice(ident[1].length).replace(/^\./, '');
       continue;
     }
     break;
@@ -116,7 +120,9 @@ export function getPayloadByPath( path: any, data: any) {
       const keyMatch = part.match(/^\["(.+)"\]$/) ?? part.match(/^\['(.+)'\]$/);
       const indexMatch = part.match(/^\[(\d+)\]$/);
       if (keyMatch) {
-        current = /** @type {Record<string, unknown>} */ (current)[keyMatch[1]];
+        const next = resolvePathProperty(current, keyMatch[1]);
+        if (!next.ok) return undefined;
+        current = next.value;
       } else if (indexMatch) {
         current = /** @type {unknown[]} */ (current)[Number(indexMatch[1])];
       } else {
@@ -124,7 +130,10 @@ export function getPayloadByPath( path: any, data: any) {
       }
       continue;
     }
-    current = /** @type {Record<string, unknown>} */ (current)[part];
+    // Use own-property / row-column lookup — never Array.prototype.values/keys/…
+    const next = resolvePathProperty(current, part);
+    if (!next.ok) return undefined;
+    current = next.value;
   }
   return current;
 }
@@ -148,10 +157,11 @@ export function payloadPathExists(path: any, data: any) {
       rest = rest.slice(bracket[1].length).replace(/^\./, '');
       continue;
     }
-    const dot = rest.match(/^([^.\[]+)(?:\.|$)/);
-    if (dot) {
-      parts.push(dot[1]);
-      rest = rest.slice(dot[1].length).replace(/^\./, '');
+    // Allow `Table[0]` (identifier immediately followed by subscript).
+    const ident = rest.match(/^([^.\[]+)/);
+    if (ident) {
+      parts.push(ident[1]);
+      rest = rest.slice(ident[1].length).replace(/^\./, '');
       continue;
     }
     break;
@@ -241,15 +251,12 @@ export function sourcePathExists(sourcePath: any, payload: any) {
 export function resolveSourcePath( sourcePath: any, payload: any) {
   const { path } = parseMappingSourcePath(sourcePath);
   if (!path) return undefined;
+  // Always walk with getPayloadByPath / resolvePathProperty. Evaluating the path
+  // via `new Function` returns Array.prototype methods for keys like `values`
+  // (`arr.values` is the iterator), which breaks nested `$values.amount` drops.
   if (path.startsWith('$payload')) {
-    try {
-      // eslint-disable-next-line no-new-func
-      const fn = new Function('$payload', `"use strict"; return (${path});`);
-      return fn(payload);
-    } catch {
-      const stripped = path.replace(/^\$payload\.?/, '');
-      return stripped ? getPayloadByPath(stripped, payload) : payload;
-    }
+    const stripped = path.replace(/^\$payload\.?/, '');
+    return stripped ? getPayloadByPath(stripped, payload) : payload;
   }
   return getPayloadByPath(path, payload);
 }
@@ -608,35 +615,48 @@ export function validateMappedValues( fieldsExport: any, blocks: any, fieldSchem
 
   const sections = fieldsExport.sections ?? {};
   for (const [sectionName, fields] of Object.entries(sections)) {
-    if (Array.isArray(fields)) continue;
-    if (!fields || typeof fields !== 'object') continue;
+    /** @type {Array<Record<string, unknown>>} */
+    const fieldMaps = [];
+    if (
+      Array.isArray(fields) &&
+      fields.every((item) => item != null && typeof item === 'object' && !Array.isArray(item))
+    ) {
+      for (const item of fields) fieldMaps.push(/** @type {Record<string, unknown>} */ (item));
+    } else if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
+      fieldMaps.push(/** @type {Record<string, unknown>} */ (fields));
+    } else {
+      continue;
+    }
 
-    for (const [fieldName, value] of Object.entries(fields)) {
-      const fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
-      if (!fieldId) {
-        warnings.push({
-          section: sectionName,
-          field: fieldName,
-          message: `Unknown template field "${fieldName}" in section "${sectionName}".`,
-        });
-        continue;
-      }
+    for (const fieldMap of fieldMaps) {
+      for (const [fieldName, value] of Object.entries(fieldMap)) {
+        if (fieldName === SECTION_SOURCE_KEY) continue;
+        const fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
+        if (!fieldId) {
+          warnings.push({
+            section: sectionName,
+            field: fieldName,
+            message: `Unknown template field "${fieldName}" in section "${sectionName}".`,
+          });
+          continue;
+        }
 
-      const schema = fieldSchemas[fieldId];
-      const error = validateMappedFieldValue(schema, value);
-      if (error) {
-        errors.push({ section: sectionName, field: fieldName, message: error });
-      }
+        const schema = fieldSchemas[fieldId];
+        const error = validateMappedFieldValue(schema, value);
+        if (error) {
+          errors.push({ section: sectionName, field: fieldName, message: error });
+        }
 
-      if (schema?.type === 'child' && value && typeof value === 'object' && !Array.isArray(value)) {
-        validateChildMappedObject(
-          getRepeaterFieldSchemas(schema),
-          /** @type {Record<string, unknown>} */ (value),
-          sectionName,
-          fieldName,
-          errors,
-          warnings,
-        );
+        if (schema?.type === 'child' && value && typeof value === 'object' && !Array.isArray(value)) {
+          validateChildMappedObject(
+            getRepeaterFieldSchemas(schema),
+            /** @type {Record<string, unknown>} */ (value),
+            sectionName,
+            fieldName,
+            errors,
+            warnings,
+          );
+        }
       }
     }
   }
@@ -765,33 +785,67 @@ export function validateMappingSourcePaths(rules: any, payload: any) {
   const warnings = [];
   const seen = new Set();
 
+  const sourcedSections = new Set(
+    (rules ?? [])
+      .filter(isSectionSourceRule)
+      .map((rule: any) => String(rule.section ?? ''))
+      .filter(Boolean),
+  );
+
   for (const rule of rules ?? []) {
     /** @type {string[]} */
     const paths = [];
     const sourcePath = String(rule?.sourcePath ?? '').trim();
     const sourceArrayPath = String(rule?.sourceArrayPath ?? '').trim();
+    const sectionSource = isSectionSourceRule(rule);
+    const sectionIsSourced = sourcedSections.has(String(rule?.section ?? ''));
 
-    if (sourcePath.startsWith('$')) {
+    // Relative field paths under a sourced section resolve against each array item — skip root checks.
+    if (
+      !sectionSource &&
+      sectionIsSourced &&
+      sourcePath &&
+      !isAbsoluteMappingPath(sourcePath) &&
+      !sourceArrayPath
+    ) {
+      continue;
+    }
+
+    if (sourcePath.startsWith('$') && (sectionSource || isAbsoluteMappingPath(sourcePath) || !sectionIsSourced)) {
       paths.push(sourcePath);
     }
     if (sourceArrayPath.startsWith('$')) {
       const coerced = coerceToExistingArrayPath(sourceArrayPath, payload);
       // Validate the real child array when nested lookup paths mis-infer Item__r as array
-      paths.push(coerced && coerced !== sourceArrayPath ? coerced : sourceArrayPath);
+      const checkPath = coerced && coerced !== sourceArrayPath ? coerced : sourceArrayPath;
+      if (!paths.includes(checkPath)) paths.push(checkPath);
     }
 
     for (const path of paths) {
       const dedupeKey = `${rule.section ?? ''}\0${rule.field ?? ''}\0${path}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
-      if (sourcePathExists(path, payload)) continue;
       if (sourcePathUnderLazyStub(path, payload)) continue;
-      warnings.push({
-        section: String(rule.section ?? ''),
-        field: String(rule.field ?? ''),
-        sourcePath: path,
-        message: `Source path "${path}" does not exist in the payload.`,
-      });
+      if (!sourcePathExists(path, payload)) {
+        warnings.push({
+          section: String(rule.section ?? ''),
+          field: String(rule.field ?? ''),
+          sourcePath: path,
+          message: `Source path "${path}" does not exist in the payload.`,
+        });
+        continue;
+      }
+      if (sectionSource) {
+        const value = resolveSourcePath(path, payload);
+        if (!Array.isArray(value)) {
+          warnings.push({
+            section: String(rule.section ?? ''),
+            field: SECTION_SOURCE_KEY,
+            sourcePath: path,
+            message: `Section source "${path}" is not an array in the payload.`,
+          });
+        }
+      }
     }
   }
 
@@ -887,11 +941,20 @@ export function resolveFieldMappingTarget( fieldId: any, blocks: any, fieldSchem
   if (!schema) return null;
 
   if (childFieldId) {
-    const childSchema = fieldSchemas[childFieldId];
+    const childPath = findRepeaterChildPathById(schema, childFieldId);
+    const childSchema =
+      (childPath && resolveChildSchemaByPath(schema, childPath.pathIds)) ||
+      fieldSchemas[childFieldId];
+    const childField =
+      childPath?.pathNames?.[childPath.pathNames.length - 1] ??
+      childSchema?.name ??
+      childSchema?.label ??
+      childFieldId;
     return {
       section,
       field: schema.name ?? schema.label ?? fieldId,
-      childField: childSchema?.name ?? childSchema?.label ?? childFieldId,
+      childField,
+      childFieldPath: childPath?.pathNames?.join('.') || undefined,
       fieldId,
       childFieldId,
     };
@@ -902,6 +965,147 @@ export function resolveFieldMappingTarget( fieldId: any, blocks: any, fieldSchem
     field: schema.name ?? schema.label ?? fieldId,
     fieldId,
   };
+}
+
+/**
+ * Walk a repeater schema tree to locate a child field id.
+ * @param {import('../types.d.ts').FieldSchema | undefined} repeaterSchema
+ * @param {string} targetChildId
+ * @param {string[]} [pathNames]
+ * @param {string[]} [pathIds]
+ * @returns {{ pathNames: string[]; pathIds: string[] } | null}
+ */
+function findRepeaterChildPathById(
+  repeaterSchema: any,
+  targetChildId: any,
+  pathNames: string[] = [],
+  pathIds: string[] = [],
+): { pathNames: string[]; pathIds: string[] } | null {
+  if (!repeaterSchema || !targetChildId) return null;
+
+  for (const [childId, childSchemaRaw] of Object.entries(getRepeaterFieldSchemas(repeaterSchema))) {
+    const childSchema = childSchemaRaw as SoftSchema;
+    const nextNames = [...pathNames, childSchema.name ?? childSchema.label ?? childId];
+    const nextIds = [...pathIds, childId];
+    if (childId === targetChildId) {
+      return { pathNames: nextNames, pathIds: nextIds };
+    }
+    if (childSchema.type === 'child') {
+      const found = findRepeaterChildPathById(childSchema, targetChildId, nextNames, nextIds);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {import('../types.d.ts').FieldSchema | undefined} repeaterSchema
+ * @param {string[]} pathIds
+ */
+function resolveChildSchemaByPath(repeaterSchema: any, pathIds: any) {
+  let current = repeaterSchema as SoftSchema | undefined;
+  let leaf: SoftSchema | undefined;
+  for (const childId of pathIds ?? []) {
+    if (!current || current.type !== 'child') return null;
+    leaf = getRepeaterFieldSchemas(current)[childId] as SoftSchema | undefined;
+    if (!leaf) return null;
+    current = leaf;
+  }
+  return leaf ?? null;
+}
+
+/**
+ * Remap a field/child id through an old→new rename map (supports short chains).
+ * @param {string | undefined} id
+ * @param {Record<string, string> | Map<string, string> | null | undefined} fieldIdRenames
+ */
+function remapFieldId(id: any, fieldIdRenames: any) {
+  if (!id || !fieldIdRenames) return id;
+  let current = String(id);
+  for (let i = 0; i < 8; i += 1) {
+    const next =
+      fieldIdRenames instanceof Map ? fieldIdRenames.get(current) : fieldIdRenames[current];
+    if (!next || next === current) break;
+    current = String(next);
+  }
+  return current;
+}
+
+/**
+ * Rewrite mapping rule section/field/child names (and fieldIds) to match the
+ * current template after a section or field rename.
+ *
+ * Prefers `rule.fieldId` / `rule.childFieldId`. Optional `fieldIdRenames` covers
+ * cases where ids were rebuilt (section rename / field name → new id).
+ *
+ * @param {import('../types.d.ts').FieldMappingRule[]} rules
+ * @param {import('../types.d.ts').EditorBlock[]} blocks
+ * @param {Record<string, import('../types.d.ts').FieldSchema>} fieldSchemas
+ * @param {{ fieldIdRenames?: Record<string, string> | Map<string, string> }} [options]
+ * @returns {import('../types.d.ts').FieldMappingRule[]}
+ */
+export function syncMappingRulesToSchema(rules: any, blocks: any, fieldSchemas: any, options: any = {}) {
+  const fieldIdRenames = options?.fieldIdRenames;
+  if (!Array.isArray(rules) || !rules.length) return Array.isArray(rules) ? [] : [];
+
+  return rules.map((rule: any) => {
+    if (!rule || typeof rule !== 'object') return rule;
+    if (isSectionSourceRule(rule)) {
+      const path = String(rule.sourceArrayPath || rule.sourcePath || '').trim();
+      return createSectionSourceRule(rule.section, path);
+    }
+
+    const fieldId = remapFieldId(rule.fieldId, fieldIdRenames);
+    const childFieldId = remapFieldId(rule.childFieldId, fieldIdRenames);
+    const schema = fieldId ? fieldSchemas?.[fieldId] : null;
+
+    if (!fieldId || !schema) {
+      if (fieldId === rule.fieldId && childFieldId === rule.childFieldId) return rule;
+      const patched = { ...rule, fieldId: fieldId || rule.fieldId };
+      if (childFieldId) patched.childFieldId = childFieldId;
+      else if ('childFieldId' in patched && !childFieldId) delete patched.childFieldId;
+      return patched;
+    }
+
+    const target = resolveFieldMappingTarget(
+      fieldId,
+      blocks,
+      fieldSchemas,
+      childFieldId || null,
+    );
+    if (!target) {
+      const patched = { ...rule, fieldId };
+      if (childFieldId) patched.childFieldId = childFieldId;
+      return patched;
+    }
+
+    const next = {
+      ...rule,
+      section: target.section,
+      field: target.field,
+      fieldId: target.fieldId,
+    };
+
+    if (childFieldId || rule.childField || rule.childFieldPath) {
+      if (target.childFieldId || childFieldId) {
+        next.childFieldId = target.childFieldId ?? childFieldId;
+      }
+      if (target.childField) {
+        next.childField = target.childField;
+      }
+      if (target.childFieldPath) {
+        next.childFieldPath = target.childFieldPath;
+      } else if (target.childField && rule.childFieldPath) {
+        const parts = String(rule.childFieldPath).split('.').filter(Boolean);
+        if (parts.length) {
+          parts[parts.length - 1] = target.childField;
+          next.childFieldPath = parts.join('.');
+        }
+      }
+    }
+
+    return next;
+  });
 }
 
 /**
@@ -1067,6 +1271,397 @@ function getColumnPropertyFromPaths( sourcePath: any, sourceArrayPath: any) {
 }
 
 /**
+ * Array path on an unresolved table mapping object.
+ * Prefers `_source` (same key as section maps); accepts legacy `source`.
+ * @param {unknown} value
+ */
+export function getTableMappingSourcePath(value: any): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  const fromPreferred = value[SECTION_SOURCE_KEY];
+  if (typeof fromPreferred === 'string' && fromPreferred.trim().startsWith('$')) {
+    return fromPreferred.trim();
+  }
+  const legacy = /** @type {{ source?: unknown }} */ (value).source;
+  if (typeof legacy === 'string' && legacy.trim().startsWith('$')) {
+    return legacy.trim();
+  }
+  return '';
+}
+
+/**
+ * Unresolved table mapping in Mapping result JSON:
+ * `{ _source: "$payload.records", items: { name: "$name", … } }`.
+ * Legacy `{ source, items }` is still accepted when reading.
+ * @param {unknown} value
+ */
+export function isTableMappingObject(value: any) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const source = getTableMappingSourcePath(value);
+  const items = /** @type {{ items?: unknown }} */ (value).items;
+  return (
+    !!source &&
+    items != null &&
+    typeof items === 'object' &&
+    !Array.isArray(items)
+  );
+}
+
+/**
+ * @param {unknown} rule
+ */
+export function isSectionSourceRule(rule: any): boolean {
+  return !!rule && String(rule.field ?? '') === SECTION_SOURCE_KEY;
+}
+
+/**
+ * Absolute mapping paths resolve against the root payload (`$payload…`).
+ * @param {string} sourcePath
+ */
+export function isAbsoluteMappingPath(sourcePath: any): boolean {
+  const full = String(sourcePath ?? '').trim();
+  if (!full) return false;
+  const { path } = parseMappingSourcePath(full);
+  return String(path || full).startsWith('$payload');
+}
+
+/**
+ * Relative paths resolve against the current section-source array item.
+ * @param {string} sourcePath
+ */
+export function isRelativeMappingPath(sourcePath: any): boolean {
+  const full = String(sourcePath ?? '').trim();
+  if (!full) return false;
+  return !isAbsoluteMappingPath(full);
+}
+
+/**
+ * Build the reserved `_source` rule for a section.
+ * @param {string} sectionName
+ * @param {string} sourceArrayPath
+ * @returns {import('../types.d.ts').FieldMappingRule}
+ */
+export function createSectionSourceRule(sectionName: any, sourceArrayPath: any) {
+  const path = String(sourceArrayPath ?? '').trim();
+  return {
+    section: String(sectionName ?? ''),
+    field: SECTION_SOURCE_KEY,
+    sourcePath: path,
+    sourceArrayPath: path,
+  };
+}
+
+/**
+ * Resolve a mapping path for one section-source array item.
+ * Absolute (`$payload…`) → root payload; relative (`$Name`, `Name`, `$item.Foo`) → item.
+ * @param {string} sourcePath
+ * @param {unknown} payload
+ * @param {unknown} item
+ */
+export function resolvePathForSectionItem(sourcePath: any, payload: any, item: any): unknown {
+  const full = String(sourcePath ?? '').trim();
+  if (!full) return undefined;
+
+  if (isAbsoluteMappingPath(full)) {
+    return resolveMappedSourceValue(full, payload);
+  }
+
+  const { path, dateFormat } = parseMappingSourcePath(full);
+  let relative = String(path || full).trim();
+  if (relative.startsWith('$item.')) {
+    relative = relative.slice('$item.'.length);
+  } else if (relative.startsWith('$item')) {
+    relative = relative.slice('$item'.length).replace(/^\./, '');
+  } else if (relative.startsWith('$')) {
+    relative = relative.slice(1);
+  }
+
+  let value: unknown;
+  if (item != null && typeof item === 'object' && !Array.isArray(item)) {
+    value =
+      relative.includes('.') || relative.startsWith('[')
+        ? getPayloadByPath(relative, item)
+        : /** @type {Record<string, unknown>} */ (item)[relative];
+    if (value === undefined && relative) {
+      value = getPayloadByPath(relative, item);
+    }
+  }
+
+  if (dateFormat && looksLikeMappingFormatSuffix(dateFormat)) {
+    value = applyMappingFormatSuffix(value, dateFormat);
+  }
+  return value;
+}
+
+/**
+ * Walk back a path until `resolveSourcePath` yields an array (table coerce helper).
+ * @param {string} sourceArrayPath
+ * @param {unknown} payload
+ * @returns {{ path: string; rows: unknown[] }}
+ */
+function resolveArrayPathRows(sourceArrayPath: any, payload: any) {
+  let path = String(sourceArrayPath ?? '').trim();
+  let rows = resolveSourcePath(path, payload);
+  while (!Array.isArray(rows) && typeof path === 'string' && path.includes('.')) {
+    const stripped = String(path).replace(/^\$payload\.?/, '');
+    const lastDot = stripped.lastIndexOf('.');
+    if (lastDot <= 0) break;
+    path = String(path).startsWith('$payload')
+      ? `$payload.${stripped.slice(0, lastDot)}`
+      : stripped.slice(0, lastDot);
+    rows = resolveSourcePath(path, payload);
+  }
+  return { path, rows: Array.isArray(rows) ? rows : [] };
+}
+
+/**
+ * True when a string looks like a mapping path (absolute `$payload…`, relative `$Name`, or bare `Name`).
+ * @param {string} value
+ */
+function looksLikeMappingPathString(value: any): boolean {
+  const s = String(value ?? '').trim();
+  if (!s) return false;
+  if (s.startsWith('$')) return true;
+  return /^[A-Za-z_][\w.[\]'"]*$/.test(s);
+}
+
+/**
+ * Resolve an unresolved field template value against payload + current array item.
+ * @param {unknown} value
+ * @param {unknown} payload
+ * @param {unknown} item
+ */
+function resolveSourcedSectionFieldValue(value: any, payload: any, item: any): unknown {
+  if (typeof value === 'string' && looksLikeMappingPathString(value)) {
+    return resolvePathForSectionItem(value, payload, item);
+  }
+
+  if (isTableMappingObject(value)) {
+    const source = getTableMappingSourcePath(value);
+    const items = /** @type {{ items: Record<string, unknown> }} */ (value).items ?? {};
+    let sourceRows: unknown[];
+    if (isAbsoluteMappingPath(source)) {
+      sourceRows = resolveArrayPathRows(source, payload).rows;
+    } else {
+      const relative = source.startsWith('$') ? source.slice(1) : source;
+      const fromItem =
+        item != null && typeof item === 'object'
+          ? getPayloadByPath(relative, item)
+          : undefined;
+      sourceRows = Array.isArray(fromItem) ? fromItem : [];
+    }
+
+    return sourceRows.map((sourceRow: any) => {
+      if (sourceRow == null || typeof sourceRow !== 'object' || Array.isArray(sourceRow)) {
+        return {};
+      }
+      const targetRow: Record<string, unknown> = {};
+      for (const [columnKey, columnValue] of Object.entries(items)) {
+        if (typeof columnValue !== 'string') continue;
+        targetRow[columnKey] = resolvePathForSectionItem(columnValue, payload, sourceRow);
+      }
+      return targetRow;
+    });
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value)) {
+      out[key] = resolveSourcedSectionFieldValue(child, payload, item);
+    }
+    return out;
+  }
+
+  return value;
+}
+
+/**
+ * Pick the payload property to bind to a table column when a whole array is
+ * mapped onto the table. Prefer a label slug for generic keys like column_1
+ * so "Name" → $name matches nested values[].name.
+ */
+function inferSourcePropForTableColumn(col: any): string {
+  const key = String(col?.key ?? '').trim();
+  const label = String(col?.label ?? col?.name ?? '').trim();
+  if (/^column_\d+$/i.test(key) && label) {
+    return labelToFieldKey(label);
+  }
+  if (key) return key;
+  if (label) return labelToFieldKey(label);
+  return 'value';
+}
+
+/**
+ * True when a column rule accidentally points at the array itself
+ * (e.g. drop `$values` onto a cell → sourcePath === sourceArrayPath === `$values`)
+ * instead of a row property like `$name`.
+ */
+function isColumnBoundToArrayItself(rule: any): boolean {
+  const sourcePath = String(rule?.sourcePath ?? '').trim();
+  const arrayPath = String(rule?.sourceArrayPath ?? '').trim();
+  if (!sourcePath || !arrayPath) return false;
+  const { path: cleanSource } = parseMappingSourcePath(sourcePath);
+  const { path: cleanArray } = parseMappingSourcePath(arrayPath);
+  return String(cleanSource || sourcePath) === String(cleanArray || arrayPath);
+}
+
+/**
+ * Build per-column rules that project an array of row objects onto a table.
+ */
+function buildTableColumnRulesForArrayPath(
+  target: { section: string; field: string; fieldId?: string },
+  tableFieldId: string,
+  schema: any,
+  arrayPath: string,
+): FieldMappingRule[] {
+  const path = String(arrayPath ?? '').trim();
+  if (!path || !Array.isArray(schema?.columns) || !schema.columns.length) return [];
+  return schema.columns.map((col: any) => {
+    const colKey = String(col?.key ?? '').trim();
+    const prop = inferSourcePropForTableColumn(col);
+    return {
+      section: target.section,
+      field: target.field,
+      fieldId: tableFieldId,
+      columnKey: colKey,
+      sourcePath: toAbsoluteColumnPath(path, `$${prop}`),
+      sourceArrayPath: path,
+    };
+  });
+}
+
+/**
+ * Expand an unresolved section field map (with `_source`) into instance array.
+ * @param {Record<string, unknown>} fieldTemplate
+ * @param {string} sourceArrayPath
+ * @param {unknown} payload
+ * @param {Record<string, import('../types.d.ts').FieldSchema>} [fieldSchemas]
+ * @param {import('../types.d.ts').EditorBlock[]} [blocks]
+ * @param {string} [sectionName]
+ * @returns {Array<Record<string, unknown>>}
+ */
+function findSoleTableSchema(
+  blocks: any,
+  fieldSchemas: any,
+  sectionName: any,
+): { fieldId: string; schema: any } | null {
+  const matches: Array<{ fieldId: string; schema: any }> = [];
+  for (const block of blocks ?? []) {
+    if (block?.type !== 'documentSection') continue;
+    const name = resolveSectionName(block.data ?? {});
+    if (
+      name !== sectionName &&
+      String(name).toLowerCase() !== String(sectionName ?? '').toLowerCase()
+    ) {
+      continue;
+    }
+    walkSegments(block.data?.segments ?? [], (seg: any) => {
+      if (seg?.type !== 'table' || !seg.id) return;
+      const schema = fieldSchemas?.[seg.id];
+      if (schema?.type === 'table') matches.push({ fieldId: seg.id, schema });
+    });
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function expandSourcedSectionInstances(
+  fieldTemplate: any,
+  sourceArrayPath: any,
+  payload: any,
+  fieldSchemas: any = {},
+  blocks: any = [],
+  sectionName: any = '',
+) {
+  const { rows } = resolveArrayPathRows(sourceArrayPath, payload);
+  const soleTable = findSoleTableSchema(blocks, fieldSchemas, sectionName);
+  return rows.map((item: any) => {
+    const instance: Record<string, unknown> = {};
+    for (const [fieldName, value] of Object.entries(fieldTemplate ?? {})) {
+      if (fieldName === SECTION_SOURCE_KEY) continue;
+      let resolved = resolveSourcedSectionFieldValue(value, payload, item);
+      let fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
+      let schema = fieldId ? fieldSchemas?.[fieldId] : null;
+      if ((!schema || schema.type !== 'table') && soleTable && isTableRowArray(resolved)) {
+        fieldId = soleTable.fieldId;
+        schema = soleTable.schema;
+      }
+      if (schema?.type === 'table' && isTableRowArray(resolved)) {
+        resolved = projectTableRowsOntoColumns(resolved, schema);
+      }
+      instance[fieldName] = resolved;
+    }
+    return instance;
+  });
+}
+
+/**
+ * No-op: `_source` mapping must not flip "Show on each page" (`repeatable`).
+ * Instance cloning uses loaded section arrays via `resolveRepeatablePagePlan`.
+ * Kept for API compatibility with older callers.
+ * @param {import('../types.d.ts').EditorBlock[]} blocks
+ * @param {import('../types.d.ts').FieldMappingRule[] | null | undefined} _rules
+ */
+export function applySectionSourceRepeatable(blocks: any, _rules: any) {
+  return blocks;
+}
+
+/**
+ * Absolute column path → relative `$prop` item path when under `sourceArrayPath`.
+ * Preserves `#format` suffixes. Falls back to the original absolute path.
+ * @param {string} sourcePath
+ * @param {string} sourceArrayPath
+ */
+export function toRelativeItemPath(sourcePath: any, sourceArrayPath: any) {
+  const full = String(sourcePath ?? '').trim();
+  const { path, dateFormat } = parseMappingSourcePath(full);
+  const cleanPath = path || full;
+  const arrayPath = String(sourceArrayPath ?? '').trim();
+
+  if (!arrayPath || !cleanPath.startsWith(arrayPath)) return full;
+
+  const suffix = cleanPath.slice(arrayPath.length);
+  if (suffix.startsWith('.')) {
+    const relative = `$${suffix.slice(1)}`;
+    return dateFormat ? `${relative}#${dateFormat}` : relative;
+  }
+
+  const onlyBracket = suffix.match(/^\[["'](.+)["']\]$/);
+  if (onlyBracket && /^[a-zA-Z_$][\w$]*$/.test(onlyBracket[1])) {
+    const relative = `$${onlyBracket[1]}`;
+    return dateFormat ? `${relative}#${dateFormat}` : relative;
+  }
+
+  return full;
+}
+
+/**
+ * Join table `source` with a relative (`$name`) or absolute (`$payload…`) item path.
+ * Preserves `#format` suffixes.
+ * @param {string} source
+ * @param {string} itemPath
+ */
+export function toAbsoluteColumnPath(source: any, itemPath: any) {
+  const full = String(itemPath ?? '').trim();
+  const { path, dateFormat } = parseMappingSourcePath(full);
+  const cleanItem = path || full;
+  const arrayPath = String(source ?? '').trim();
+
+  if (cleanItem.startsWith('$payload')) {
+    return dateFormat ? `${cleanItem}#${dateFormat}` : cleanItem;
+  }
+
+  const relative = cleanItem.startsWith('$') ? cleanItem.slice(1) : cleanItem;
+  if (!arrayPath) {
+    const abs = relative.startsWith('$') ? relative : `$${relative}`;
+    return dateFormat ? `${abs}#${dateFormat}` : abs;
+  }
+
+  const absolute = relative.startsWith('[')
+    ? `${arrayPath}${relative}`
+    : `${arrayPath}.${relative}`;
+  return dateFormat ? `${absolute}#${dateFormat}` : absolute;
+}
+
+/**
  * @param {import('../types.d.ts').FieldMappingRule[]} tableRules
  * @param {unknown} payload
  * @returns {Array<Record<string, unknown>>}
@@ -1143,15 +1738,25 @@ function buildSectionsFromRules(
 ) {
   const sections: Record<string, Record<string, unknown>> = {};
 
+  /** @type {Map<string, string>} */
+  const sectionSources = new Map();
+  for (const rule of rules ?? []) {
+    if (!isSectionSourceRule(rule)) continue;
+    const path = String(rule.sourceArrayPath || rule.sourcePath || '').trim();
+    if (path) sectionSources.set(String(rule.section), path);
+  }
+
   const tableRuleGroups = new Map<string, FieldMappingRule[]>();
   /** @type {FieldMappingRule[]} */
   const pivotRules = [];
 
   for (const rule of rules ?? []) {
     if (!rule?.section || !rule?.field) continue;
+    if (isSectionSourceRule(rule)) continue;
 
     const sourcePath = String(rule.sourcePath ?? '').trim();
     const sourceArrayPath = String(rule.sourceArrayPath ?? '').trim();
+    const sectionIsSourced = sectionSources.has(String(rule.section));
 
     // Pivot: sourceArrayPath without columnKey; confirmed via schema or array-only rule.
     if (sourceArrayPath && !rule.columnKey) {
@@ -1174,8 +1779,56 @@ function buildSectionsFromRules(
       continue;
     }
 
+    // Whole-array path on a table field (e.g. "Table": "$values") → expand into
+    // { source, items } column rules so nested master-detail rows resolve correctly.
+    {
+      const fieldId =
+        rule.fieldId ||
+        resolveFieldIdByName(rule.section, rule.field, blocks, fieldSchemas);
+      const schema = (fieldId && fieldSchemas?.[fieldId]) || null;
+      if (schema?.type === 'table' && Array.isArray(schema.columns) && schema.columns.length) {
+        let arrayPath = sourcePath;
+        if (sectionIsSourced) {
+          const sectionSourcePath = sectionSources.get(String(rule.section));
+          if (sectionSourcePath && isAbsoluteMappingPath(arrayPath)) {
+            arrayPath = toRelativeItemPath(arrayPath, sectionSourcePath);
+          }
+        }
+        const synthetic = buildTableColumnRulesForArrayPath(
+          { section: rule.section, field: rule.field, fieldId: fieldId ?? rule.fieldId },
+          fieldId ?? rule.fieldId,
+          schema,
+          arrayPath,
+        );
+        const groupKey = `${rule.section}\0${rule.field}`;
+        if (!tableRuleGroups.has(groupKey)) tableRuleGroups.set(groupKey, []);
+        tableRuleGroups.get(groupKey)?.push(...synthetic);
+        continue;
+      }
+    }
+
     if (!sections[rule.section]) sections[rule.section] = {};
-    const value = resolved ? resolveMappedSourceValue(rule.sourcePath, payload) : rule.sourcePath;
+    // Sourced sections keep unresolved paths so each array item can resolve relative/absolute.
+    let storedPath = rule.sourcePath;
+    if (sectionIsSourced && !(resolved && !sectionIsSourced)) {
+      const sectionSourcePath = sectionSources.get(String(rule.section));
+      if (sectionSourcePath && isAbsoluteMappingPath(storedPath)) {
+        storedPath = toRelativeItemPath(storedPath, sectionSourcePath);
+      }
+    }
+    let value =
+      resolved && !sectionIsSourced
+        ? resolveMappedSourceValue(rule.sourcePath, payload)
+        : storedPath;
+    if (resolved && !sectionIsSourced && isTableRowArray(value)) {
+      const fieldId =
+        rule.fieldId ||
+        resolveFieldIdByName(rule.section, rule.field, blocks, fieldSchemas);
+      const schema = (fieldId && fieldSchemas?.[fieldId]) || null;
+      if (schema?.type === 'table') {
+        value = projectTableRowsOntoColumns(value, schema);
+      }
+    }
     const childPathNames = getRuleChildPathNames(rule);
     if (childPathNames.length) {
       const current = sections[rule.section][rule.field];
@@ -1193,17 +1846,74 @@ function buildSectionsFromRules(
   for (const [groupKey, tableRules] of tableRuleGroups) {
     const [section, field] = groupKey.split('\0');
     if (!sections[section]) sections[section] = {};
+    const sectionIsSourced = sectionSources.has(section);
 
-    if (resolved) {
-      sections[section][field] = resolveTableRowsFromRules(tableRules, payload);
+    // Heal cell-drops of a whole array (`column_1: "$values"`) into real row props.
+    const fieldId: string | undefined =
+      tableRules.find((r: any) => r.fieldId)?.fieldId ||
+      resolveFieldIdByName(section, field, blocks, fieldSchemas) ||
+      undefined;
+    const tableSchema = (fieldId && fieldSchemas?.[fieldId]) || null;
+    const healedRules =
+      fieldId &&
+      tableSchema?.type === 'table' &&
+      tableRules.some(isColumnBoundToArrayItself)
+        ? (() => {
+            const arrayPath =
+              tableRules.find((r: any) => r.sourceArrayPath)?.sourceArrayPath ||
+              tableRules.find((r: any) => r.sourcePath)?.sourcePath ||
+              '';
+            const rebuilt = buildTableColumnRulesForArrayPath(
+              { section, field, fieldId },
+              fieldId,
+              tableSchema,
+              arrayPath,
+            );
+            return rebuilt.length ? rebuilt : tableRules;
+          })()
+        : tableRules;
+
+    if (resolved && !sectionIsSourced) {
+      sections[section][field] = resolveTableRowsFromRules(healedRules, payload);
       continue;
     }
 
-    const templateRow: Record<string, unknown> = {};
-    for (const rule of tableRules) {
-      if (rule.columnKey) templateRow[rule.columnKey] = rule.sourcePath;
+    let sourceArrayPath =
+      healedRules.find((rule: any) => rule.sourceArrayPath)?.sourceArrayPath ??
+      inferSourceArrayPathFromColumnRules(healedRules);
+    const sectionSourcePath = sectionIsSourced
+      ? sectionSources.get(section)
+      : undefined;
+    // Under a section `_source`, prefer table source relative to each array item.
+    if (sectionSourcePath && isAbsoluteMappingPath(sourceArrayPath)) {
+      sourceArrayPath = toRelativeItemPath(sourceArrayPath, sectionSourcePath);
     }
-    sections[section][field] = [templateRow];
+    const items: Record<string, unknown> = {};
+    for (const rule of healedRules) {
+      if (!rule.columnKey) continue;
+      // Peel absolute → section-relative → row-relative (`$amount` under `$values`).
+      // Using only the first rule's sourceArrayPath left later absolute drops
+      // (e.g. `$payload…Table.values.amount`) unshortened next to `$name`.
+      let itemPath = String(rule.sourcePath ?? '').trim();
+      if (sectionSourcePath && isAbsoluteMappingPath(itemPath)) {
+        itemPath = toRelativeItemPath(itemPath, sectionSourcePath);
+      }
+      let ruleArrayPath = String(rule.sourceArrayPath ?? sourceArrayPath ?? '').trim();
+      if (sectionSourcePath && isAbsoluteMappingPath(ruleArrayPath)) {
+        ruleArrayPath = toRelativeItemPath(ruleArrayPath, sectionSourcePath);
+      }
+      if (ruleArrayPath) {
+        itemPath = toRelativeItemPath(itemPath, ruleArrayPath);
+      }
+      if (sourceArrayPath) {
+        itemPath = toRelativeItemPath(itemPath, sourceArrayPath);
+      }
+      items[rule.columnKey] = itemPath;
+    }
+    sections[section][field] = {
+      [SECTION_SOURCE_KEY]: sourceArrayPath,
+      items,
+    };
   }
 
   for (const rule of pivotRules) {
@@ -1212,8 +1922,9 @@ function buildSectionsFromRules(
       rule.fieldId ||
       resolveFieldIdByName(rule.section, rule.field, blocks, fieldSchemas);
     const schema = (fieldId && fieldSchemas?.[fieldId]) || null;
+    const sectionIsSourced = sectionSources.has(String(rule.section));
 
-    if (resolved) {
+    if (resolved && !sectionIsSourced) {
       let sourceRows = resolveSourcePath(rule.sourceArrayPath, payload);
       if (!Array.isArray(sourceRows)) sourceRows = [];
       if (schema?.type === 'pivotTable') {
@@ -1226,17 +1937,43 @@ function buildSectionsFromRules(
     }
   }
 
+  for (const [sectionName, sourcePath] of sectionSources) {
+    if (!sections[sectionName]) sections[sectionName] = {};
+    if (!resolved) {
+      sections[sectionName][SECTION_SOURCE_KEY] = sourcePath;
+    }
+  }
+
+  if (resolved && sectionSources.size > 0) {
+    /** @type {Record<string, unknown>} */
+    const expanded: Record<string, unknown> = { ...sections };
+    for (const [sectionName, sourcePath] of sectionSources) {
+      expanded[sectionName] = expandSourcedSectionInstances(
+        sections[sectionName] ?? {},
+        sourcePath,
+        payload,
+        fieldSchemas,
+        blocks,
+        sectionName,
+      );
+    }
+    return /** @type {Record<string, Record<string, unknown>>} */ (expanded);
+  }
+
   return sections;
 }
 
 /**
  * @param {import('../types.d.ts').FieldMappingRule[]} rules
+ * @param {{ blocks?: import('../types.d.ts').EditorBlock[]; fieldSchemas?: Record<string, import('../types.d.ts').FieldSchema> }} [template]
  */
-export function buildMappingResultFromRules( rules: any) {
+export function buildMappingResultFromRules(rules: any, template: any = {}) {
+  const blocks = template?.blocks ?? [];
+  const fieldSchemas = template?.fieldSchemas ?? {};
   return {
     kind: 'field',
     version: IO_VERSION,
-    sections: buildSectionsFromRules(rules, false),
+    sections: buildSectionsFromRules(rules, false, null, fieldSchemas, blocks),
   };
 }
 
@@ -1400,8 +2137,10 @@ function buildArrayColumnFields( lookupPath: any, rows: any): SourceTreeNode[] |
       key,
       path,
       type,
+      // Recurse into nested objects and arrays so nested table columns
+      // (e.g. Table.values[].name) appear in the source fields tree.
       children:
-        value != null && typeof value === 'object' && !Array.isArray(value)
+        value != null && typeof value === 'object'
           ? buildSourcePayloadTree(value, path)
           : undefined,
     };
@@ -1496,6 +2235,13 @@ export function parseMappingResultToRules( mappingResult: any, blocks: any, fiel
     if (!fields || typeof fields !== 'object' || Array.isArray(fields)) continue;
 
     for (const [fieldName, value] of Object.entries(fields)) {
+      if (fieldName === SECTION_SOURCE_KEY) {
+        if (typeof value === 'string' && value.trim().startsWith('$')) {
+          rules.push(createSectionSourceRule(sectionName, value.trim()));
+        }
+        continue;
+      }
+
       const fieldId = resolveFieldIdByName(sectionName, fieldName, blocks, fieldSchemas);
 
       if (isMappingExpressionValue(value)) {
@@ -1516,6 +2262,28 @@ export function parseMappingResultToRules( mappingResult: any, blocks: any, fiel
           });
         }
         continue;
+      }
+
+      if (isTableMappingObject(value)) {
+        const schema = fieldId ? fieldSchemas[fieldId] : null;
+        if (!schema || schema.type === 'table') {
+          const source = getTableMappingSourcePath(value);
+          const items = /** @type {{ items: Record<string, unknown> }} */ (value).items;
+          for (const [columnKey, columnValue] of Object.entries(items)) {
+            if (!isMappingExpressionValue(columnValue)) continue;
+            const absolute = toAbsoluteColumnPath(source, String(columnValue));
+            const normalized = normalizeTableColumnSourcePath(absolute);
+            rules.push({
+              section: sectionName,
+              field: fieldName,
+              fieldId: fieldId ?? undefined,
+              columnKey,
+              sourcePath: normalized.sourcePath,
+              sourceArrayPath: source,
+            });
+          }
+          continue;
+        }
       }
 
       if (Array.isArray(value) && value.length > 0 && value[0] && typeof value[0] === 'object') {
@@ -1597,7 +2365,8 @@ export function createMappingRuleFromDrop( fieldId: any, sourcePath: any, blocks
  * @returns {import('../types.d.ts').FieldMappingRule[]}
  */
 export function createMappingRulesFromDrop( fieldId: any, sourcePath: any, blocks: any, fieldSchemas: any, options: any = {}) {
-  const { childFieldIds = [], bulkChild = false } = options;
+  const { childFieldIds = [], bulkChild = false, sourceType = '' } = options;
+  const dropType = String(sourceType ?? '').trim().toLowerCase();
 
   const cellRef = parseCellFieldId(fieldId, fieldSchemas);
   if (cellRef) {
@@ -1608,6 +2377,19 @@ export function createMappingRulesFromDrop( fieldId: any, sourcePath: any, block
     if (!target) return [];
 
     const normalized = normalizeTableColumnSourcePath(sourcePath);
+    // Dropping a whole array onto a cell must project onto table columns
+    // (`$values` → column_1: $name), not bind the array into one column.
+    if (dropType === 'array') {
+      const arrayPath = normalized.sourceArrayPath || normalized.sourcePath || sourcePath;
+      const columnRules = buildTableColumnRulesForArrayPath(
+        target,
+        cellRef.tableFieldId,
+        tableSchema,
+        arrayPath,
+      );
+      if (columnRules.length) return columnRules;
+    }
+
     return [
       {
         section: target.section,
@@ -1679,6 +2461,18 @@ export function createMappingRulesFromDrop( fieldId: any, sourcePath: any, block
   if (!target) return [];
   const schema = fieldSchemas[fieldId];
   if (schema?.type === 'computed') return [];
+
+  // Dropping an array onto a whole table → per-column rules under that array path.
+  if (schema?.type === 'table' && Array.isArray(schema.columns) && schema.columns.length) {
+    const arrayPath = String(sourcePath ?? '').trim();
+    const columnRules = buildTableColumnRulesForArrayPath(
+      target,
+      target.fieldId ?? fieldId,
+      schema,
+      arrayPath,
+    );
+    if (columnRules.length) return columnRules;
+  }
 
   return [
     {
@@ -1795,6 +2589,20 @@ export function normalizeFieldMappingSpec( spec: any) {
 }
 
 /**
+ * @param {import('../types.d.ts').FieldMappingSpec | null | undefined} spec
+ * @param {import('../types.d.ts').EditorBlock[]} blocks
+ * @param {Record<string, import('../types.d.ts').FieldSchema>} fieldSchemas
+ * @param {{ fieldIdRenames?: Record<string, string> | Map<string, string> }} [options]
+ */
+export function syncFieldMappingSpecToSchema(spec: any, blocks: any, fieldSchemas: any, options: any = {}) {
+  const normalized = normalizeFieldMappingSpec(spec);
+  return {
+    ...normalized,
+    rules: syncMappingRulesToSchema(normalized.rules, blocks, fieldSchemas, options),
+  };
+}
+
+/**
  * Build a set of `section\0field` keys targeted by any mapping rule.
  * Child / column / table rules mark the whole parent field as mapped.
  */
@@ -1806,6 +2614,7 @@ export function collectMappedSectionFieldKeys(mappingSpec: any): Set<string> {
     const field = rule?.field;
     if (typeof section !== 'string' || !section.trim()) continue;
     if (typeof field !== 'string' || !field.trim()) continue;
+    if (field === SECTION_SOURCE_KEY) continue;
     keys.add(`${section}\0${field}`);
   }
   return keys;

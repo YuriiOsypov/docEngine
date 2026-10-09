@@ -1252,4 +1252,291 @@ describe('renderDocumentPreview', () => {
       assert.equal((token as HTMLElement).style.backgroundColor, '');
     }
   });
+
+  it('clones a section once per repeatableSectionInstances entry (_source arrays)', () => {
+    const doc = {
+      fieldSchemas: {
+        letter_date: { type: 'text', name: 'Date', label: 'Date', defaultValue: '' },
+        letter_to: { type: 'text', name: 'To', label: 'To', defaultValue: '' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'letter',
+            label: 'Letter',
+            repeatable: true,
+            borderBottom: true,
+            segments: [
+              { type: 'text', content: 'Date: ' },
+              { type: 'field', id: 'letter_date' },
+              { type: 'text', content: ' To: ' },
+              { type: 'field', id: 'letter_to' },
+            ],
+            fieldValues: {
+              letter_date: '2',
+              letter_to: 'Test name',
+            },
+          },
+        },
+      ],
+      repeatableSectionInstances: {
+        letter: [
+          { Date: '2', To: 'Test name' },
+          { Date: '5', To: 'Test name' },
+        ],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    const wraps = root.querySelectorAll('.preview-document__section-wrap');
+    assert.equal(wraps.length, 2, root.textContent);
+    // "Show on each page" → section title on every instance.
+    assert.equal(root.querySelectorAll('.document-section__header').length, 2);
+    assert.equal(root.querySelectorAll('.document-section__label-text').length, 2);
+    assert.equal(root.querySelector('.document-section__label-text')?.textContent, 'Letter');
+    assert.match(root.textContent ?? '', /Date:\s*2/);
+    assert.match(root.textContent ?? '', /Date:\s*5/);
+    // Section borderBottom applies to every repeated row.
+    assert.equal(root.querySelectorAll('.document-section--border-bottom').length, 2);
+  });
+
+  it('keeps title once for _source clones when Show on each page is off', () => {
+    const doc = {
+      fieldSchemas: {
+        letter_date: { type: 'text', name: 'Date', label: 'Date', defaultValue: '' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'letter',
+            label: 'Letter',
+            repeatable: false,
+            borderBottom: true,
+            segments: [
+              { type: 'text', content: 'Date: ' },
+              { type: 'field', id: 'letter_date' },
+            ],
+            fieldValues: { letter_date: '2' },
+          },
+        },
+      ],
+      repeatableSectionInstances: {
+        letter: [{ Date: '2' }, { Date: '5' }],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    assert.equal(root.querySelectorAll('.preview-document__section-wrap').length, 2);
+    assert.equal(root.querySelectorAll('.document-section__header').length, 1);
+  });
+
+  it('marks continuation rows with new-page class when eachRowOnNewPage is set', () => {
+    const doc = {
+      fieldSchemas: {
+        letter_date: { type: 'text', name: 'Date', label: 'Date', defaultValue: '' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'letter',
+            label: 'Letter',
+            repeatable: true,
+            eachRowOnNewPage: true,
+            segments: [
+              { type: 'text', content: 'Date: ' },
+              { type: 'field', id: 'letter_date' },
+            ],
+            fieldValues: { letter_date: '2' },
+          },
+        },
+      ],
+      repeatableSectionInstances: {
+        letter: [{ Date: '2' }, { Date: '5' }],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    const wraps = root.querySelectorAll('.preview-document__section-wrap');
+    assert.equal(wraps.length, 2);
+    // Title on every page when each row starts a new page.
+    assert.equal(root.querySelectorAll('.document-section__header').length, 2);
+    assert.equal(wraps[0].classList.contains('preview-document__section-wrap--new-page'), false);
+    assert.equal(wraps[1].classList.contains('preview-document__section-wrap--new-page'), true);
+  });
+
+  it('repeats a separate Show-on-each-page header before every eachRowOnNewPage row', () => {
+    const doc = {
+      fieldSchemas: {
+        amount: { type: 'number', name: 'amount', label: 'amount' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'hdr',
+            label: '',
+            hideTitleInPreview: true,
+            repeatable: true,
+            segments: [{ type: 'text', content: 'page header' }],
+            fieldValues: {},
+          },
+        },
+        {
+          type: 'documentSection',
+          data: {
+            name: 'body',
+            label: 'Body',
+            hideTitleInPreview: true,
+            eachRowOnNewPage: true,
+            borderBottom: true,
+            segments: [
+              { type: 'text', content: 'amount: ' },
+              { type: 'field', id: 'amount' },
+            ],
+            fieldValues: { amount: 2 },
+          },
+        },
+      ],
+      repeatableSectionInstances: {
+        body: [{ amount: 2 }, { amount: 5 }],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    const text = root.textContent ?? '';
+    assert.equal([...text.matchAll(/page header/g)].length, 2, text);
+    assert.match(text, /page header[\s\S]*amount:\s*2[\s\S]*page header[\s\S]*amount:\s*5/);
+  });
+
+  it('renders nested master-detail table rows from loaded section instances', () => {
+    const tableId = 'table_1';
+    const doc = {
+      fieldSchemas: {
+        amount: { type: 'text', name: 'amount', label: 'amount', defaultValue: '' },
+        [tableId]: {
+          type: 'table',
+          name: 'Table',
+          label: 'Table',
+          columns: [{ key: 'column_1', label: 'Name' }],
+        },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'Letter',
+            label: 'Letter',
+            hideTitleInPreview: true,
+            segments: [
+              { type: 'field', id: 'amount' },
+              { type: 'text', content: ':' },
+              {
+                type: 'table',
+                id: tableId,
+                // Seed single row — instances must expand to 3 / 2 rows.
+                rows: [{ key: 'row1', label: '' }],
+              },
+            ],
+            fieldValues: {
+              amount: 'Test name 2',
+              [`${tableId}_row1_column_1`]: 'value1',
+            },
+          },
+        },
+      ],
+      loadedDocumentSections: {
+        Letter: [
+          {
+            amount: 'Test name 2',
+            Table: [
+              { column_1: 'value1' },
+              { column_1: 'value2' },
+              { column_1: 'value3' },
+            ],
+          },
+          {
+            amount: 'Test name 5',
+            Table: [{ column_1: 'value1' }, { column_1: 'value2' }],
+          },
+        ],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    const text = (root.textContent ?? '').replace(/\s+/g, ' ');
+    assert.match(text, /Test name 2/);
+    assert.match(text, /Test name 5/);
+    assert.match(text, /value1.*value2.*value3.*Test name 5.*value1.*value2/);
+    const rowCounts = [...root.querySelectorAll('table')].map(
+      (table) => table.querySelectorAll('tbody tr').length,
+    );
+    assert.deepEqual(rowCounts, [3, 2]);
+  });
+
+  it('expands master-detail rows when the table is nested inside columns', () => {
+    const tableId = 'table_1';
+    const doc = {
+      fieldSchemas: {
+        amount: { type: 'text', name: 'amount', label: 'amount', defaultValue: '' },
+        [tableId]: {
+          type: 'table',
+          name: 'Table',
+          label: 'Table',
+          columns: [{ key: 'column_1', label: 'Name' }],
+        },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'Letter',
+            label: 'Letter',
+            hideTitleInPreview: true,
+            segments: [
+              { type: 'field', id: 'amount' },
+              {
+                type: 'columns',
+                id: 'cols_1',
+                columns: [
+                  [{ type: 'table', id: tableId, rows: [{ key: 'row1', label: '' }] }],
+                  [],
+                ],
+              },
+            ],
+            fieldValues: {
+              amount: 'Test name 2',
+              [`${tableId}_row1_column_1`]: 'value1',
+            },
+          },
+        },
+      ],
+      loadedDocumentSections: {
+        Letter: [
+          {
+            amount: 'Test name 2',
+            Table: [
+              { column_1: 'value1' },
+              { column_1: 'value2' },
+              { column_1: 'value3' },
+            ],
+          },
+          {
+            amount: 'Test name 5',
+            Table: [{ column_1: 'valueA' }, { column_1: 'valueB' }],
+          },
+        ],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    const text = (root.textContent ?? '').replace(/\s+/g, ' ');
+    assert.match(text, /value1.*value2.*value3.*Test name 5.*valueA.*valueB/);
+    const rowCounts = [...root.querySelectorAll('table')].map(
+      (table) => table.querySelectorAll('tbody tr').length,
+    );
+    assert.deepEqual(rowCounts, [3, 2]);
+  });
 });

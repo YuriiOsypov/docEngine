@@ -1,6 +1,6 @@
 import { renderDocumentPreview } from '../fields/document-preview.js';
 import { generateDocumentPdfBlob, isClientPdfAvailable } from '../export/document-pdf.js';
-import { buildPreviewHtmlBlob } from '../export/preview-html-document.js';
+import { buildPreviewHtmlBlob, buildPreviewHtmlDocument } from '../export/preview-html-document.js';
 import { resolvePreviewExportOptions } from '../export/preview-export-options.js';
 import {
   applyFieldFormTextStyle,
@@ -10,6 +10,7 @@ import {
 import { ACTION_ICONS } from './action-icons.js';
 import { showNotification } from './notification.js';
 import { saveBlobToDisk } from '../utils/save-blob.js';
+import { printBlob, printHtmlDocument } from '../utils/print-document.js';
 import { buildExportFilename } from '../utils/export-filename.js';
 import { wireModalEscape } from './wire-modal-escape.js';
 import { renderPdfBlobToContainer } from './pdf-canvas-preview.js';
@@ -115,6 +116,7 @@ export function createPreviewModal({
           </span>
           <button type="button" class="btn" data-action="view-pdf" hidden>View as PDF</button>
           <button type="button" class="btn" data-action="view-html" hidden>View as HTML</button>
+          <button type="button" class="btn btn-icon preview-modal__print" data-action="print" title="Print" aria-label="Print"></button>
           <button type="button" class="btn btn-icon preview-modal__save" data-action="save" title="Save" aria-label="Save"></button>
           <button type="button" class="btn btn-icon preview-modal__share" data-action="share" title="Share" aria-label="Share" hidden></button>
         </div>
@@ -131,10 +133,12 @@ export function createPreviewModal({
   const btnClose = overlay.querySelector('[data-action="close"]');
   const btnViewPdf = overlay.querySelector('[data-action="view-pdf"]');
   const btnViewHtml = overlay.querySelector('[data-action="view-html"]');
+  const btnPrint = overlay.querySelector('[data-action="print"]');
   const btnSave = overlay.querySelector('[data-action="save"]');
   const btnShare = overlay.querySelector('[data-action="share"]');
   const hideEmptyCheckbox = overlay.querySelector('[data-option="hide-empty"]');
   const pdfHint = overlay.querySelector('[data-role="pdf-hint"]');
+  btnPrint.innerHTML = ACTION_ICONS.print;
   btnSave.innerHTML = ACTION_ICONS.save;
   btnShare.innerHTML = ACTION_ICONS.share;
 
@@ -145,6 +149,7 @@ export function createPreviewModal({
   let pdfBlobUrl: any = null;
   let saving = false;
   let sharing = false;
+  let printing = false;
   let viewMode: 'html' | 'pdf' = 'html';
   let pdfLoading = false;
   let hideEmptyValues = false;
@@ -197,6 +202,11 @@ export function createPreviewModal({
     const label = `Save ${format}`;
     btnSave.title = label;
     btnSave.setAttribute('aria-label', label);
+    if (btnPrint) {
+      const printLabel = `Print ${format}`;
+      btnPrint.title = printLabel;
+      btnPrint.setAttribute('aria-label', printLabel);
+    }
     if (btnShare) {
       const shareLabel = `Share ${format}`;
       btnShare.title = shareLabel;
@@ -217,11 +227,15 @@ export function createPreviewModal({
     // HTML mode: never show "Back to HTML". PDF mode: show it to return.
     setFooterButtonVisible(btnViewPdf, pdfEnabled && viewMode === 'html');
     setFooterButtonVisible(btnViewHtml, pdfEnabled && viewMode === 'pdf');
-    // Save always available for the current view format (HTML even when PDF is unavailable).
+    // Save / Print always available for the current view format (HTML even when PDF is unavailable).
+    setFooterButtonVisible(btnPrint, true);
     setFooterButtonVisible(btnSave, true);
     setFooterButtonVisible(btnShare, shareEnabled);
-    const busy = pdfLoading || saving || sharing;
+    const busy = pdfLoading || saving || sharing || printing;
     btnSave.disabled = busy || (viewMode === 'pdf' && !pdfEnabled);
+    if (btnPrint) {
+      btnPrint.disabled = busy || (viewMode === 'pdf' && !pdfEnabled);
+    }
     if (btnShare) {
       btnShare.disabled = busy || (viewMode === 'pdf' && !pdfEnabled);
     }
@@ -265,6 +279,7 @@ export function createPreviewModal({
     viewMode = 'html';
     pdfLoading = false;
     sharing = false;
+    printing = false;
     hideEmptyValues = false;
     hideEmptyCheckbox.checked = false;
     revokeBlobUrl();
@@ -428,7 +443,7 @@ export function createPreviewModal({
   }
 
   async function saveCurrent() {
-    if (saving || sharing || !currentDoc) return;
+    if (saving || sharing || printing || !currentDoc) return;
     if (viewMode === 'pdf' && !pdfEnabled) return;
 
     saving = true;
@@ -444,8 +459,36 @@ export function createPreviewModal({
     }
   }
 
+  async function printCurrent() {
+    if (printing || saving || sharing || !currentDoc) return;
+    if (viewMode === 'pdf' && !pdfEnabled) return;
+
+    printing = true;
+    if (btnPrint) btnPrint.disabled = true;
+    try {
+      // Prefer HTML print — LWS blocks document.write / blob iframes used for PDF print.
+      // PDF mode still prints the same document content as HTML under Salesforce.
+      if (viewMode === 'pdf' && embedPdfInIframe && pdfEnabled) {
+        try {
+          const blob = await ensurePdfBlob();
+          await printBlob(blob);
+          return;
+        } catch {
+          /* fall through to HTML */
+        }
+      }
+      const html = buildPreviewHtmlDocument(currentDoc, previewOptions(currentDoc));
+      await printHtmlDocument(html);
+    } catch (err: any) {
+      showNotification(err?.message ?? 'Print failed.');
+    } finally {
+      printing = false;
+      syncFooterButtons();
+    }
+  }
+
   async function shareCurrent() {
-    if (!shareEnabled || sharing || saving || !currentDoc) return;
+    if (!shareEnabled || sharing || saving || printing || !currentDoc) return;
     if (viewMode === 'pdf' && !pdfEnabled) return;
 
     sharing = true;
@@ -508,6 +551,9 @@ export function createPreviewModal({
   });
   btnSave.addEventListener('click', () => {
     void saveCurrent();
+  });
+  btnPrint.addEventListener('click', () => {
+    void printCurrent();
   });
   btnShare.addEventListener('click', () => {
     void shareCurrent();

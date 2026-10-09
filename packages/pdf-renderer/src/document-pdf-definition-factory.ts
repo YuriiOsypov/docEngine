@@ -7,10 +7,13 @@ import {
   resolvePdfTextStyle,
   resolvePdfTitleStyle,
 } from './style-mapper.js';
-import { renderDocumentToPdfContent, hasMultipageRepeatableContent } from './multipage-renderer.js';
+import {
+  renderDocumentToPdfContent,
+  multipageTargetsRepeatableSection,
+} from './multipage-renderer.js';
 import { buildRepeatableSectionPageHeader } from './repeatable-section-header.js';
 import type { buildFontRegistry } from './fonts-registry.js';
-import { marginMmToPt, mmToPt, normalizeMarginMm, resolvePageOrientation, resolvePageSize } from './units.js';
+import { marginMmToPt, mmToPt, normalizeMarginMm, resolveDocPageOrientation, resolvePageSize } from './units.js';
 
 type FontRegistry = ReturnType<typeof buildFontRegistry>;
 
@@ -33,6 +36,10 @@ export function resolvePdfPageSetup(
     margin: options.margin ?? optionsPageSetup.margin ?? docPageSetup.margin,
     title: options.title ?? optionsPageSetup.title ?? docPageSetup.title,
   };
+  // Explicit null from caller clears a stale Show-on-each-page header band.
+  if (optionsPageSetup.header === null) {
+    delete pageSetup.header;
+  }
   if (footer.text || footer.showPageNumbers || footer.height != null) pageSetup.footer = footer;
   return pageSetup;
 }
@@ -73,9 +80,11 @@ export function buildPdfDocumentDefinition(
     });
   }
 
+  const pageSize = resolvePageSize(pageSetup.format, pageSetup, pageSetup.orientation);
+  const pageOrientation = resolveDocPageOrientation(pageSetup.format, pageSetup.orientation);
   const docDefinition: Record<string, unknown> = {
-    pageSize: resolvePageSize(pageSetup.format),
-    pageOrientation: resolvePageOrientation(pageSetup.orientation),
+    pageSize,
+    ...(pageOrientation ? { pageOrientation } : {}),
     pageMargins,
     defaultStyle: {
       ...withPdfDefaultFont(bodyStyle, defaultFont),
@@ -168,7 +177,9 @@ export function createRenderDocumentToPdfDefinition(
       defaultFont,
     };
 
-    const repeatableHeader = hasMultipageRepeatableContent(doc)
+    // Keep PDF page header when "Show on each page" is a different section than
+    // the multi-instance expand target. Same-section expand uses body titles instead.
+    const repeatableHeader = multipageTargetsRepeatableSection(doc)
       ? null
       : buildRepeatableSectionPageHeader(doc, renderOptions);
     if (repeatableHeader) {
@@ -176,6 +187,11 @@ export function createRenderDocumentToPdfDefinition(
         height: repeatableHeader.heightMm,
         fromRepeatableSection: true,
       };
+      renderOptions.pageSetup = pageSetup;
+    } else if (pageSetup.header?.fromRepeatableSection) {
+      // Drop a stale header band so multipage body clones are not pushed down unevenly.
+      // Explicit null so resolvePdfPageSetup merge does not revive doc.pageSetup.header.
+      pageSetup.header = null as any;
       renderOptions.pageSetup = pageSetup;
     }
 

@@ -42,18 +42,24 @@
   --me-text-subtle: var(--lwc-colorTextWeak, #706e6b);
   --me-text-placeholder: var(--lwc-colorTextInputDisabled, #747474);
 
-  /* Accent panels */
-  --me-accent-surface: var(--lwc-colorBackgroundHighlight, #f3f2f2);
+  /* Accent panels — avoid --lwc-colorBackgroundHighlight (search yellow). */
+  --me-accent-surface: var(--lwc-colorBackgroundRowSelected, #eef4ff);
   --me-accent-border: var(--lwc-colorBorder, #c9c9c9);
   --me-accent-hover: var(--lwc-colorBackgroundRowHover, #f3f3f3);
   --me-accent-hover-border: var(--lwc-brandPrimary, #0176d3);
   --me-accent-panel: var(--lwc-colorBackgroundShade, #ecebea);
 
-  /* Focus / selection */
+  /* Filled field pills in fill mode (never search-highlight yellow). */
+  --me-field-filled-bg: var(--lwc-colorBackgroundRowSelected, #eef4ff);
+  --me-field-filled-color: var(--lwc-brandPrimary, #0176d3);
+
+  /* Focus / selection — text selection uses outline mixed in editor.css ::selection */
   --me-focus-color: var(--lwc-brandPrimary, #0176d3);
   --me-focus-ring: 0 0 0 2px var(--lwc-colorBackgroundRowSelected, rgba(1, 118, 211, 0.25));
   --me-selection-outline: var(--lwc-brandPrimary, #0176d3);
-  --me-selection-bg: var(--lwc-colorBackgroundRowSelected, rgba(1, 118, 211, 0.08));
+  --me-selection-text: #0f172a;
+  /* Stronger than 8% row-selected so drop targets / chrome stay readable */
+  --me-selection-bg: color-mix(in srgb, var(--lwc-brandPrimary, #0176d3) 18%, #ffffff);
   --me-drop-indicator: var(--lwc-brandPrimary, #0176d3);
 
   /* Semantic */

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Output_Format__c</fullName>
-    <description>Finish attach format for documents created from this template. PDF is the default.</description>
+    <description>When Attach File is on, Finish attaches this format (PDF or HTML) for documents from this template. PDF is the default.</description>
     <label>Output Format</label>
     <required>false</required>
     <type>Picklist</type>

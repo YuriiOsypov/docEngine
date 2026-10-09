@@ -15,6 +15,10 @@ import {
   renderNumericDisplayFormatFields,
 } from './schema-form-dom.js';
 import { formatNumericDisplay } from '@docengine/engine';
+import {
+  formatLogicalDisplay,
+  normalizeLogicalTrueMark,
+} from '../logical-display.js';
 
 function baseSchema(type: any, label: any, name: any) {
   return { type, label, name: name || label, required: false };
@@ -288,7 +292,7 @@ const BUILTIN_HANDLERS = [
     label: 'Logical',
     paletteOrder: 45,
     createSchema(label: any, name: any) {
-      return { ...baseSchema('logical', label, name), defaultValue: null };
+      return { ...baseSchema('logical', label, name), defaultValue: null, trueMark: 'yesNo' };
     },
     getEmptyValue: () => null,
     resolveDefaultValue(schema: any) {
@@ -296,13 +300,22 @@ const BUILTIN_HANDLERS = [
       return value === true || value === false ? value : null;
     },
     toDisplayConfig(schema: any) {
-      return { picker: 'logical', label: schema.label };
+      return {
+        picker: 'logical',
+        label: schema.label,
+        trueMark: normalizeLogicalTrueMark(schema.trueMark),
+      };
     },
     toPickerConfig(schema: any) {
-      return { picker: 'logical', label: schema.label };
+      return {
+        picker: 'logical',
+        label: schema.label,
+        trueMark: normalizeLogicalTrueMark(schema.trueMark),
+      };
     },
     renderSchemaFields(host: any, schema: any) {
       const defaultValue = schema.defaultValue;
+      const trueMark = normalizeLogicalTrueMark(schema.trueMark);
       host.innerHTML = `
         <label class="schema-form__row">
           <span>Default value</span>
@@ -312,17 +325,34 @@ const BUILTIN_HANDLERS = [
             <option value="false"${defaultValue === false ? ' selected' : ''}>No</option>
           </select>
         </label>
+        <label class="schema-form__row">
+          <span class="schema-form__label-row">
+            <span>True mark</span>
+            ${infoTipHtml('How a true value appears in the document. False stays blank for X and ✓.')}
+          </span>
+          <select data-field="trueMark">
+            <option value="yesNo"${trueMark === 'yesNo' ? ' selected' : ''}>Yes / No</option>
+            <option value="x"${trueMark === 'x' ? ' selected' : ''}>X</option>
+            <option value="check"${trueMark === 'check' ? ' selected' : ''}>✓</option>
+          </select>
+        </label>
       `;
     },
     readSchemaFields(host: any) {
       const raw = readInputValue(host, 'defaultValue');
-      if (raw === 'true') return { defaultValue: true };
-      if (raw === 'false') return { defaultValue: false };
-      return { defaultValue: undefined };
+      const trueMark = normalizeLogicalTrueMark(readInputValue(host, 'trueMark'));
+      const patch: Record<string, unknown> = { trueMark };
+      if (raw === 'true') patch.defaultValue = true;
+      else if (raw === 'false') patch.defaultValue = false;
+      else patch.defaultValue = undefined;
+      return patch;
     },
-    formatDisplay(value: any, { emptyLabel }: any) {
-      if (value !== true && value !== false) return emptyLabel ?? '';
-      return value ? 'Yes' : 'No';
+    formatDisplay(value: any, { emptyLabel, schema, def }: any) {
+      return formatLogicalDisplay(
+        value,
+        def?.trueMark ?? schema?.trueMark,
+        emptyLabel ?? '',
+      );
     },
     isEmpty(value: any) {
       return value !== true && value !== false;

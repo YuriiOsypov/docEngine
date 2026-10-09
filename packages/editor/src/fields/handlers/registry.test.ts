@@ -115,6 +115,7 @@ describe('field handler registry', () => {
 
   it('logical and signature built-ins format and emptiness', () => {
     assert.equal(createDefaultSchema('logical', 'Agree').type, 'logical');
+    assert.equal(createDefaultSchema('logical', 'Agree').trueMark, 'yesNo');
     assert.equal(createDefaultSchema('signature', 'Sign').type, 'signature');
     assert.equal(
       formatFieldDisplay('agree', true, 'Agree', {
@@ -127,6 +128,30 @@ describe('field handler registry', () => {
         fieldSchemas: { agree: { type: 'logical', label: 'Agree', name: 'Agree' } },
       }),
       'No',
+    );
+    assert.equal(
+      formatFieldDisplay('mark', true, 'Mark', {
+        fieldSchemas: { mark: { type: 'logical', label: 'Mark', name: 'Mark', trueMark: 'x' } },
+      }),
+      'X',
+    );
+    assert.equal(
+      formatFieldDisplay('mark', false, 'Mark', {
+        fieldSchemas: { mark: { type: 'logical', label: 'Mark', name: 'Mark', trueMark: 'x' } },
+      }),
+      '',
+    );
+    assert.equal(
+      formatFieldDisplay('tick', true, 'Tick', {
+        fieldSchemas: { tick: { type: 'logical', label: 'Tick', name: 'Tick', trueMark: 'check' } },
+      }),
+      '✓',
+    );
+    assert.equal(
+      formatFieldDisplay('tick', false, 'Tick', {
+        fieldSchemas: { tick: { type: 'logical', label: 'Tick', name: 'Tick', trueMark: 'check' } },
+      }),
+      '',
     );
     assert.equal(isFieldEmpty(null, { schema: { type: 'logical' } }), true);
     assert.equal(isFieldEmpty(false, { schema: { type: 'logical' } }), false);

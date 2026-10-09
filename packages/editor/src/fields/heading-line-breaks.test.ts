@@ -829,6 +829,67 @@ describe('applyBlockHeading and applyBlockAlignment', () => {
     assert.equal(alignDiv.querySelector('.document-table'), null);
     assert.ok(body.querySelector(':scope > .document-table'));
   });
+
+  it('aligns only the selected line inside a multi-line alignment block', () => {
+    const body = buildSectionBody();
+    const wrap = document.createElement('div');
+    wrap.className = 'document-align document-align--left';
+    wrap.setAttribute('style', 'text-align: left');
+    const line1 = document.createTextNode('First line');
+    const br = document.createElement('br');
+    const line2 = document.createTextNode('Second line');
+    wrap.append(line1, br, line2);
+    body.appendChild(wrap);
+
+    // Partial selection of line2 only (not the whole left-aligned block).
+    const partial = selectNodeContentsRange(wrap);
+    partial.startOffset = 2;
+    partial.endOffset = 3;
+    partial.extractContents = () => {
+      const frag = document.createDocumentFragment();
+      if (line2.parentNode === wrap) frag.appendChild(line2);
+      return frag;
+    };
+    partial.insertNode = (el: any) => {
+      br.after(el);
+    };
+
+    const applied = applyBlockAlignment(body, 'center', partial);
+    assert.equal(applied, true);
+
+    // Outer block stays left; only the second line is wrapped as center.
+    assert.equal(wrap.getAttribute('style'), 'text-align: left');
+    const nested = wrap.querySelector('.document-align--center');
+    assert.ok(nested);
+    assert.match(nested?.textContent ?? '', /Second line/);
+    assert.doesNotMatch(nested?.textContent ?? '', /First line/);
+  });
+
+  it('aligns a single list item without centering the whole editor', () => {
+    const body = buildSectionBody();
+    body.appendChild(textToFragment('Intro'));
+    const ol = document.createElement('ol');
+    const li1 = document.createElement('li');
+    li1.textContent = 'one';
+    const li2 = document.createElement('li');
+    li2.textContent = 'two';
+    ol.append(li1, li2);
+    body.appendChild(ol);
+
+    const caret: any = {
+      collapsed: true,
+      startContainer: li2.firstChild,
+      startOffset: 0,
+      endContainer: li2.firstChild,
+      endOffset: 0,
+      commonAncestorContainer: li2,
+    };
+    const applied = applyBlockAlignment(body, 'center', caret);
+    assert.equal(applied, true);
+    assert.equal(li2.style.textAlign, 'center');
+    assert.equal(li1.style.textAlign || '', '');
+    assert.equal(body.querySelector('.document-align--center'), null);
+  });
 });
 
 describe('sanitizeHtml line breaks', () => {

@@ -227,10 +227,20 @@ export function sanitizeHtml(html: any) {
           const safe = filterSpanStyle(attr.value);
           if (safe) child.setAttribute('style', safe);
           else child.removeAttribute('style');
-        } else if (child.tagName === 'DIV' && attr.name === 'style') {
+        } else if (
+          (child.tagName === 'DIV' || child.tagName === 'LI' || child.tagName === 'P') &&
+          attr.name === 'style'
+        ) {
           const safe = filterBlockStyle(attr.value);
           if (safe) child.setAttribute('style', safe);
           else child.removeAttribute('style');
+        } else if (child.tagName === 'DIV' && attr.name === 'class') {
+          const kept = String(attr.value || '')
+            .split(/\s+/)
+            .filter((c) => c === 'document-align' || c.startsWith('document-align--'))
+            .join(' ');
+          if (kept) child.setAttribute('class', kept);
+          else child.removeAttribute('class');
         } else {
           child.removeAttribute(attr.name);
         }
@@ -315,8 +325,17 @@ export function isHtmlValueEmpty(html: any) {
   return !doc.body.querySelector('img, br, li, ul, ol');
 }
 
+/** Window for an editable node (supports iframe contenteditables). */
+function ownerWindow(node: any): Window {
+  return (node?.ownerDocument?.defaultView as Window | null | undefined) ?? window;
+}
+
+function selectionFor(node: any): Selection | null {
+  return ownerWindow(node).getSelection();
+}
+
 export function saveSelection(container: any) {
-  const sel = window.getSelection();
+  const sel = selectionFor(container);
   if (!sel?.rangeCount) return null;
   const range = sel.getRangeAt(0);
   if (!container?.contains(range.commonAncestorContainer)) return null;
@@ -325,7 +344,8 @@ export function saveSelection(container: any) {
 
 export function restoreSelection(range: any) {
   if (!range) return false;
-  const sel = window.getSelection();
+  const root = range?.commonAncestorContainer;
+  const sel = selectionFor(root?.nodeType === Node.TEXT_NODE ? root.parentNode : root) ?? window.getSelection();
   sel!.removeAllRanges();
   sel!.addRange(range);
   return true;
@@ -548,12 +568,16 @@ function isFieldTokenElement(node: any) {
   return node?.nodeType === Node.ELEMENT_NODE && node.classList?.contains('field-token');
 }
 
-function getTopLevelLineRange(editable: any, range: any) {
-  const nodes = [...editable.childNodes];
+/**
+ * Line range inside `container` (editable root, alignment div, or similar).
+ * Split on BR / heading / table boundaries — not the whole container as one line.
+ */
+function getLineRangeInContainer(container: any, range: any) {
+  const nodes = [...container.childNodes];
   if (!nodes.length) return null;
 
   let activeIndex = -1;
-  if (range.startContainer === editable) {
+  if (range.startContainer === container) {
     activeIndex = Math.min(Math.max(range.startOffset, 0), nodes.length - 1);
   } else {
     for (let i = 0; i < nodes.length; i++) {
@@ -571,6 +595,7 @@ function getTopLevelLineRange(editable: any, range: any) {
     const prev = nodes[lineStart - 1];
     if (HEADING_TAGS.has(prev.nodeName)) break;
     if (isDocumentTableElement(prev)) break;
+    if (isAlignmentDiv(prev)) break;
     lineStart -= 1;
   }
 
@@ -579,6 +604,7 @@ function getTopLevelLineRange(editable: any, range: any) {
     const next = nodes[lineEnd + 1];
     if (HEADING_TAGS.has(next.nodeName)) break;
     if (isDocumentTableElement(next)) break;
+    if (isAlignmentDiv(next)) break;
     lineEnd += 1;
   }
 
@@ -586,7 +612,8 @@ function getTopLevelLineRange(editable: any, range: any) {
     if (isDocumentTableElement(nodes[i])) return null;
   }
 
-  const lineRange = document.createRange();
+  const doc = container.ownerDocument ?? document;
+  const lineRange = doc.createRange();
   lineRange.setStartBefore(nodes[lineStart]);
   if (nodes[lineEnd]?.nodeName === 'BR') {
     lineRange.setEndBefore(nodes[lineEnd]);
@@ -595,6 +622,58 @@ function getTopLevelLineRange(editable: any, range: any) {
   }
 
   return lineRange.collapsed ? null : lineRange;
+}
+
+function getTopLevelLineRange(editable: any, range: any) {
+  return getLineRangeInContainer(editable, range);
+}
+
+/** Nearest block that owns "lines" for alignment (LI, align div, or editable). */
+function getAlignmentLineRoot(node: any, editable: any) {
+  let el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  while (el && el !== editable) {
+    if (el.tagName === 'LI') return el;
+    if (isAlignmentDiv(el)) return el;
+    if (isHeadingElement(el)) return el;
+    el = el.parentElement;
+  }
+  return editable;
+}
+
+function selectionCoversElement(range: any, el: any) {
+  if (!range || !el) return false;
+  // Test / incomplete Range mocks: only full selectNodeContents-style ranges cover.
+  if (typeof range.compareBoundaryPoints !== 'function') {
+    return (
+      range.startContainer === el &&
+      range.endContainer === el &&
+      range.startOffset === 0 &&
+      range.endOffset === el.childNodes.length
+    );
+  }
+  try {
+    const doc = el.ownerDocument ?? document;
+    const full = doc.createRange();
+    full.selectNodeContents(el);
+    return (
+      range.compareBoundaryPoints(Range.START_TO_START, full) <= 0 &&
+      range.compareBoundaryPoints(Range.END_TO_END, full) >= 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+function applyAlignmentToElement(el: any, alignment: any) {
+  if (!el) return false;
+  el.style.textAlign = alignment;
+  if (el.tagName === 'DIV') {
+    setAlignmentDivClass(el, alignment);
+    el.setAttribute('style', `text-align: ${alignment}`);
+  } else {
+    el.setAttribute('style', `text-align: ${alignment}`);
+  }
+  return true;
 }
 
 function setAlignmentDivClass(div: any, alignment: any) {
@@ -646,7 +725,12 @@ function wrapRangeInAlignmentDiv(range: any, alignment: any) {
   for (const table of extractedTables) {
     table.remove();
   }
-  if (!contents.textContent && !contents.querySelector?.('.field-token, img, br')) {
+  // linkedom DocumentFragment.textContent can be null — fall back to child text.
+  const contentText = String(
+    contents.textContent ??
+      [...(contents.childNodes ?? [])].map((n: any) => n.textContent ?? '').join(''),
+  );
+  if (!contentText.trim() && !contents.querySelector?.('.field-token, img, br')) {
     for (const table of extractedTables) {
       if (insertParent) {
         const ref = insertParent.childNodes[insertOffset] ?? null;
@@ -679,16 +763,29 @@ export function applyBlockAlignment(editable: any, alignment: any, savedRange: a
   editable.focus();
   if (savedRange) restoreSelection(savedRange);
 
-  const sel = window.getSelection();
+  const sel = selectionFor(editable) ?? window.getSelection();
   if (!sel?.rangeCount) return false;
   let range = sel.getRangeAt(0);
   if (!editable.contains(range.commonAncestorContainer)) return false;
 
-  const existingBlock = findAlignmentBlock(range.commonAncestorContainer, editable);
-  if (existingBlock && !existingBlock.querySelector?.('.document-table')) {
-    existingBlock.style.textAlign = alignment;
-    setAlignmentDivClass(existingBlock, alignment);
-    return true;
+  // List items: align the LI only — not a wrapper around the whole editor.
+  let startEl: any =
+    range.startContainer?.nodeType === Node.TEXT_NODE
+      ? range.startContainer.parentElement
+      : range.startContainer;
+  const li =
+    startEl?.nodeType === Node.ELEMENT_NODE
+      ? (startEl.closest?.('li') as HTMLElement | null)
+      : null;
+  if (li && editable.contains(li)) {
+    const endNode =
+      range.endContainer?.nodeType === Node.TEXT_NODE
+        ? range.endContainer.parentNode
+        : range.endContainer;
+    const endInLi = range.collapsed || !!(endNode && li.contains(endNode));
+    if (endInLi) {
+      return applyAlignmentToElement(li, alignment);
+    }
   }
 
   if (range.collapsed) {
@@ -708,9 +805,26 @@ export function applyBlockAlignment(editable: any, alignment: any, savedRange: a
       return applyAlignmentToFieldToken(fieldToken, alignment);
     }
 
-    const lineRange = getTopLevelLineRange(editable, range);
+    // Align the current line only — never retarget a multi-line ancestor div.
+    const lineRoot = getAlignmentLineRoot(range.startContainer, editable);
+    const lineRange = getLineRangeInContainer(lineRoot, range);
     if (!lineRange) return false;
-    range = lineRange;
+
+    if (isAlignmentDiv(lineRoot) && selectionCoversElement(lineRange, lineRoot)) {
+      return applyAlignmentToElement(lineRoot, alignment);
+    }
+
+    return !!wrapRangeInAlignmentDiv(lineRange, alignment);
+  }
+
+  // Non-collapsed: only update an existing align block when the selection is the whole block.
+  const existingBlock = findAlignmentBlock(range.commonAncestorContainer, editable);
+  if (
+    existingBlock &&
+    !existingBlock.querySelector?.('.document-table') &&
+    selectionCoversElement(range, existingBlock)
+  ) {
+    return applyAlignmentToElement(existingBlock, alignment);
   }
 
   // Selected content may include fields; tables are excluded from the wrap.

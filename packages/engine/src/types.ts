@@ -123,8 +123,12 @@ export interface EditorBlock {
 }
 
 export interface TemplatePageSetup {
-  format?: 'a4' | 'letter';
+  format?: 'a4' | 'letter' | 'custom';
   orientation?: 'portrait' | 'landscape';
+  /** Custom page width in mm (portrait base). Used when format is "custom". */
+  widthMm?: number;
+  /** Custom page height in mm (portrait base). Used when format is "custom". */
+  heightMm?: number;
   margin?: number | [number, number, number, number];
   title?: string;
   textStyle?: FieldDisplayStyle;

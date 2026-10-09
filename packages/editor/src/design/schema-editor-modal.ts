@@ -1,10 +1,8 @@
 import { createSchemaEditorController } from './schema-editor-controller.js';
 import { wireModalEscape } from '../ui/wire-modal-escape.js';
-import { applyDesignPanelTextStyle } from '../core/page-setup-styles.js';
 
 export function createSchemaEditorModal({
   getRegistry,
-  getTextStyle,
   onRepeaterTemplateChange,
   getRemoteListCollections = null,
   getRemoteListLabelFields = null,
@@ -58,7 +56,6 @@ export function createSchemaEditorModal({
       resolvePromise = resolve;
       rejectPromise = reject;
       controller.load(fieldId, schema, context);
-      applyDesignPanelTextStyle(overlay.querySelector('.modal'), { textStyle: getTextStyle?.() });
       overlay.hidden = false;
     });
   }

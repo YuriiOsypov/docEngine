@@ -28,6 +28,7 @@ public with sharing class DocEngineTemplateSaveService {
     row.Description__c = dto.description;
     row.PDF_Filename__c = dto.pdfFilename;
     row.Hide_Empty__c = dto.hideEmpty == true;
+    row.Attach_File__c = dto.attachFile != false;
     row.Output_Format__c = String.isBlank(dto.outputFormat)
       ? 'pdf'
       : (dto.outputFormat.trim().equalsIgnoreCase('html') ? 'html' : 'pdf');

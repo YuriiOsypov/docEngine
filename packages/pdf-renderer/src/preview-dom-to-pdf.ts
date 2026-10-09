@@ -29,6 +29,8 @@ type PdfCtx = {
   tableHeaderStyle?: Record<string, any>;
   tableBodyStyle?: Record<string, any>;
   imageMap?: Map<string, string>;
+  /** Page content width in pt for horizontal rules. */
+  contentWidthPt?: number;
   [key: string]: any;
 };
 
@@ -274,7 +276,7 @@ function convertSerializedHtmlToPdfBlocks(html: string, ctx: PdfCtx): Record<str
       }
     }
     if (index < chunks.length - 1) {
-      blocks.push(buildPdfHorizontalRuleBlock());
+      blocks.push(buildPdfHorizontalRuleBlock({ widthPt: ctx.contentWidthPt }));
     }
   }
 
@@ -640,7 +642,7 @@ function convertSectionWrap(sectionWrap: any, ctx: PdfCtx): Record<string, any> 
   const borderBottom = sectionWrap.classList?.contains('document-section--border-bottom') === true;
 
   if (borderTop) {
-    stack.push(buildPdfSectionBorderRuleBlock('top'));
+    stack.push(buildPdfSectionBorderRuleBlock('top', ctx.contentWidthPt));
   }
 
   const labelEl = sectionWrap.querySelector('.document-section__header .document-section__label-text');
@@ -661,7 +663,7 @@ function convertSectionWrap(sectionWrap: any, ctx: PdfCtx): Record<string, any> 
   }
 
   if (borderBottom) {
-    stack.push(buildPdfSectionBorderRuleBlock('bottom'));
+    stack.push(buildPdfSectionBorderRuleBlock('bottom', ctx.contentWidthPt));
   }
 
   if (!stack.length) return null;

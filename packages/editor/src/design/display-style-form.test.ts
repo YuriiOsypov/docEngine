@@ -54,18 +54,18 @@ describe('applyPageSetupStyleCommand', () => {
 describe('createDisplayStyleForm', () => {
   it('exports setStyle, readStyle, and clear API', () => {
     installDom();
-    const form = createDisplayStyleForm({ legend: 'Test style', previewText: 'Preview' });
+    const form = createDisplayStyleForm({ legend: 'Test style' });
     assert.equal(typeof form.setStyle, 'function');
     assert.equal(typeof form.readStyle, 'function');
     assert.equal(typeof form.clear, 'function');
     assert.ok(form.element.classList.contains('display-style-form'));
     assert.ok(form.element.querySelector('.display-style-form__toolbar'));
-    assert.ok(form.element.querySelector('.display-style-form__preview'));
+    assert.equal(form.element.querySelector('.display-style-form__preview'), null);
   });
 
   it('places reset button in the section header', () => {
     installDom();
-    const form = createDisplayStyleForm({ legend: 'Test style', previewText: 'Preview' });
+    const form = createDisplayStyleForm({ legend: 'Test style' });
     const header = form.element.querySelector('.display-style-form__header');
     const legend = form.element.querySelector('.display-style-form__legend');
     const reset = form.element.querySelector('.display-style-form__reset');
@@ -81,7 +81,7 @@ describe('createDisplayStyleForm', () => {
 
   it('reset button clears style overrides without throwing', () => {
     installDom();
-    const form = createDisplayStyleForm({ legend: 'Test style', previewText: 'Preview' });
+    const form = createDisplayStyleForm({ legend: 'Test style' });
     const select = form.element.querySelector('[aria-label="Font"]') as HTMLSelectElement;
     const size = form.element.querySelector('[aria-label="Font size"]') as HTMLInputElement;
     Object.defineProperty(select, 'value', {
@@ -124,7 +124,7 @@ describe('createDisplayStyleForm', () => {
 
   it('renders format button group and separate color control', () => {
     installDom();
-    const form = createDisplayStyleForm({ legend: 'Test style', previewText: 'Preview' });
+    const form = createDisplayStyleForm({ legend: 'Test style' });
     const formatRow = form.element.querySelector('.display-style-form__format-row');
     const styleGroup = form.element.querySelector('.display-style-form__style-group');
     const colorControl = form.element.querySelector('.display-style-form__color-control');

@@ -50,6 +50,7 @@ export default class DocumentSection {
       hideTitleInPreview: !!data.hideTitleInPreview,
       borderTop: !!data.borderTop,
       borderBottom: !!data.borderBottom,
+      eachRowOnNewPage: !!data.eachRowOnNewPage,
       visibility: data.visibility ?? null,
       segments: data.segments ?? [],
       fieldValues: data.fieldValues ?? {},
@@ -177,6 +178,7 @@ export default class DocumentSection {
       hideTitleInPreview: !!this.data.hideTitleInPreview,
       borderTop: !!this.data.borderTop,
       borderBottom: !!this.data.borderBottom,
+      eachRowOnNewPage: !!this.data.eachRowOnNewPage,
       visibility: this.data.visibility ?? null,
       segments: this.data.segments,
       fieldValues: this.data.fieldValues,
@@ -198,6 +200,7 @@ export default class DocumentSection {
     hideTitleInPreview,
     borderTop,
     borderBottom,
+    eachRowOnNewPage,
     visibility,
   }: any = {}) {
     if (name !== undefined) this.data.name = name;
@@ -206,6 +209,7 @@ export default class DocumentSection {
     if (hideTitleInPreview !== undefined) this.data.hideTitleInPreview = !!hideTitleInPreview;
     if (borderTop !== undefined) this.data.borderTop = !!borderTop;
     if (borderBottom !== undefined) this.data.borderBottom = !!borderBottom;
+    if (eachRowOnNewPage !== undefined) this.data.eachRowOnNewPage = !!eachRowOnNewPage;
     if (visibility !== undefined) this.data.visibility = visibility ?? null;
     if (this.wrapper) {
       this.wrapper.dataset.sectionName = resolveSectionName(this.data);
@@ -256,6 +260,7 @@ export default class DocumentSection {
       hideTitleInPreview: !!data.hideTitleInPreview,
       borderTop: !!data.borderTop,
       borderBottom: !!data.borderBottom,
+      eachRowOnNewPage: !!data.eachRowOnNewPage,
       visibility: data.visibility ?? null,
       segments: JSON.parse(JSON.stringify(data.segments ?? [])),
       fieldValues: JSON.parse(JSON.stringify(data.fieldValues ?? {})),
@@ -511,8 +516,10 @@ export default class DocumentSection {
     }
 
     if (this.config.mappingMode) {
-      wireMappingDragDrop(this.editable, {
+      // Wire the whole section (header + body) so array drops on the header set `_source`.
+      wireMappingDragDrop(this.wrapper, {
         getRegistry: this.config.getRegistry,
+        getMappingRules: () => this.config.getMappingRules?.() ?? [],
         onAssignRules: (rules: any) => {
           for (const rule of rules) {
             this.config.onMappingRuleChange?.(rule);
@@ -637,6 +644,7 @@ export default class DocumentSection {
       hideTitleInPreview: !!this.data.hideTitleInPreview,
       borderTop: !!this.data.borderTop,
       borderBottom: !!this.data.borderBottom,
+      eachRowOnNewPage: !!this.data.eachRowOnNewPage,
       visibility: this.data.visibility ?? null,
       segments: this.data.segments,
       fieldValues: this.data.fieldValues,

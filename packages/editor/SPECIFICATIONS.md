@@ -1611,6 +1611,55 @@ interface FieldMappingRule {
 - Drag-and-drop writes a plain path with **no** format suffix.
 - Path existence checks (`sourcePathExists`, validation warnings) ignore any `#…` suffix (see below).
 
+### 18.2.1 Table mapping result (`_source` + `items`)
+
+Unresolved **Mapping result** JSON for a table field uses an explicit source array plus relative column paths (not a fake single-row array). The array path uses `_source` — the same key as section maps:
+
+```json
+{
+  "kind": "field",
+  "version": 2,
+  "sections": {
+    "list": {
+      "Table": {
+        "_source": "$payload.records",
+        "items": {
+          "name": "$name",
+          "start": "$date_visit_start#DD-MM-YY",
+          "patient": "$patient",
+          "facility": "$facility"
+        }
+      }
+    }
+  }
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `_source` | Absolute (or section-relative) path to the source array (`$payload.records`, `$values`) |
+| `items` | Map of table column key → mapping expression |
+
+Column paths in `items`:
+
+- **Relative (preferred):** `$name`, `$Item__r.Name` — resolved against each row of `_source`
+- **Absolute still allowed:** `$payload.records.name` (normalized on parse)
+- `#format` suffixes work the same as scalar fields
+
+Resolved fields export / apply output remains a **row array** (`[{ name, start, … }, …]`). Internal `FieldMappingRule` still uses `columnKey` + `sourcePath` + `sourceArrayPath`.
+
+Legacy Mapping result shapes still accepted when parsing:
+
+- `{ "source": "…", "items": { … } }` (renamed to `_source` on rebuild)
+- `[ { "name": "$payload.records.name", … } ]`
+
+```ts
+interface TableMappingResult {
+  _source: string;
+  items: Record<string, string>;
+}
+```
+
 ### 18.3 Date format suffix (`#format`)
 
 A mapping source path may append `#` + a date format so the **resolved value** is formatted when the mapping is applied / previewed:

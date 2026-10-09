@@ -8,13 +8,32 @@ import { FORMAT_ICONS } from '../ui/format-icons.js';
 export function createFieldHighlightForm() {
   const root = document.createElement('fieldset');
   root.className = 'display-style-form field-highlight-form';
-  root.innerHTML = `
-    <legend class="display-style-form__legend">
-      <span class="display-style-form__legend-label">Empty field style</span>
-      <button type="button" class="schema-form__info-tip" title="Empty field placeholders use this color and weight in design and fill mode. Fields render as soft rounded pills so they read as data tokens, not links." aria-label="More information">${FORMAT_ICONS.info}</button>
-    </legend>
+
+  const titleId = `field-highlight-title-${Math.random().toString(36).slice(2, 9)}`;
+  root.setAttribute('aria-labelledby', titleId);
+
+  const header = document.createElement('div');
+  header.className = 'display-style-form__header';
+
+  const titleEl = document.createElement('div');
+  titleEl.id = titleId;
+  titleEl.className = 'display-style-form__legend';
+  titleEl.textContent = 'Empty field style';
+  header.appendChild(titleEl);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.className = 'display-style-form__reset';
+  resetBtn.title = 'Reset to defaults';
+  resetBtn.setAttribute('aria-label', 'Reset style');
+  resetBtn.innerHTML = FORMAT_ICONS.reset;
+  header.appendChild(resetBtn);
+  root.appendChild(header);
+
+  const body = document.createElement('div');
+  body.innerHTML = `
     <div class="field-highlight-form__colors">
-    <label class="color-field">
+      <label class="color-field">
         <span class="color-field__label">Text color</span>
         <span class="color-field__control">
           <input type="color" class="color-field__swatch" data-field="highlight-color-picker" aria-label="Field highlight text color" />
@@ -25,20 +44,13 @@ export function createFieldHighlightForm() {
         <span class="color-field__label">Background</span>
         <span class="color-field__control">
           <input type="color" class="color-field__swatch" data-field="highlight-bg-picker" aria-label="Field highlight background color" />
-          <input type="text" class="color-field__hex" data-field="highlight-background" placeholder="transparent" spellcheck="false" />
+          <input type="text" class="color-field__hex" data-field="highlight-background" placeholder="#F0FDFA" spellcheck="false" />
         </span>
       </label>
     </div>
-    <div class="field-highlight-form__preview" aria-hidden="true">
-      <span class="field-highlight-form__preview-caption">Preview</span>
-      <span class="field-highlight-form__preview-sample">
-        Complaints:
-        <span class="field-highlight-form__preview-token">Vision disturbance</span>
-      </span>
-    </div>
     <div class="field-highlight-form__options">
       <label class="schema-form__row">
-        <span>Weight</span>
+        <span>Font weight</span>
         <select data-field="highlight-font-weight">
           <option value="500">Medium (500)</option>
           <option value="600">Semibold (600)</option>
@@ -53,6 +65,7 @@ export function createFieldHighlightForm() {
       </label>
     </div>
   `;
+  root.appendChild(body);
 
   const colorPicker = root.querySelector('[data-field="highlight-color-picker"]') as HTMLInputElement | null;
   const colorInput = root.querySelector('[data-field="highlight-color"]') as HTMLInputElement | null;
@@ -60,7 +73,6 @@ export function createFieldHighlightForm() {
   const bgInput = root.querySelector('[data-field="highlight-background"]') as HTMLInputElement | null;
   const fontWeightSelect = root.querySelector('[data-field="highlight-font-weight"]') as HTMLSelectElement | null;
   const borderWidthSelect = root.querySelector('[data-field="highlight-border-width"]') as HTMLSelectElement | null;
-  const previewToken = root.querySelector('.field-highlight-form__preview-token') as HTMLElement | null;
 
   function syncPickerFromText(picker: HTMLInputElement | null, textInput: HTMLInputElement | null, property: any = 'color') {
     if (!textInput) return;
@@ -96,54 +108,18 @@ export function createFieldHighlightForm() {
     return `#${value}`;
   }
 
-  function readFormHighlight() {
-    return {
-      color: colorInput?.value?.trim() || undefined,
-      backgroundColor: bgInput?.value?.trim() || undefined,
-      fontWeight: (fontWeightSelect?.value || undefined) as '500' | '600' | undefined,
-      borderWidth: borderWidthSelect?.value || undefined,
-    };
-  }
-
-  function refreshPreview() {
-    if (!previewToken) return;
-    const resolved = normalizeFieldHighlightStyle(readFormHighlight());
-    const color = resolved.color ?? DEFAULT_FIELD_HIGHLIGHT_STYLE.color;
-    const bg = resolved.backgroundColor ?? DEFAULT_FIELD_HIGHLIGHT_STYLE.backgroundColor;
-    const weight = resolved.fontWeight ?? DEFAULT_FIELD_HIGHLIGHT_STYLE.fontWeight;
-    const borderWidth = resolved.borderWidth ?? DEFAULT_FIELD_HIGHLIGHT_STYLE.borderWidth;
-
-    previewToken.style.color = color;
-    previewToken.style.backgroundColor = bg === 'transparent' ? '#f0fdfa' : bg;
-    previewToken.style.fontWeight = weight;
-    previewToken.style.textDecoration = 'none';
-    previewToken.style.textDecorationColor = '';
-    previewToken.style.textDecorationThickness = '';
-    previewToken.style.textUnderlineOffset = '';
-    previewToken.style.fontStyle = 'normal';
-    previewToken.style.padding = '1px 7px';
-    previewToken.style.borderRadius = '999px';
-    void borderWidth;
-  }
-
   colorInput?.addEventListener('input', () => {
     syncPickerFromText(colorPicker, colorInput, 'color');
-    refreshPreview();
   });
   bgInput?.addEventListener('input', () => {
     syncPickerFromText(bgPicker, bgInput, 'backgroundColor');
-    refreshPreview();
   });
   colorPicker?.addEventListener('input', () => {
     syncTextFromPicker(colorInput, colorPicker);
-    refreshPreview();
   });
   bgPicker?.addEventListener('input', () => {
     syncTextFromPicker(bgInput, bgPicker);
-    refreshPreview();
   });
-  fontWeightSelect?.addEventListener('change', refreshPreview);
-  borderWidthSelect?.addEventListener('change', refreshPreview);
 
   function setStyle(style: any) {
     const resolved = normalizeFieldHighlightStyle(style);
@@ -153,10 +129,15 @@ export function createFieldHighlightForm() {
     if (borderWidthSelect) borderWidthSelect.value = resolved.borderWidth ?? '1px';
     syncPickerFromText(colorPicker, colorInput, 'color');
     syncPickerFromText(bgPicker, bgInput, 'backgroundColor');
-    refreshPreview();
   }
 
-  refreshPreview();
+  resetBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setStyle({});
+  });
+
+  setStyle({});
 
   return {
     element: root,

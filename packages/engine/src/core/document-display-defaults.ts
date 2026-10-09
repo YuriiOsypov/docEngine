@@ -22,10 +22,10 @@ export const DEFAULT_FIELD_VALUE_STYLE_OPTIONS: FieldValueStyleOptions = {
 /** Default HTML unvisited link blue. */
 export const DEFAULT_FIELD_LINK_COLOR = '#0000FF';
 
-/** Mention-style field markers in fill mode (link-like; no background). */
+/** Mention-style field markers in fill mode (link blue + soft teal wash). */
 export const DEFAULT_FIELD_HIGHLIGHT_STYLE: FieldHighlightStyle = {
   color: DEFAULT_FIELD_LINK_COLOR,
-  backgroundColor: 'transparent',
+  backgroundColor: '#F0FDFA',
   fontWeight: '500',
   borderWidth: '1px',
 };

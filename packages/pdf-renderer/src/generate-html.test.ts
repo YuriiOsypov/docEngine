@@ -84,11 +84,12 @@ describe('generateHtmlFromTemplate', () => {
   });
 
   it('preserves newline-separated list layouts in exported field tokens', async () => {
+    // Plain multiline values render as text + <br> (not literal \\n in HTML).
     for (const [layout, expectedSnippet] of [
-      ['lines', 'Alpha\nBeta'],
-      ['bullet', '• Alpha\n• Beta'],
-      ['numeric', '1. Alpha\n2. Beta'],
-      ['custom', '- Alpha\n- Beta'],
+      ['lines', 'Alpha<br>Beta'],
+      ['bullet', '• Alpha<br>• Beta'],
+      ['numeric', '1. Alpha<br>2. Beta'],
+      ['custom', '- Alpha<br>- Beta'],
     ]) {
       const html = await generateHtmlFromTemplate({
         template: makeListTemplate(layout, layout === 'custom' ? '- ' : ''),

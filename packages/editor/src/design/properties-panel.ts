@@ -6,6 +6,7 @@ import { parseCellFieldId } from '../core/field-schemas.js';
 import { ACTION_ICONS } from '../ui/action-icons.js';
 import { FORMAT_ICONS } from '../ui/format-icons.js';
 import {
+  normalizeCustomPageMm,
   resolvePageSetupFieldHighlightStyle,
   resolvePageSetupFieldValueStyle,
   resolvePageSetupTextStyle,
@@ -22,7 +23,7 @@ function infoTipHtml(text: string) {
 
 /**
  * Right-side properties panel for design mode.
- * @param {{ getRegistry?: () => import('../registry/schema-registry.js').SchemaRegistry, onSaveField?: (result: { fieldId: string, previousFieldId: string, schema: object }) => void | Promise<void>, onSaveSection?: (data: { blockIndex: number, name: string, label: string, repeatable?: boolean, hideTitleInPreview?: boolean, borderTop?: boolean, borderBottom?: boolean, sectionEl?: HTMLElement }) => void | Promise<void>, onSaveDocument?: (pageSetup: object) => void | Promise<void> }} options
+ * @param {{ getRegistry?: () => import('../registry/schema-registry.js').SchemaRegistry, onSaveField?: (result: { fieldId: string, previousFieldId: string, schema: object }) => void | Promise<void>, onSaveSection?: (data: { blockIndex: number, name: string, label: string, repeatable?: boolean, hideTitleInPreview?: boolean, borderTop?: boolean, borderBottom?: boolean, eachRowOnNewPage?: boolean, sectionEl?: HTMLElement }) => void | Promise<void>, onSaveDocument?: (pageSetup: object) => void | Promise<void> }} options
  */
 export function createPropertiesPanel({
   getRegistry,
@@ -135,6 +136,13 @@ export function createPropertiesPanel({
       </span>
     </label>
     <label class="schema-form__row schema-form__row--checkbox">
+      <input type="checkbox" data-field="section-each-row-on-new-page" />
+      <span class="schema-form__label-row">
+        <span>Print each row on new page</span>
+        ${infoTipHtml('When this section repeats from a mapped source array, start each row on a new PDF/print page. Off keeps all rows on one continuous flow.')}
+      </span>
+    </label>
+    <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-visibility-enabled" />
       <span>Show/hide by field value</span>
     </label>
@@ -183,7 +191,16 @@ export function createPropertiesPanel({
         <select data-field="page-format">
           <option value="a4">A4</option>
           <option value="letter">Letter</option>
+          <option value="custom">Custom</option>
         </select>
+      </label>
+      <label class="schema-form__row properties-panel__custom-page-size" hidden>
+        <span>Width (mm)</span>
+        <input type="number" data-field="page-width-mm" min="20" max="1200" step="1" placeholder="210" />
+      </label>
+      <label class="schema-form__row properties-panel__custom-page-size" hidden>
+        <span>Height (mm)</span>
+        <input type="number" data-field="page-height-mm" min="20" max="1200" step="1" placeholder="297" />
       </label>
       <label class="schema-form__row">
         <span>Orientation</span>
@@ -229,13 +246,9 @@ export function createPropertiesPanel({
   const styleFormsHost = documentWrap.querySelector('[data-role="style-forms"]');
   const textStyleForm = createDisplayStyleForm({
     legend: 'Default text style',
-    prefix: 'text',
-    previewText: 'Document body text',
   });
   const valueStyleForm = createDisplayStyleForm({
     legend: 'Default value style',
-    prefix: 'value',
-    previewText: 'Field value text',
   });
   const fieldHighlightForm = createFieldHighlightForm();
   styleFormsHost.appendChild(textStyleForm.element);
@@ -291,6 +304,35 @@ export function createPropertiesPanel({
       if (mode !== 'field') return;
       await persistCurrent();
     },
+  });
+
+  const pageFormatSelect = documentWrap.querySelector('[data-field="page-format"]') as HTMLSelectElement | null;
+  const pageWidthMmInput = documentWrap.querySelector('[data-field="page-width-mm"]') as HTMLInputElement | null;
+  const pageHeightMmInput = documentWrap.querySelector('[data-field="page-height-mm"]') as HTMLInputElement | null;
+  const customPageSizeRows = documentWrap.querySelectorAll('.properties-panel__custom-page-size');
+
+  const NAMED_PAGE_PORTRAIT_MM: Record<string, { widthMm: number; heightMm: number }> = {
+    a4: { widthMm: 210, heightMm: 297 },
+    letter: { widthMm: 215.9, heightMm: 279.4 },
+  };
+
+  function syncCustomPageSizeInputs() {
+    const isCustom = String(pageFormatSelect?.value ?? 'a4').toLowerCase() === 'custom';
+    for (const row of customPageSizeRows) {
+      (row as HTMLElement).hidden = !isCustom;
+    }
+  }
+
+  pageFormatSelect?.addEventListener('change', () => {
+    const format = String(pageFormatSelect.value ?? 'a4').toLowerCase();
+    if (format === 'custom') {
+      const prev = String(pageFormatSelect.dataset.prevFormat ?? 'a4').toLowerCase();
+      const named = NAMED_PAGE_PORTRAIT_MM[prev] ?? NAMED_PAGE_PORTRAIT_MM.a4;
+      if (pageWidthMmInput) pageWidthMmInput.value = String(named.widthMm);
+      if (pageHeightMmInput) pageHeightMmInput.value = String(named.heightMm);
+    }
+    pageFormatSelect.dataset.prevFormat = format;
+    syncCustomPageSizeInputs();
   });
 
   const presetSelect = columnsWrap.querySelector('[data-field="columns-preset"]');
@@ -463,6 +505,8 @@ export function createPropertiesPanel({
       sectionWrap.querySelector('[data-field="section-border-top"]').checked = !!data.borderTop;
       sectionWrap.querySelector('[data-field="section-border-bottom"]').checked =
         !!data.borderBottom;
+      sectionWrap.querySelector('[data-field="section-each-row-on-new-page"]').checked =
+        !!data.eachRowOnNewPage;
       const visibility = data.visibility ?? null;
       populateSectionVisibilityFields(visibility?.fieldId ?? '');
       sectionVisibilityEnabled.checked = !!visibility?.fieldId;
@@ -484,11 +528,29 @@ export function createPropertiesPanel({
     fieldController.clear();
 
     withSuppressedPersist(() => {
-      documentWrap.querySelector('[data-field="page-format"]').value = pageSetup.format ?? 'a4';
+      const format = String(pageSetup.format ?? 'a4').toLowerCase();
+      const formatValue = format === 'custom' || format === 'letter' ? format : 'a4';
+      if (pageFormatSelect) {
+        pageFormatSelect.value = formatValue;
+        pageFormatSelect.dataset.prevFormat = formatValue;
+      }
       documentWrap.querySelector('[data-field="page-orientation"]').value =
         String(pageSetup.orientation ?? 'portrait').toLowerCase() === 'landscape'
           ? 'landscape'
           : 'portrait';
+      if (pageWidthMmInput) {
+        pageWidthMmInput.value =
+          pageSetup.widthMm != null && Number.isFinite(Number(pageSetup.widthMm))
+            ? String(pageSetup.widthMm)
+            : '210';
+      }
+      if (pageHeightMmInput) {
+        pageHeightMmInput.value =
+          pageSetup.heightMm != null && Number.isFinite(Number(pageSetup.heightMm))
+            ? String(pageSetup.heightMm)
+            : '297';
+      }
+      syncCustomPageSizeInputs();
       documentWrap.querySelector('[data-field="page-margin"]').value =
         pageSetup.margin != null ? String(pageSetup.margin) : '';
       documentWrap.querySelector('[data-field="page-title"]').value = pageSetup.title ?? '';
@@ -546,6 +608,9 @@ export function createPropertiesPanel({
       const borderBottom = !!sectionWrap.querySelector(
         '[data-field="section-border-bottom"]',
       )?.checked;
+      const eachRowOnNewPage = !!sectionWrap.querySelector(
+        '[data-field="section-each-row-on-new-page"]',
+      )?.checked;
       const visibility = readSectionVisibilityRule();
       await onSaveSection?.({
         blockIndex: sectionBlockIndex,
@@ -555,6 +620,7 @@ export function createPropertiesPanel({
         hideTitleInPreview,
         borderTop,
         borderBottom,
+        eachRowOnNewPage,
         visibility,
         sectionEl: sectionTarget,
       });
@@ -570,14 +636,25 @@ export function createPropertiesPanel({
       const protectFieldsInFillMode =
         !!documentWrap.querySelector('[data-field="page-protect-fields"]')?.checked;
 
+      const formatRaw = String(
+        documentWrap.querySelector('[data-field="page-format"]')?.value ?? 'a4',
+      ).toLowerCase();
+      const format =
+        formatRaw === 'custom' || formatRaw === 'letter' ? formatRaw : 'a4';
       const pageSetup: any = {
-        format: documentWrap.querySelector('[data-field="page-format"]')?.value ?? 'a4',
+        format,
         orientation:
           documentWrap.querySelector('[data-field="page-orientation"]')?.value === 'landscape'
             ? 'landscape'
             : 'portrait',
         protectFieldsInFillMode,
       };
+      if (format === 'custom') {
+        const widthRaw = pageWidthMmInput?.value?.trim() ?? '';
+        const heightRaw = pageHeightMmInput?.value?.trim() ?? '';
+        pageSetup.widthMm = normalizeCustomPageMm(widthRaw === '' ? 210 : Number(widthRaw), 210);
+        pageSetup.heightMm = normalizeCustomPageMm(heightRaw === '' ? 297 : Number(heightRaw), 297);
+      }
       if (margin != null && !Number.isNaN(margin)) pageSetup.margin = margin;
       const title = documentWrap.querySelector('[data-field="page-title"]')?.value?.trim() ?? '';
       if (title) pageSetup.title = title;
@@ -719,6 +796,12 @@ export function createPropertiesPanel({
       if (mode !== 'field') return false;
       if (fieldController.getCurrentFieldId() !== fieldId) return false;
       withSuppressedPersist(() => fieldController.syncTableColumnWidths?.(columns));
+      return true;
+    },
+    syncTableColumns(fieldId: any, columns: any) {
+      if (mode !== 'field') return false;
+      if (fieldController.getCurrentFieldId() !== fieldId) return false;
+      withSuppressedPersist(() => fieldController.syncTableColumns?.(columns));
       return true;
     },
     commitLiveTableColumnWidths(fieldId: any) {

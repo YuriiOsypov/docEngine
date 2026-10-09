@@ -1,5 +1,4 @@
 import { wireModalEscape } from '../ui/wire-modal-escape.js';
-import { applyDesignPanelTextStyle } from '../core/page-setup-styles.js';
 import {
   createListItemsEditor,
   createTreeNodesEditor,
@@ -13,10 +12,9 @@ import {
  * Modal editor for manual list options and tree nodes (design mode).
  */
 let sharedModal: any = null;
-let getTextStyle: any = null;
 
-export function configureSchemaItemsDesignerModal(options: any = {}) {
-  getTextStyle = options.getTextStyle ?? null;
+export function configureSchemaItemsDesignerModal(_options: any = {}) {
+  // Default text style is document-only; schema designer keeps UI font.
 }
 
 export function getSchemaItemsDesignerModal() {
@@ -130,7 +128,6 @@ function createSchemaItemsDesignerModal() {
       resolvePromise = resolve;
       rejectPromise = reject;
       mountEditor(options.mode, options);
-      applyDesignPanelTextStyle(overlay.querySelector('.modal'), { textStyle: getTextStyle?.() });
       overlay.hidden = false;
     });
   }

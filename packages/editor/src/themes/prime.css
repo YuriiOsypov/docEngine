@@ -61,10 +61,15 @@
   --me-accent-hover-border: var(--p-primary-300, #7a9);
   --me-accent-panel: var(--p-surface-100, #e4eaf2);
 
+  /* Filled field pills */
+  --me-field-filled-bg: var(--p-primary-50, #e8f0fa);
+  --me-field-filled-color: var(--p-primary-color, #4a7ab5);
+
   /* Focus / selection */
   --me-focus-color: var(--p-primary-color, #4a7ab5);
   --me-focus-ring: var(--p-focus-ring-shadow, 0 0 0 2px color-mix(in srgb, var(--p-primary-color) 35%, transparent));
   --me-selection-outline: var(--p-primary-color, #2563eb);
+  --me-selection-text: #0f172a;
   --me-selection-bg: var(--p-primary-50, #eff6ff);
   --me-drop-indicator: var(--p-primary-color, #2563eb);
 

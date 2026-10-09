@@ -3,7 +3,12 @@ import {
   DOCUMENT_BODY_LINE_HEIGHT,
   DOCUMENT_TABLE_TEXT_STYLE,
 } from '../core/document-display-defaults.js';
-import { resolvePageSetupTextStyle } from '../core/page-setup-styles.js';
+import {
+  resolvePageContentWidthMm,
+  resolvePageFormatSizeMm,
+  resolvePageMarginsMm,
+  resolvePageSetupTextStyle,
+} from '../core/page-setup-styles.js';
 
 /** Strip values that could break out of an inline `<style>` block. */
 function sanitizeCssValue(value: unknown, fallback: string): string {
@@ -12,10 +17,14 @@ function sanitizeCssValue(value: unknown, fallback: string): string {
 }
 
 /**
- * Resolve document typography for a standalone HTML export (no app CSS vars).
+ * Resolve document typography + page geometry for a standalone HTML export (no app CSS vars).
  */
 export function resolvePreviewHtmlCssVars(exportOptions: any = {}): Record<string, string> {
-  const textStyle = resolvePageSetupTextStyle(exportOptions.pageSetup);
+  const pageSetup = exportOptions.pageSetup ?? {};
+  const textStyle = resolvePageSetupTextStyle(pageSetup);
+  const { widthMm, heightMm } = resolvePageFormatSizeMm(pageSetup);
+  const margins = resolvePageMarginsMm(pageSetup);
+  const contentWidthMm = resolvePageContentWidthMm(pageSetup);
   return {
     '--me-document-font-family': sanitizeCssValue(
       textStyle.fontFamily,
@@ -34,6 +43,14 @@ export function resolvePreviewHtmlCssVars(exportOptions: any = {}): Record<strin
       DOCUMENT_TABLE_TEXT_STYLE.fontSize,
       '14px',
     ),
+    '--doc-page-width': `${widthMm}mm`,
+    '--doc-page-min-height': `${heightMm}mm`,
+    '--doc-page-margin-top': `${margins[0]}mm`,
+    '--doc-page-margin-right': `${margins[1]}mm`,
+    '--doc-page-margin-bottom': `${margins[2]}mm`,
+    '--doc-page-margin-left': `${margins[3]}mm`,
+    '--doc-page-margin': `${margins[0]}mm`,
+    '--doc-page-content-width': `${contentWidthMm}mm`,
   };
 }
 
@@ -55,21 +72,38 @@ ${rootVars}
 html, body {
   margin: 0;
   padding: 0;
-  background: #fff;
+  background: #e8eef3;
   color: #000;
 }
 body {
-  padding: 24px;
+  padding: 24px 16px;
   font-family: var(--me-document-font-family);
   font-size: var(--me-document-font-size);
   line-height: var(--me-document-line-height);
+}
+.preview-export-sheet {
+  width: min(100%, var(--doc-page-width, 210mm));
+  max-width: var(--doc-page-width, 210mm);
+  min-height: var(--doc-page-min-height, 297mm);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--doc-page-margin-top, 15mm) var(--doc-page-margin-right, 15mm)
+    var(--doc-page-margin-bottom, 15mm) var(--doc-page-margin-left, 15mm);
+  background: #ffffff;
+  border: 1px solid rgb(15 23 42 / 0.08);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 8px 24px rgb(15 23 42 / 0.08);
 }
 .preview-document {
   font-family: var(--me-document-font-family);
   font-size: var(--me-document-font-size);
   line-height: var(--me-document-line-height);
   color: #000;
+  width: 100%;
   max-width: 100%;
+  margin: 0;
 }
 .preview-document__title {
   font-family: var(--me-document-font-family);
@@ -80,6 +114,21 @@ body {
 }
 .preview-document__section-wrap {
   margin-bottom: 1em;
+}
+/* Screen: light separator only — large padding looked like a broken uneven gap. */
+.preview-document__section-wrap--new-page {
+  break-before: page;
+  page-break-before: always;
+  margin-top: 0.5em;
+  padding-top: 0.5em;
+  border-top: 1px dashed #94a3b8;
+}
+@media print {
+  .preview-document__section-wrap--new-page {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
 }
 .preview-document__section-wrap.document-section--border-top,
 .document-section.document-section--border-top {
@@ -129,11 +178,49 @@ body {
   margin: 0;
 }
 .document-section__body ul,
+.preview-document ul {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: disc outside;
+}
 .document-section__body ol,
-.preview-document ul,
 .preview-document ol {
   margin: 0.25em 0;
   padding-left: 1.5em;
+  list-style: decimal outside;
+}
+.field-token--html {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  white-space: normal;
+}
+.field-token--html:has(div, ul, ol, h1, h2, h3, p, br) {
+  display: block;
+  width: 100%;
+}
+.field-token--html .document-align,
+.field-token--html div[style*='text-align'] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.field-token--html ul {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: disc outside;
+}
+.field-token--html ol {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: decimal outside;
+}
+.preview-document .field-token--html,
+.preview-document .field-token--html ul,
+.preview-document .field-token--html ol,
+.preview-document .field-token--html li,
+.preview-document .field-token--html .document-align {
+  white-space: normal;
 }
 .document-section__body b,
 .document-section__body strong,
@@ -206,7 +293,6 @@ body {
 .document-columns__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  /* Percent tracks (table-synced totals) must not add gap or they overflow 100%. */
   gap: 0;
   width: 100%;
   max-width: 100%;
@@ -223,10 +309,23 @@ body {
   line-height: inherit;
   color: inherit;
 }
-.preview-document .document-columns__col ul,
+.preview-document .document-columns__col ul {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: disc outside;
+}
 .preview-document .document-columns__col ol {
   margin: 0.25em 0;
   padding-left: 1.5em;
+  list-style: decimal outside;
+}
+.document-align--center { text-align: center; }
+.document-align--right { text-align: right; }
+.document-align--left { text-align: left; }
+.field-token {
+  white-space: pre-wrap;
+  text-decoration: none;
+  cursor: default;
 }
 .vision-table-block,
 .document-table,
@@ -358,6 +457,20 @@ body {
   margin-inline-start: 0;
   margin-inline-end: auto;
 }
+.field-token--preview.field-token--logical-yes,
+.field-token--preview.field-token--logical-no {
+  font-weight: 600;
+}
+.field-token--barcode img,
+.field-token__barcode {
+  max-width: 100%;
+  height: auto;
+}
+.field-token--signature img,
+.field-token__signature {
+  max-width: 100%;
+  height: auto;
+}
 .repeater-block,
 .field-token__repeater-preview {
   display: block;
@@ -417,6 +530,22 @@ body {
 .document-table__row-actions,
 .editor-drag-handle {
   display: none !important;
+}
+@media print {
+  html, body {
+    background: #fff;
+    padding: 0;
+  }
+  .preview-export-sheet {
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
 }
 `.trim();
 }

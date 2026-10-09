@@ -302,6 +302,12 @@ export function isFieldNameTakenInSection(
   return false;
 }
 
+function fieldNameMatches(candidate: unknown, normalized: string): boolean {
+  const name = String(candidate ?? '').trim();
+  if (!name) return false;
+  return name === normalized || name.toLowerCase() === normalized.toLowerCase();
+}
+
 export function resolveFieldIdByName(
   sectionName: string,
   fieldName: string,
@@ -318,7 +324,7 @@ export function resolveFieldIdByName(
         if (!fieldId) continue;
         const schema = fieldSchemas[fieldId];
         const name = schema?.name ?? schema?.label ?? fieldId;
-        if (name === normalized) return fieldId;
+        if (fieldNameMatches(name, normalized)) return fieldId;
       }
       if (block.type === 'documentSection') {
         let matchId: string | null = null;
@@ -327,7 +333,7 @@ export function resolveFieldIdByName(
             return;
           const schema = fieldSchemas[seg.id];
           const name = schema?.name ?? schema?.label ?? seg.id;
-          if (name === normalized) matchId = seg.id;
+          if (fieldNameMatches(name, normalized)) matchId = seg.id;
         });
         if (matchId) return matchId;
       }
@@ -338,14 +344,16 @@ export function resolveFieldIdByName(
   for (const block of blocks ?? []) {
     if (block.type !== 'documentSection') continue;
     const blockName = resolveSectionName(block.data);
-    if (blockName !== sectionName) continue;
+    if (blockName !== sectionName && blockName.toLowerCase() !== sectionName.toLowerCase()) {
+      continue;
+    }
 
     let matchId: string | null = null;
     walkSegments((block.data as DocumentSectionData | undefined)?.segments ?? [], (seg) => {
       if (matchId || (seg.type !== 'field' && seg.type !== 'child' && seg.type !== 'table')) return;
       const schema = fieldSchemas[seg.id];
       const name = schema?.name ?? schema?.label ?? seg.id;
-      if (name === normalized) matchId = seg.id;
+      if (fieldNameMatches(name, normalized)) matchId = seg.id;
     });
     if (matchId) return matchId;
   }
@@ -357,9 +365,14 @@ export function rebuildFieldIdsForSection(
   block: EditorBlock,
   fieldSchemas: FieldSchemaMap,
   allBlocks: EditorBlock[],
-): { fieldSchemas: FieldSchemaMap; blocks: EditorBlock[] } {
+): {
+  fieldSchemas: FieldSchemaMap;
+  blocks: EditorBlock[];
+  /** old fieldId → new fieldId for mapping / formula consumers */
+  idRenames: Record<string, string>;
+} {
   if (block.type !== 'documentSection') {
-    return { fieldSchemas, blocks: allBlocks };
+    return { fieldSchemas, blocks: allBlocks, idRenames: {} };
   }
 
   const sectionName = resolveSectionName(block.data);
@@ -386,13 +399,16 @@ export function rebuildFieldIdsForSection(
     }
   });
 
+  /** @type {Record<string, string>} */
+  const idRenames: Record<string, string> = {};
   for (const { oldId, newId, schema } of renames) {
     const result = applyFieldIdChange(oldId, newId, schema, schemas, blocks);
     schemas = result.fieldSchemas;
     blocks = result.blocks;
+    idRenames[oldId] = newId;
   }
 
-  return { fieldSchemas: schemas, blocks };
+  return { fieldSchemas: schemas, blocks, idRenames };
 }
 
 export function migrateFieldIds(

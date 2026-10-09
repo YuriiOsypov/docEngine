@@ -35,6 +35,7 @@ import {
 } from './style-mapper.js';
 import { resolveVisionTablePdfLayout, TABLE_PDF_LINE_HEIGHT } from './table-layout.js';
 import { withPdfSectionBorderRules } from './pdf-horizontal-rule.js';
+import { estimateContentWidthPt } from './repeatable-table-pagination.js';
 import {
   chunkTableBodyRowsVariable,
   estimateContinuationChunkMaxBodyHeight,
@@ -248,6 +249,9 @@ function createProseParagraphBuilder(content: any, defaultFont?: any) {
   let paragraphParts: any[] = [];
   let blockStyle: any = {};
   let currentAlign: any;
+  /** After omitting an empty field, collapse a doubled newline once:
+   * `main\n` + [empty] + `\namount` → `main\namount` (not a blank line). */
+  let collapseDoubledNewline = false;
 
   return {
     ensureAlignment(align: any) {
@@ -258,10 +262,21 @@ function createProseParagraphBuilder(content: any, defaultFont?: any) {
       currentAlign = nextAlign;
     },
     appendParts(parts: any) {
-      paragraphParts.push(...parts);
+      let next = parts;
+      if (collapseDoubledNewline && Array.isArray(next) && next.length) {
+        if (partsEndWithNewline(paragraphParts) && partsStartWithNewline(next)) {
+          next = stripLeadingNewlineFromParts(next);
+        }
+        collapseDoubledNewline = false;
+      }
+      paragraphParts.push(...next);
     },
     setBlockStyle(style: any) {
       blockStyle = style;
+    },
+    /** Call when an optional empty field is skipped between text segments. */
+    noteOmittedField() {
+      collapseDoubledNewline = true;
     },
     flush() {
       const text = pdfTextContent(paragraphParts);
@@ -269,6 +284,7 @@ function createProseParagraphBuilder(content: any, defaultFont?: any) {
         paragraphParts = [];
         blockStyle = {};
         currentAlign = undefined;
+        collapseDoubledNewline = false;
         return;
       }
       const parts = finalizePdfInlineParts(paragraphParts, { font: defaultFont });
@@ -276,8 +292,43 @@ function createProseParagraphBuilder(content: any, defaultFont?: any) {
       paragraphParts = [];
       blockStyle = {};
       currentAlign = undefined;
+      collapseDoubledNewline = false;
     },
   };
+}
+
+function partTextValue(part: any): string {
+  if (typeof part === 'string') return part;
+  return String(part?.text ?? '');
+}
+
+function partsEndWithNewline(parts: any[]): boolean {
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const text = partTextValue(parts[i]);
+    if (!text) continue;
+    return /\n[^\S\n]*$/.test(text);
+  }
+  return false;
+}
+
+function partsStartWithNewline(parts: any[]): boolean {
+  for (let i = 0; i < parts.length; i += 1) {
+    const text = partTextValue(parts[i]);
+    if (!text) continue;
+    return /^[^\S\n]*\n/.test(text);
+  }
+  return false;
+}
+
+function stripLeadingNewlineFromParts(parts: any[]): any[] {
+  if (!parts.length) return parts;
+  const first = parts[0];
+  const text = partTextValue(first);
+  if (!/^[^\S\n]*\n/.test(text)) return parts;
+  const trimmed = text.replace(/^[^\S\n]*\n/, '');
+  if (!trimmed) return parts.slice(1);
+  if (typeof first === 'string') return [trimmed, ...parts.slice(1)];
+  return [{ ...first, text: trimmed }, ...parts.slice(1)];
 }
 
 function appendPlainTextToProseParagraph(raw: any, inlineStyle: any, builder: any) {
@@ -342,7 +393,11 @@ export function renderSegmentsToPdfProseBlocks(segments: any, ctx: PdfRenderCont
       const value = resolveFieldValue(fieldId, ctx.fieldValues, ctx.fieldSchemas, ctx.blocks);
       const empty = isPdfFieldEmpty(value, schema);
       // Optional empties are omitted; required empties keep their placeholder.
-      if (empty && !schema?.required) continue;
+      // Collapse the newline that usually wraps the field so gaps stay even across rows.
+      if (empty && !schema?.required) {
+        builder.noteOmittedField();
+        continue;
+      }
 
       const label = getFieldDisplayLabel(fieldId, seg.placeholder, ctx.previewContext);
       const style = resolvePdfFieldStyleForExport(fieldId, ctx);
@@ -1310,12 +1365,21 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
 
       if (!sectionStack.length) continue;
 
-      const borderedStack = withPdfSectionBorderRules(sectionStack, data);
+      const borderedStack = withPdfSectionBorderRules(
+        sectionStack,
+        data,
+        estimateContentWidthPt(pageSetup),
+      );
 
       if (usedRepeatableTableChunks) {
         content.push(...borderedStack);
       } else {
-        content.push({ stack: borderedStack, margin: [0, 0, 0, 6] });
+        // Keep each "Show on each page" instance on one page so internal gaps match.
+        content.push({
+          stack: borderedStack,
+          margin: [0, 0, 0, 6],
+          ...(repeatable ? { unbreakable: true } : {}),
+        });
       }
       continue;
     }

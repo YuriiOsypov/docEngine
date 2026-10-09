@@ -1,10 +1,15 @@
 import { resolveRegistry, getRegistryFromNode } from '../registry/registry-context.js';
 import { schemaToDisplayConfig } from '../registry/schema-registry.js';
 import { getFieldHandler } from './handlers/registry.js';
+import { formatLogicalTokenDisplay } from './logical-display.js';
 import { createDefaultBlockData, createDefaultSchema, resolveSchemaDefaultValue, ensureCellSchemasForRows, resolveTableInstanceRows, parseCellFieldId, isFieldEditableInFillMode, isTableCellInheritedReadonly, isSchemaReadonly } from '../core/field-schemas.js';
 import { allocateFieldIdentity } from '../core/field-id.js';
 import { remapperMovedSubtreeToSection } from './cross-section-reposition.js';
 import { PALETTE_DRAG_MIME, parsePaletteDrag, isPaletteDragSessionActive } from '../design/field-palette.js';
+import {
+  isSourcePathDragEvent,
+  parseSourcePathMeta,
+} from '../ui/mapping-drag-drop.js';
 import { normalizeImageValue, isImageValueEmpty } from '../services/image-upload.js';
 import {
   appendHtmlToFragment,
@@ -55,12 +60,14 @@ import {
   addTableRowsFromText,
   removeTableRowFromWrapper,
   shouldShowTableRowActions,
+  reorderTableColumnsInWrapper,
 } from './table-field.js';
 import {
   schemaWidthToColCss,
   scalePercentCssWidthsToFill,
   wireTableColumnResize,
 } from './wire-table-column-resize.js';
+import { wireTableColumnReorder } from './wire-table-column-reorder.js';
 import { wireColumnsResize } from './wire-columns-resize.js';
 import { showNotification } from '../ui/notification.js';
 import {
@@ -521,11 +528,19 @@ export function createFieldToken(fieldId: any, value: any, placeholder: any, con
   return span;
 }
 
+/** Built-in default table column labels: "Column 1", "Column 2", … */
+const DEFAULT_COLUMN_LABEL_RE = /^Column \d+$/i;
+
 export function isTableCellDisplayPlaceholder(value: any, label: any) {
   if (value == null || value === '') return true;
   if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
   const normalized = String(label ?? '').trim();
-  return !!normalized && value === normalized;
+  if (normalized && trimmed === normalized) return true;
+  // After renaming default columns, "Column 1" can stick as a stored value while
+  // the header/label is already the real field name (e.g. "name").
+  if (DEFAULT_COLUMN_LABEL_RE.test(trimmed) && trimmed !== normalized) return true;
+  return false;
 }
 
 function isTableCellPlaceholderValue(token: any, value: any, placeholder: any) {
@@ -757,11 +772,13 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
     } else if (!empty) {
       if (value === true) {
         token.classList.add('field-token--logical-yes');
-        token.textContent = 'Yes ✓';
       } else {
         token.classList.add('field-token--logical-no');
-        token.textContent = 'No';
       }
+      token.textContent = formatLogicalTokenDisplay(
+        value === true,
+        def?.trueMark ?? schema?.trueMark,
+      );
     }
   } else if (def?.htmlEditor) {
     token.classList.add('field-token--html');
@@ -778,7 +795,9 @@ export function updateFieldToken(token: any, value: any, placeholder: any, conte
     const empty = isFieldEmpty(value, { htmlEditor: false });
     if (!empty) {
       const display = formatFieldDisplay(fieldId, value, placeholder ?? token.dataset.placeholder, registryCtx);
-      token.textContent = display;
+      // Use <br> for newlines so Preview/PDF match the textarea even when CSS
+      // white-space is not pre-wrap on the token.
+      token.appendChild(textToFragment(String(display)));
     } else if (showEmptyPlaceholder) {
       token.textContent = label;
     }
@@ -1085,14 +1104,20 @@ function hasSuspiciousEncodingArtifacts(value: any) {
   return value.includes('\uFFFD') || /Ã.|Â.|ï¿½/.test(value);
 }
 
+/**
+ * Normalize plain-text field values. Preserve real line breaks (textarea Enter);
+ * turn JSON-escaped "\\n" / "\\r" into real newlines. Do not strip breaks —
+ * that collapsed multi-line Text picker input into a single line in the document.
+ */
 function sanitizeTextFieldValue(value: any) {
   if (typeof value !== 'string') return value;
-  // Handle both real CR/LF and literal escaped sequences like "\\n\\r".
   return value
-    .replace(/\\r\\n/g, '')
-    .replace(/\\r/g, '')
-    .replace(/\\n/g, '')
-    .replace(/[\r\n]+/g, '');
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n\\r/g, '\n')
+    .replace(/\\r/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
 }
 
 function normalizeHtmlEditorValue(value: any) {
@@ -2569,8 +2594,15 @@ export async function insertPaletteFieldAtPoint(editable: any, fieldType: any, c
   const { designMode, onEditSchema, onDeleteField, openEditor = true, designPropertiesPanel } = options;
   const registry = registryFrom(options) ?? getRegistryFromNode(editable);
   const registryCtx = registry ? { getRegistry: () => registry } : options;
-  const { label } = createDefaultBlockData(fieldType);
+  const defaults = createDefaultBlockData(fieldType);
+  const label =
+    typeof options.label === 'string' && options.label.trim()
+      ? options.label.trim()
+      : defaults.label;
   const schema = createDefaultSchema(fieldType, label, label);
+  if (options.readonly === true) {
+    schema.readonly = true;
+  }
   const { fieldId, fieldName } = allocateFieldIdentity(editable, registry, schema.name as string);
   schema.name = fieldName;
   registry?.updateFieldSchema(fieldId, schema);
@@ -2579,6 +2611,15 @@ export async function insertPaletteFieldAtPoint(editable: any, fieldType: any, c
   const token = createFieldToken(fieldId, initialValue, schema.label, registryCtx);
   token.classList.add('field-token--design');
   placeNodeAtPoint(editable, token, clientX, clientY);
+
+  // Database → canvas: insert visible "Label: " text before the field token.
+  if (options.insertVisibleLabel === true && label) {
+    const parent = token.parentNode;
+    if (parent) {
+      parent.insertBefore(document.createTextNode(`${label}: `), token);
+      ensureFieldTokenCaretAnchors(parent);
+    }
+  }
 
   if (designMode) {
     wireDesignFieldToken(token, { onEditSchema, onDeleteField, designPropertiesPanel });
@@ -2605,8 +2646,23 @@ export function insertColumnsAtPoint(sectionBody: any, clientX: any, clientY: an
 export async function insertPaletteTableAtPoint(sectionBody: any, clientX: any, clientY: any, options: any = {}) {
   const registry = registryFrom(options);
   const fieldType = options.fieldType === 'pivotTable' ? 'pivotTable' : 'table';
-  const defaultLabel = fieldType === 'pivotTable' ? 'Pivot Table' : 'Table';
+  const defaultLabel =
+    typeof options.label === 'string' && options.label.trim()
+      ? options.label.trim()
+      : fieldType === 'pivotTable'
+        ? 'Pivot Table'
+        : 'Table';
   const schema = createDefaultSchema(fieldType, defaultLabel, defaultLabel);
+  if (options.readonly === true) {
+    schema.readonly = true;
+  }
+  if (Array.isArray(options.columns) && options.columns.length) {
+    schema.columns = options.columns.map((col: any) => ({
+      key: col.key,
+      label: col.label ?? col.key,
+      name: col.name ?? col.label ?? col.key,
+    }));
+  }
   const { fieldId, fieldName } = allocateFieldIdentity(sectionBody, registry, schema.name as string);
   schema.name = fieldName;
   registry?.updateFieldSchema(fieldId, schema);
@@ -2655,7 +2711,13 @@ function wirePaletteDropGuard(element: any) {
     'beforeinput',
     (e: any) => {
       if (e.inputType !== 'insertFromDrop') return;
-      if (!isInternalDragActive() && !isPaletteDragSessionActive()) return;
+      if (
+        !isInternalDragActive() &&
+        !isPaletteDragSessionActive() &&
+        !isSourcePathDragEvent(e.dataTransfer)
+      ) {
+        return;
+      }
       e.preventDefault();
     },
     true,
@@ -3094,8 +3156,18 @@ export function wireDesignDragDrop(container: any, options: any = {}) {
   wireDesignDragDropContainer(container, options);
 }
 
+function isMappableSourceDropTarget(el: any, container: any) {
+  if (!el || !container) return false;
+  const pivot = el.closest?.('.document-table--pivot[data-pivot-field-id]');
+  if (pivot && container.contains(pivot)) return true;
+  const token = el.closest?.('.field-token');
+  if (!token || !container.contains(token)) return false;
+  if (token.classList.contains('field-token--computed')) return false;
+  return true;
+}
+
 function wireDesignDragDropContainer(container: any, options: any = {}) {
-  const { designMode, onStructureChange, onPaletteDrop } = options;
+  const { designMode, onStructureChange, onPaletteDrop, onSourcePathCanvasDrop } = options;
   if (!designMode || container.dataset.designDragWired === 'true') return;
   container.dataset.designDragWired = 'true';
 
@@ -3106,7 +3178,13 @@ function wireDesignDragDropContainer(container: any, options: any = {}) {
 
   function onBeforeInput(e: any) {
     if (e.inputType !== 'insertFromDrop') return;
-    if (!isInternalDragActive() && !isPaletteDragSessionActive()) return;
+    if (
+      !isInternalDragActive() &&
+      !isPaletteDragSessionActive() &&
+      !isSourcePathDragEvent(e.dataTransfer)
+    ) {
+      return;
+    }
     e.preventDefault();
   }
 
@@ -3117,6 +3195,22 @@ function wireDesignDragDropContainer(container: any, options: any = {}) {
       e.dataTransfer.dropEffect = 'copy';
       container.classList.add('document-section--drop-target');
       updateDropIndicator(container, e.clientX, e.clientY);
+      return;
+    }
+
+    if (isSourcePathDragEvent(e.dataTransfer)) {
+      // When mappingMode wiring is present it handles field/cell targets.
+      // With onSourcePathCanvasDrop we accept both canvas insert and token mapping.
+      if (isMappableSourceDropTarget(e.target, container) && !onSourcePathCanvasDrop) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+      if (!isMappableSourceDropTarget(e.target, container)) {
+        container.classList.add('document-section--drop-target');
+        updateDropIndicator(container, e.clientX, e.clientY);
+      }
       return;
     }
 
@@ -3144,6 +3238,16 @@ function wireDesignDragDropContainer(container: any, options: any = {}) {
       container.classList.remove('document-section--drop-target');
       clearDropIndicators();
       await onPaletteDrop?.(paletteItem, container, e.clientX, e.clientY);
+      return;
+    }
+
+    const sourceMeta = parseSourcePathMeta(e.dataTransfer);
+    if (sourceMeta?.path && onSourcePathCanvasDrop) {
+      e.preventDefault();
+      e.stopPropagation();
+      container.classList.remove('document-section--drop-target');
+      clearDropIndicators();
+      await onSourcePathCanvasDrop(sourceMeta, container, e.clientX, e.clientY, e.target);
       return;
     }
 
@@ -3404,6 +3508,14 @@ export function wireTableRegions(container: any, options: any = {}) {
             onTableColumnWidthsPreview: options.onTableColumnWidthsPreview,
             onTableColumnResizeStart: options.onTableColumnResizeStart,
           });
+          if (options.designMode) {
+            wireTableColumnReorder(visionTable, {
+              tableId,
+              onReorder: (fromIndex: number, toIndex: number) => {
+                reorderTableColumnsInWrapper(tableEl, fromIndex, toIndex, options);
+              },
+            });
+          }
         }
       }
     }

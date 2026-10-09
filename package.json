@@ -25,7 +25,11 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
+    "rollup": "npm:@rollup/wasm-node@^4.64.1",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
+  },
+  "overrides": {
+    "rollup": "npm:@rollup/wasm-node"
   }
 }

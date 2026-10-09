@@ -231,9 +231,10 @@ export function applyFieldDisplayStyle(element: any, style: any) {
 }
 
 /**
- * Let mention-style fill-mode CSS control text color and underline.
+ * Clear display-style props that Empty field style owns, then apply
+ * `--me-field-fill-*` as inline styles so weight/color always win over CSS.
  * @param {HTMLElement} token
- * @param {{ fillModeFieldHighlight?: boolean } | null | undefined} [context]
+ * @param {{ fillModeFieldHighlight?: boolean, mappingMode?: boolean } | null | undefined} [context]
  */
 export function clearFieldHighlightOverriddenStyles(token: any, context: any) {
   if (shouldHighlightEmptyField(token, context)) {
@@ -241,13 +242,56 @@ export function clearFieldHighlightOverriddenStyles(token: any, context: any) {
     token.style.removeProperty('text-decoration');
     token.style.removeProperty('text-decoration-color');
     token.style.removeProperty('text-decoration-thickness');
+    token.style.removeProperty('text-underline-offset');
     token.style.removeProperty('font-weight');
+    token.style.removeProperty('background-color');
+    applyEmptyFieldHighlightInlineStyles(token);
     return;
   }
   if (shouldUnderlineFieldInFillMode(token, context)) {
     token.style.removeProperty('text-decoration');
     token.style.removeProperty('text-decoration-color');
     token.style.removeProperty('text-decoration-thickness');
+    token.style.removeProperty('text-underline-offset');
+  }
+}
+
+/**
+ * Paint Empty field style from CSS variables set by `applyFieldHighlightCssVars`.
+ * Inline styles beat conflicting design-mode chrome rules (e.g. hardcoded 500).
+ * @param {HTMLElement} token
+ */
+export function applyEmptyFieldHighlightInlineStyles(token: any) {
+  if (!token?.style || typeof getComputedStyle !== 'function') return;
+  const host =
+    (typeof token.closest === 'function' && token.closest('.editor-holder')) ||
+    token.parentElement ||
+    token;
+  const css = getComputedStyle(host);
+  const color = css.getPropertyValue('--me-field-fill-color').trim();
+  const bg = css.getPropertyValue('--me-field-fill-bg').trim();
+  const weight = css.getPropertyValue('--me-field-fill-font-weight').trim();
+  const borderWidth = css.getPropertyValue('--me-field-fill-border-width').trim();
+
+  if (color) token.style.color = color;
+  if (weight) token.style.fontWeight = weight;
+  if (bg && bg !== 'transparent' && bg !== 'none') {
+    token.style.backgroundColor = bg;
+  } else {
+    token.style.removeProperty('background-color');
+  }
+
+  // Border width maps to underline thickness (same control as pre-pill chrome).
+  if (borderWidth && color) {
+    token.style.textDecoration = 'underline';
+    token.style.textDecorationColor = color;
+    token.style.textDecorationThickness = borderWidth;
+    token.style.textUnderlineOffset = '2px';
+  } else {
+    token.style.textDecoration = 'none';
+    token.style.removeProperty('text-decoration-color');
+    token.style.removeProperty('text-decoration-thickness');
+    token.style.removeProperty('text-underline-offset');
   }
 }
 

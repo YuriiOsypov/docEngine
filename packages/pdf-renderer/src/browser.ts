@@ -4,7 +4,14 @@ import { renderDocumentToPdfDefinition } from './document-pdf-definition-browser
 import { renderDocumentToPdfDefinitionFromPreview } from './document-pdf-definition-preview-browser.js';
 import { generateDocumentPdf, generateDocumentPdfFromPreview, generatePdfBuffer } from './generate-pdf-browser.js';
 import { renderDocumentToPdfContent, hasMultipageRepeatableContent, shouldUseLegacyPdfExport } from './multipage-renderer.js';
-import { mmToPt, marginMmToPt, normalizeMarginMm, resolvePageOrientation, resolvePageSize } from './units.js';
+import {
+  mmToPt,
+  marginMmToPt,
+  normalizeMarginMm,
+  resolvePageOrientation,
+  resolveDocPageOrientation,
+  resolvePageSize,
+} from './units.js';
 import { mapEditorPdfOptions, type EditorPdfOptions } from './map-editor-pdf-options.js';
 
 export {
@@ -20,6 +27,7 @@ export {
   marginMmToPt,
   normalizeMarginMm,
   resolvePageOrientation,
+  resolveDocPageOrientation,
   resolvePageSize,
   DEFAULT_FIELD_VALUE_STYLE_OPTIONS,
   mapEditorPdfOptions,

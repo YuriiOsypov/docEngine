@@ -34,6 +34,10 @@ import {
   syncTableHeaderWidthsFromCols,
   wireTableColumnResize,
 } from './wire-table-column-resize.js';
+import {
+  moveTableColumn,
+  wireTableColumnReorder,
+} from './wire-table-column-reorder.js';
 
 function tableHasRowLabels(rows: any): boolean {
   return (rows ?? []).some((row: any) => String(row?.label ?? '').trim() !== '');
@@ -94,14 +98,25 @@ function resolveCellValue(cellId: any, fieldValues: any, fieldSchemas: any, bloc
   const filled = resolveValueOrFillDefault(schema, current, {
     designMode: !!options.designMode,
   });
+  const placeholderLabel = schema?.label ?? schema?.name;
+  const normalized =
+    typeof filled === 'string' && isTableCellDisplayPlaceholder(filled, placeholderLabel)
+      ? ''
+      : filled;
   if (
     fieldValues &&
-    filled !== current &&
-    !isFieldEmpty(filled, { schema })
+    normalized !== current &&
+    (schema?.type === 'computed' || !isFieldEmpty(normalized, { schema }))
   ) {
-    fieldValues[cellId] = filled;
+    fieldValues[cellId] = normalized;
+  } else if (
+    fieldValues &&
+    typeof current === 'string' &&
+    isTableCellDisplayPlaceholder(current, placeholderLabel)
+  ) {
+    fieldValues[cellId] = '';
   }
-  return filled;
+  return normalized;
 }
 
 function applyColumnWidthCss(el: any, width: any, { pin = false }: any = {}) {
@@ -347,7 +362,8 @@ function buildTableRowElement(row: any, tableFieldId: any, tableSchema: any, fie
     ) {
       fieldValues[cellId] = value;
     }
-    const token = createTableCellFieldToken(cellId, value ?? '', col.label, options, ['field-token--cell']);
+    const columnPlaceholder = col.name ?? col.label;
+    const token = createTableCellFieldToken(cellId, value ?? '', columnPlaceholder, options, ['field-token--cell']);
 
     if (!previewMode) {
       if (designMode) {
@@ -360,7 +376,7 @@ function buildTableRowElement(row: any, tableFieldId: any, tableSchema: any, fie
         attachFillCellToken(
           token,
           cellId,
-          col.label,
+          columnPlaceholder,
           {
             ...options,
             fieldSchemas,
@@ -444,13 +460,19 @@ function buildTableHead(tableFieldId: any, tableSchema: any, options: any = {}) 
     headerRow.appendChild(labelTh);
   }
   const columns = tableSchema.columns ?? [];
+  const allowReorder = !!options.withColumnReorder;
   columns.forEach((col: any, colIndex: any) => {
     const th = document.createElement('th');
     if (resizeOnly) {
       th.className = 'vision-table__resize-th';
       th.title = col.label ?? '';
     } else {
+      th.className = 'vision-table__col-head';
+      th.dataset.colIndex = String(colIndex);
+      th.dataset.colKey = String(col.key ?? '');
+      th.contentEditable = 'false';
       th.textContent = col.label;
+      if (allowReorder) th.title = 'Drag to reorder column';
     }
     if (!resizeOnly) {
       applyFieldDisplayStyle(
@@ -509,13 +531,15 @@ export function buildTableElement(tableFieldId: any, fieldValues: any, options: 
   const includeRowLabels = shouldShowRowLabels(tableSchema, tableRows);
   table.appendChild(buildColgroup(tableSchema, includeRowLabels));
 
-  // Resize is available whenever design mode shows a real header (always).
+  // Resize / reorder are available whenever design mode shows a real header.
   const allowResize = !!designMode;
+  const allowReorder = !!designMode && (tableSchema.columns?.length ?? 0) > 1;
   if (designMode || !tableSchema.hideHeader) {
     table.appendChild(
       buildTableHead(tableFieldId, tableSchema, {
         ...options,
         withResizers: allowResize,
+        withColumnReorder: allowReorder,
         includeRowLabels,
       }),
     );
@@ -539,6 +563,17 @@ export function buildTableElement(tableFieldId: any, fieldValues: any, options: 
       onTableColumnWidthsChange: options.onTableColumnWidthsChange,
       onTableColumnWidthsPreview: options.onTableColumnWidthsPreview,
       onTableColumnResizeStart: options.onTableColumnResizeStart,
+    });
+  }
+
+  if (allowReorder) {
+    wireTableColumnReorder(table, {
+      tableId: tableFieldId,
+      onReorder: (fromIndex: number, toIndex: number) => {
+        const wrapper = table.closest?.('.document-table[data-table-id]');
+        if (!wrapper) return;
+        reorderTableColumnsInWrapper(wrapper, fromIndex, toIndex, options);
+      },
     });
   }
 
@@ -725,6 +760,113 @@ function rebuildVisionTableInWrapper(tableWrapper: any, rows: any, fieldValues: 
   const actions = tableWrapper.querySelector('.document-table__row-actions');
   if (actions) tableWrapper.insertBefore(nextTable, actions);
   else tableWrapper.appendChild(nextTable);
+}
+
+/**
+ * Reorder columns on a design-mode table and rebuild its DOM.
+ * @returns {{ tableId: string, columns: any[] } | null}
+ */
+export function reorderTableColumnsInWrapper(
+  tableWrapper: any,
+  fromIndex: number,
+  toIndex: number,
+  options: any = {},
+) {
+  const tableId = tableWrapper?.dataset?.tableId;
+  if (!tableId) return null;
+
+  const registry = resolveRegistry(options);
+  const tableSchema = getTableSchema(tableId, options);
+  if (!tableSchema || tableSchema.type === 'pivotTable') return null;
+
+  const nextColumns = moveTableColumn(tableSchema.columns ?? [], fromIndex, toIndex);
+  if (!nextColumns) return null;
+
+  const nextSchema = {
+    ...tableSchema,
+    columns: nextColumns,
+  };
+  registry?.updateFieldSchema?.(tableId, nextSchema);
+  options.onSchemaChange?.(registry?.getFieldSchemas?.() ?? { [tableId]: nextSchema });
+  options.onTableColumnsChange?.(tableId, nextColumns);
+
+  const rows = readTableRowsFromDom(tableWrapper);
+  const seedRows = rows.length ? rows : [{ key: 'row1', label: '' }];
+  if (!rows.length) syncTableRowsDataset(tableWrapper, seedRows);
+
+  const fieldValues = collectTableCellValuesFromDom(
+    tableWrapper,
+    options.fieldValues ?? {},
+  );
+
+  rebuildVisionTableInWrapper(tableWrapper, seedRows, fieldValues, {
+    ...options,
+    fieldSchemas: registry?.getFieldSchemas?.() ?? options.fieldSchemas,
+    fieldValues,
+  });
+
+  const sectionBody = tableWrapper.closest?.('.document-section__body');
+  sectionBody?.dispatchEvent?.(new InputEvent('input', { bubbles: true }));
+  options.onStructureChange?.();
+
+  return { tableId, columns: nextColumns };
+}
+
+/**
+ * Append a column to an existing design-mode table and rebuild its DOM.
+ * @returns {{ tableId: string, columnKey: string } | null}
+ */
+export function addTableColumnToWrapper(
+  tableWrapper: any,
+  column: { key: string; label?: string; name?: string },
+  options: any = {},
+) {
+  const tableId = tableWrapper?.dataset?.tableId;
+  if (!tableId || !column?.key) return null;
+
+  const registry = resolveRegistry(options);
+  const tableSchema = getTableSchema(tableId, options);
+  if (!tableSchema || tableSchema.type === 'pivotTable') return null;
+
+  const existing = tableSchema.columns ?? [];
+  let columnKey = String(column.key);
+  const used = new Set(existing.map((c: any) => String(c.key ?? '')));
+  if (used.has(columnKey)) {
+    let n = 2;
+    while (used.has(`${column.key}_${n}`)) n += 1;
+    columnKey = `${column.key}_${n}`;
+  }
+
+  const nextColumn = {
+    key: columnKey,
+    label: column.label ?? columnKey,
+    name: column.name ?? column.label ?? columnKey,
+  };
+  const nextSchema = {
+    ...tableSchema,
+    columns: [...existing, nextColumn],
+  };
+  registry?.updateFieldSchema?.(tableId, nextSchema);
+
+  const rows = readTableRowsFromDom(tableWrapper);
+  const seedRows = rows.length ? rows : [{ key: 'row1', label: '' }];
+  if (!rows.length) syncTableRowsDataset(tableWrapper, seedRows);
+
+  const merged = ensureCellSchemasForRows(
+    nextSchema,
+    tableId,
+    registry?.getFieldSchemas?.() ?? options.fieldSchemas ?? {},
+    seedRows,
+  );
+  registry?.setFieldSchemas?.(merged);
+  options.onSchemaChange?.(merged);
+
+  rebuildVisionTableInWrapper(tableWrapper, seedRows, options.fieldValues ?? {}, {
+    ...options,
+    fieldSchemas: merged,
+  });
+
+  return { tableId, columnKey };
 }
 
 /** One non-empty line → one row label (for paste/import). */

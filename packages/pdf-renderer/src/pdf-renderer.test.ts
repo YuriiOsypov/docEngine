@@ -370,6 +370,51 @@ describe('renderDocumentToPdfDefinition', () => {
     assert.equal(docDefinition.pageOrientation, 'landscape');
   });
 
+  it('uses custom page size from pageSetup', () => {
+    const doc = mergeTemplateAndDocument(makeTemplate(), makeDocument());
+    doc.pageSetup = { format: 'custom', widthMm: 100, heightMm: 200, margin: 10 };
+    const { docDefinition } = renderDocumentToPdfDefinition(doc, {});
+    assert.deepEqual(docDefinition.pageSize, resolvePageSize('custom', { widthMm: 100, heightMm: 200 }));
+    // Custom sizes bake orientation into pageSize; omit pageOrientation so pdfmake
+    // does not swap wide pages when orientation would be "portrait".
+    assert.equal(docDefinition.pageOrientation, undefined);
+  });
+
+  it('keeps wide custom pages (width > height) without swapping', () => {
+    const doc = mergeTemplateAndDocument(makeTemplate(), makeDocument());
+    doc.pageSetup = {
+      format: 'custom',
+      widthMm: 100,
+      heightMm: 50,
+      orientation: 'portrait',
+      margin: 2,
+    };
+    const { docDefinition } = renderDocumentToPdfDefinition(doc, {});
+    assert.deepEqual(
+      docDefinition.pageSize,
+      resolvePageSize('custom', { widthMm: 100, heightMm: 50 }, 'portrait'),
+    );
+    assert.ok((docDefinition.pageSize as any).width > (docDefinition.pageSize as any).height);
+    assert.equal(docDefinition.pageOrientation, undefined);
+  });
+
+  it('swaps custom width/height when orientation is landscape', () => {
+    const doc = mergeTemplateAndDocument(makeTemplate(), makeDocument());
+    doc.pageSetup = {
+      format: 'custom',
+      widthMm: 100,
+      heightMm: 50,
+      orientation: 'landscape',
+      margin: 2,
+    };
+    const { docDefinition } = renderDocumentToPdfDefinition(doc, {});
+    assert.deepEqual(
+      docDefinition.pageSize,
+      resolvePageSize('custom', { widthMm: 100, heightMm: 50 }, 'landscape'),
+    );
+    assert.ok((docDefinition.pageSize as any).width < (docDefinition.pageSize as any).height);
+  });
+
   it('emits canvas rules for section borderTop/borderBottom', () => {
     const doc = {
       fieldSchemas: {
@@ -915,6 +960,23 @@ function collectNodesWithStyle(nodes: any, style: any): any[] {
   return results;
 }
 
+function collectCanvasLineNodes(nodes: any): any[] {
+  const results: any[] = [];
+  function walk(chunkNodes: any) {
+    for (const node of chunkNodes ?? []) {
+      if (Array.isArray(node?.canvas)) results.push(node);
+      if (node?.stack) walk(node.stack);
+      if (node?.columns) {
+        for (const col of node.columns) {
+          walk(col.stack);
+        }
+      }
+    }
+  }
+  walk(nodes);
+  return results;
+}
+
 function findTextInPdfContent(nodes: any, text: any): boolean {
   for (const node of nodes ?? []) {
     if (typeof node?.text === 'string' && node.text.includes(text)) return true;
@@ -1028,7 +1090,7 @@ describe('shouldUseLegacyPdfExport', () => {
 });
 
 describe('renderDocumentToPdfContent multipage', () => {
-  it('repeats a marked section once per document instance with page breaks', () => {
+  it('repeats a marked section once per document instance inline (title on each when Show on each page)', () => {
     const template = makeTemplate();
     template.blocks.unshift({
       type: 'documentSection',
@@ -1048,6 +1110,7 @@ describe('renderDocumentToPdfContent multipage', () => {
         label: 'Items',
         name: 'Items',
         repeatable: true,
+        borderBottom: true,
         segments: [
           { type: 'text', content: 'Item: ' },
           { type: 'field', id: 'items_name', placeholder: 'Name' },
@@ -1085,12 +1148,119 @@ describe('renderDocumentToPdfContent multipage', () => {
       fieldValueStyle: {},
     });
 
-    assert.equal(collectPageBreaks(content), 2);
+    // Match HTML preview: continuous flow, title on every "Show on each page" row.
+    assert.equal(collectPageBreaks(content), 0);
+    const itemTitles = collectNodesWithStyle(content, 'sectionHeader').filter(
+      (node: any) => node.text === 'Items',
+    );
+    assert.equal(itemTitles.length, 3);
     assert.equal(findTextInPdfContent(content, 'John Doe'), true);
     assert.equal(findTextInPdfContent(content, 'Alpha'), true);
     assert.equal(findTextInPdfContent(content, 'Beta'), true);
     assert.equal(findTextInPdfContent(content, 'Gamma'), true);
     assert.equal(findTextInPdfContent(content, 'Signed'), true);
+    // borderBottom on each of the 3 repeated rows
+    const borderRules = collectCanvasLineNodes(content);
+    assert.equal(borderRules.length, 3);
+  });
+
+  it('page-breaks between rows when eachRowOnNewPage is set', () => {
+    const template = makeTemplate();
+    template.blocks.push({
+      type: 'documentSection',
+      data: {
+        label: 'Items',
+        name: 'Items',
+        repeatable: true,
+        eachRowOnNewPage: true,
+        borderBottom: true,
+        segments: [
+          { type: 'text', content: 'Item: ' },
+          { type: 'field', id: 'items_name', placeholder: 'Name' },
+        ],
+        fieldValues: { items_name: '' },
+      },
+    });
+    template.fieldSchemas.items_name = { type: 'text', name: 'Name', label: 'Name' };
+
+    const doc = mergeTemplateAndDocument(template, {
+      kind: 'field',
+      version: 2,
+      time: Date.now(),
+      sections: {
+        Examination: makeDocument().sections.Examination,
+        Items: [{ Name: 'Alpha' }, { Name: 'Beta' }, { Name: 'Gamma' }],
+      },
+    });
+
+    const content = renderDocumentToPdfContent(doc, {
+      resolveFontName: (name: any) => name ?? 'Roboto',
+      defaultFont: 'Roboto',
+      fieldValueStyle: {},
+    });
+
+    assert.equal(collectPageBreaks(content), 2);
+    const itemTitles = collectNodesWithStyle(content, 'sectionHeader').filter(
+      (node: any) => node.text === 'Items',
+    );
+    assert.equal(itemTitles.length, 3);
+    assert.equal(findTextInPdfContent(content, 'Alpha'), true);
+    assert.equal(findTextInPdfContent(content, 'Beta'), true);
+    assert.equal(findTextInPdfContent(content, 'Gamma'), true);
+  });
+
+  it('does not leave a blank line when an optional empty field sits between text', () => {
+    const doc = {
+      fieldSchemas: {
+        items_note: { type: 'text', name: 'Note', label: 'Note' },
+        items_name: { type: 'text', name: 'Name', label: 'Name' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            label: 'Letter',
+            name: 'Letter',
+            repeatable: true,
+            hideTitleInPreview: true,
+            segments: [
+              { type: 'text', content: 'main\n' },
+              { type: 'field', id: 'items_note', placeholder: 'Note' },
+              { type: 'text', content: '\namount: ' },
+              { type: 'field', id: 'items_name', placeholder: 'Name' },
+            ],
+            fieldValues: { items_note: 'kept', items_name: '2' },
+          },
+        },
+      ],
+      repeatableSectionInstances: {
+        Letter: [
+          { Note: 'kept', Name: '2' },
+          { Note: '', Name: '5' },
+        ],
+      },
+    };
+
+    const content = renderDocumentToPdfContent(doc as any, {
+      resolveFontName: (name: any) => name ?? 'Roboto',
+      defaultFont: 'Roboto',
+      fieldValueStyle: {},
+    });
+    const texts = content.map((node: any) => {
+      const walk = (n: any): string => {
+        if (!n) return '';
+        if (typeof n.text === 'string') return n.text;
+        if (Array.isArray(n.text)) {
+          return n.text.map((p: any) => (typeof p === 'string' ? p : String(p?.text ?? ''))).join('');
+        }
+        if (Array.isArray(n.stack)) return n.stack.map(walk).join('');
+        return '';
+      };
+      return walk(node);
+    });
+    assert.match(texts[0] ?? '', /^main\nkept\namount: 2$/);
+    // Empty note must not become main\n\namount (extra blank line).
+    assert.match(texts[1] ?? '', /^main\namount: 5$/);
   });
 
   it('renders adjacent vision table rows in one flow without forced page breaks', () => {

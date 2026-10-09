@@ -59,9 +59,17 @@ export function isFieldEmpty(value: unknown, options: FieldEmptyOptions = {}): b
   return value == null || value === '' || (Array.isArray(value) && value.length === 0);
 }
 
+/** Built-in default table column labels: "Column 1", "Column 2", … */
+const DEFAULT_COLUMN_LABEL_RE = /^Column \d+$/i;
+
 export function isTableCellDisplayPlaceholder(value: unknown, label: string | null | undefined): boolean {
   if (value == null || value === '') return true;
   if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
   const normalized = String(label ?? '').trim();
-  return !!normalized && value === normalized;
+  if (normalized && trimmed === normalized) return true;
+  // After renaming default columns, "Column 1" can stick as a stored value while
+  // the header/label is already the real field name (e.g. "name").
+  if (DEFAULT_COLUMN_LABEL_RE.test(trimmed) && trimmed !== normalized) return true;
+  return false;
 }

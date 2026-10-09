@@ -8,12 +8,13 @@
   --me-document-font-weight: 400;
   --me-document-line-height: 1.65;
   --me-table-font-size: 14px;
-  --me-field-fill-bg: transparent;
-  --me-field-fill-color: #0d9488;
+  --me-field-fill-bg: #F0FDFA;
+  --me-field-fill-color: #0000FF;
   --me-field-fill-font-weight: 500;
   --me-field-fill-border-width: 1px;
-  --me-field-active-outline: #0d9488;
-  --me-font-family: var(--me-document-font-family);
+  --me-field-active-outline: #0000FF;
+  /* UI chrome font — independent of Default text style / --me-document-* */
+  --me-font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 *,
@@ -249,14 +250,55 @@
   word-wrap: break-word;
 }
 
+/*
+ * Native text selection: cobalt wash + forced dark text.
+ * Lightning / host themes often paint ::selection with a light foreground;
+ * without an explicit color, selected labels become unreadable.
+ */
+.editor-holder ::selection,
+.document-section__body ::selection,
+.document-columns__col ::selection,
+.template-block__body ::selection,
+.template-block__inline ::selection,
+.field-token::selection,
+.field-token--design::selection,
+.field-token--design.field-token--empty::selection,
+.ce-paragraph ::selection {
+  background: color-mix(in srgb, var(--me-selection-outline, #2563eb) 28%, transparent);
+  color: var(--me-selection-text, #0f172a) !important;
+  -webkit-text-fill-color: var(--me-selection-text, #0f172a) !important;
+}
+
+.editor-holder ::-moz-selection,
+.document-section__body ::-moz-selection,
+.document-columns__col ::-moz-selection,
+.template-block__body ::-moz-selection,
+.template-block__inline ::-moz-selection,
+.field-token::-moz-selection,
+.field-token--design::-moz-selection,
+.field-token--design.field-token--empty::-moz-selection,
+.ce-paragraph ::-moz-selection {
+  background: color-mix(in srgb, var(--me-selection-outline, #2563eb) 28%, transparent);
+  color: var(--me-selection-text, #0f172a) !important;
+}
+
 .document-section__body:focus {
   outline: none;
 }
 
+/* Explicit list markers — SLDS/Lightning reset ul/ol to list-style: none. */
 .document-section__body ul,
-.document-section__body ol {
+.preview-document ul {
   margin: 0.25em 0;
   padding-left: 1.5em;
+  list-style: disc outside;
+}
+
+.document-section__body ol,
+.preview-document ol {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: decimal outside;
 }
 
 .document-section__body b,
@@ -683,11 +725,17 @@ body.document-columns-col-resize-active .field-token {
 }
 
 .document-section__body .document-columns__col ul,
+.preview-document .document-columns__col ul {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: disc outside;
+}
+
 .document-section__body .document-columns__col ol,
-.preview-document .document-columns__col ul,
 .preview-document .document-columns__col ol {
   margin: 0.25em 0;
   padding-left: 1.5em;
+  list-style: decimal outside;
 }
 
 .editor-top-chrome {
@@ -1028,7 +1076,7 @@ body.document-columns-col-resize-active .field-token {
 
 .field-token--empty {
   font-style: normal;
-  color: var(--me-primary, #0d9488);
+  color: var(--me-field-fill-color, #0000FF);
 }
 
 .field-token--required {
@@ -1160,7 +1208,7 @@ body.document-columns-col-resize-active .field-token {
   font-style: italic;
 }
 
-/* Fill mode: soft teal pills matching Source icon accent */
+/* Fill mode: soft pills driven by Empty field style (--me-field-fill-*) */
 .editor-holder--show-fields .document-section__body .field-token:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--required-missing),
 .document-section--mapping .document-section__body .field-token:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing) {
@@ -1169,9 +1217,9 @@ body.document-columns-col-resize-active .field-token {
   display: inline;
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--me-accent-surface, #f0fdfa);
-  color: var(--me-primary, #0d9488);
-  font-weight: 500;
+  background: var(--me-field-fill-bg, #F0FDFA);
+  color: var(--me-field-fill-color, #0000FF);
+  font-weight: var(--me-field-fill-font-weight, 500);
   font-style: normal;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
@@ -1180,44 +1228,59 @@ body.document-columns-col-resize-active .field-token {
 .editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
 .editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design).field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
 .document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
-  background: var(--me-accent-surface, #f0fdfa);
-  color: var(--me-primary, #0d9488);
-  font-weight: 500;
+  background: var(--me-field-fill-bg, #F0FDFA);
+  color: var(--me-field-fill-color, #0000FF);
+  font-weight: var(--me-field-fill-font-weight, 500);
   font-style: normal;
   text-decoration: none;
 }
 
-/* Design-mode inline fields: Source icon teal (#f0fdfa / #0d9488); stronger tint when selected */
-.document-section__body .field-token--design:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing) {
+/* Design-mode filled fields: product teal chrome */
+.document-section__body .field-token--design:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing):not(.field-token--empty) {
   text-decoration: none;
   cursor: pointer;
   display: inline;
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--me-accent-surface, #f0fdfa);
-  color: var(--me-primary, #0d9488);
+  background: var(--me-field-filled-bg, #f0fdfa);
+  color: var(--me-field-filled-color, #0d9488);
   font-weight: 500;
   font-style: normal;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 
+/* Design-mode empty placeholders: Empty field style vars */
 .document-section__body .field-token--design.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
-  background: var(--me-accent-surface, #f0fdfa);
-  color: var(--me-primary, #0d9488);
-  font-weight: 500;
-  font-style: normal;
   text-decoration: none;
+  cursor: pointer;
+  display: inline;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--me-field-fill-bg, #F0FDFA);
+  color: var(--me-field-fill-color, #0000FF);
+  font-weight: var(--me-field-fill-font-weight, 500);
+  font-style: normal;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .document-section__body .field-token--design:not(.field-token--cell):hover:not(.field-token--selected):not(.field-token--computed):not(.field-token--readonly) {
   background: var(--me-accent-hover, #ccfbf1);
 }
 
-.document-section__body .field-token--design.field-token--selected:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing),
-.document-section__body .field-token--design.field-token--selected.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
+.document-section__body .field-token--design.field-token--empty:not(.field-token--cell):hover:not(.field-token--selected):not(.field-token--computed):not(.field-token--readonly) {
+  background: color-mix(in srgb, var(--me-field-fill-color, #0000FF) 12%, transparent);
+}
+
+.document-section__body .field-token--design.field-token--selected:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing):not(.field-token--empty) {
   background: var(--me-accent-hover, #ccfbf1);
   color: var(--me-primary-muted, #115e59);
+}
+
+.document-section__body .field-token--design.field-token--selected.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
+  background: color-mix(in srgb, var(--me-field-fill-color, #0000FF) 18%, transparent);
+  color: var(--me-field-fill-color, #0000FF);
 }
 
 /* Design-mode table cells stay quiet; accent only on focus/selection */
@@ -1239,8 +1302,9 @@ body.document-columns-col-resize-active .field-token {
 }
 
 .vision-table .field-token--cell.field-token--design.field-token--empty:not(.field-token--required-missing) {
-  color: var(--me-text-placeholder, #94a3b8);
-  background: transparent;
+  color: var(--me-field-fill-color, #0000FF);
+  background: var(--me-field-fill-bg, #F0FDFA);
+  font-weight: var(--me-field-fill-font-weight, 500);
   font-style: normal;
 }
 
@@ -1271,7 +1335,7 @@ body.document-columns-col-resize-active .field-token {
 
 .field-token--focused:not(.field-token--design),
 .editor-holder--show-fields .field-token--active:not(.field-token--design) {
-  outline: 2px solid var(--me-field-active-outline, #0d9488);
+  outline: 2px solid var(--me-field-active-outline, #0000FF);
   outline-offset: 2px;
 }
 
@@ -1551,6 +1615,41 @@ body.document-columns-col-resize-active .field-token {
   letter-spacing: normal;
   text-align: center;
   position: relative;
+}
+
+.vision-table__col-head {
+  cursor: grab;
+  user-select: none;
+}
+
+.vision-table__col-head.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.vision-table__col-head.is-drop-before::before,
+.vision-table__col-head.is-drop-after::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--me-accent, #0d9488);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.vision-table__col-head.is-drop-before::before {
+  left: -1px;
+}
+
+.vision-table__col-head.is-drop-after::after {
+  right: -1px;
+}
+
+.vision-table--col-reordering {
+  cursor: grabbing;
 }
 
 .vision-table__col-resizer {
@@ -2221,10 +2320,9 @@ body.modal-move-active {
 }
 
 /*
- * HTML text values can include block nodes (ul/ol/p). Those force anonymous
- * blocks inside the default inline field-token span, so outline/background
- * fragment into per-line boxes (and a stray corner that looks like a "0").
- * One inline-block box keeps focus + fill chrome around the whole value.
+ * HTML text values can include block nodes (ul/ol/div). Default field tokens are
+ * inline; once the value has blocks/breaks, use a full-width block so text-align
+ * and list markers lay out against the page column (not a shrink-wrapped box).
  */
 .field-token--html {
   display: inline-block;
@@ -2233,12 +2331,48 @@ body.modal-move-active {
   white-space: normal;
 }
 
+.field-token--html:has(div, ul, ol, h1, h2, h3, p, br) {
+  display: block;
+  width: 100%;
+}
+
+/* Align wrappers need the full token width to center/right correctly. */
+.field-token--html .document-align,
+.field-token--html div[style*='text-align'],
+.html-text-modal__editor .document-align,
+.html-text-modal__editor div[style*='text-align'] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/*
+ * Restore list markers against Lightning's list-style: none.
+ * Full-width HTML tokens can use outside markers without clipping.
+ */
 .field-token--html ul,
-.field-token--html ol,
 .html-text-modal__editor ul,
-.html-text-modal__editor ol {
+.preview-document .field-token--html ul {
   margin: 0.25em 0;
   padding-left: 1.5em;
+  list-style: disc outside;
+}
+
+.field-token--html ol,
+.html-text-modal__editor ol,
+.preview-document .field-token--html ol {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+  list-style: decimal outside;
+}
+
+/* Section pre-wrap must not break list/align layout inside HTML values. */
+.preview-document .field-token--html,
+.preview-document .field-token--html ul,
+.preview-document .field-token--html ol,
+.preview-document .field-token--html li,
+.preview-document .field-token--html .document-align {
+  white-space: normal;
 }
 
 .field-token--html mark,
@@ -2500,6 +2634,8 @@ body.design-mode--panels .field-palette--vertical {
 .field-palette--vertical {
   display: flex;
   flex-direction: column;
+  /* Override .field-palette { align-items: center } so groups/tiles span full width. */
+  align-items: stretch;
   gap: 0;
   padding: 0;
   margin: 0;
@@ -2508,6 +2644,7 @@ body.design-mode--panels .field-palette--vertical {
   border-radius: 0;
   height: 100%;
   min-height: 0;
+  width: 100%;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -2527,16 +2664,137 @@ body.design-mode--panels .field-palette--vertical {
   color: var(--me-text, #1a1a1a);
 }
 
-.field-palette__body {
+.field-palette__tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0;
+  border-bottom: 1px solid var(--me-border, #ccc);
+  background: var(--me-surface-0, #fff);
+  padding: 0 8px;
+}
+
+.field-palette__tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--me-text-muted, #667);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px 7px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.field-palette__tab:hover {
+  color: var(--me-text, #1a1a1a);
+}
+
+.field-palette__tab--active {
+  color: var(--me-accent, #0176d3);
+  border-bottom-color: var(--me-accent, #0176d3);
+}
+
+.field-palette__pane {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.field-palette__pane[hidden] {
+  display: none !important;
+}
+
+.field-palette__database {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--me-surface-0, #fff);
+}
+
+.field-palette__database-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.field-palette__database-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--me-text, #1a1a1a);
+  border-bottom: 1px solid var(--me-border, #e5e5e5);
+}
+
+.field-palette__database-upload {
+  margin: 0;
+  cursor: pointer;
+}
+
+.field-palette__database-toolbar {
+  flex-shrink: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--me-border, #e5e5e5);
+}
+
+.field-palette__database-toolbar .modal__search {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 8px;
+  box-sizing: border-box;
+}
+
+.field-palette__database-tree {
   flex: 1 1 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px 14px 18px;
+  border: none;
+  border-radius: 0;
+  padding: 6px 4px 10px;
+  background: transparent;
+}
+
+.field-palette__database .field-mapping-schema__row {
+  font-size: 12px;
+}
+
+.field-palette__database-empty {
+  margin: 12px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--me-text-muted, #667);
+}
+
+.field-palette__database-empty--error {
+  color: #c23934;
+}
+
+.field-palette__body {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 8px 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   background: var(--me-surface-0, #fff);
 }
 
@@ -2544,6 +2802,8 @@ body.design-mode--panels .field-palette--vertical {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .field-palette__group-title {
@@ -2555,14 +2815,17 @@ body.design-mode--panels .field-palette--vertical {
   padding: 0 2px 2px;
 }
 
-/* Denser 2-column grid for field chips (mockup-style palette) */
-.field-palette__group:has(.field-palette__item + .field-palette__item) {
+/*
+ * Vertical Source panel: fill full panel width; pack as many tiles as fit
+ * (~2 at default 220px, ~3–4 when the left panel is widened).
+ */
+.field-palette--vertical .field-palette__group {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
 }
 
-.field-palette__group:has(.field-palette__item + .field-palette__item) .field-palette__group-title {
+.field-palette--vertical .field-palette__group-title {
   grid-column: 1 / -1;
 }
 
@@ -2571,18 +2834,19 @@ body.design-mode--panels .field-palette--vertical {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  min-height: 72px;
-  padding: 12px 8px 10px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 10px 4px 8px;
   text-align: center;
   /* Static chrome type — match Properties empty title, not document textStyle */
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   font-style: normal;
   letter-spacing: -0.01em;
-  line-height: 1.35;
+  line-height: 1.25;
   background: var(--me-surface-0, #fff);
   border: none;
   border-radius: 10px;
@@ -2627,11 +2891,11 @@ body.design-mode--panels .field-palette--vertical {
 .design-shell .field-palette__item,
 .design-shell .field-palette__item-label {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   font-style: normal;
   letter-spacing: -0.01em;
-  line-height: 1.35;
+  line-height: 1.25;
   color: var(--me-text-body, #1e293b);
 }
 
@@ -2679,7 +2943,12 @@ body.design-mode--panels .field-palette--vertical {
 
 .design-shell--active {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 300px;
+  grid-template-columns:
+    var(--me-design-shell-left, 220px)
+    5px
+    minmax(0, 1fr)
+    5px
+    var(--me-design-shell-right, 300px);
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   flex: 1;
@@ -2698,7 +2967,8 @@ body.design-mode--panels .field-palette--vertical {
 }
 
 .design-shell:not(.design-shell--active) .design-panel--left,
-.design-shell:not(.design-shell--active) .design-panel--right {
+.design-shell:not(.design-shell--active) .design-panel--right,
+.design-shell:not(.design-shell--active) .design-shell-splitter {
   display: none;
 }
 
@@ -2778,7 +3048,7 @@ body.design-mode--panels .field-palette--vertical {
 .design-panel--left {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--me-border, #aaa);
+  border-right: none;
   background: var(--me-surface-0, #fff);
   min-height: 0;
   overflow: hidden;
@@ -2806,7 +3076,7 @@ body.design-mode--panels .field-palette--vertical {
 .design-panel--right {
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--me-border, #aaa);
+  border-left: none;
   background: var(--me-surface-0, #fff);
   overflow: hidden;
 }
@@ -2816,6 +3086,50 @@ body.design-mode--panels .field-palette--vertical {
   min-height: 0;
   height: 100%;
   align-self: stretch;
+}
+
+.design-shell-splitter {
+  width: 5px;
+  min-width: 5px;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+
+.design-shell-splitter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--me-border, #aaa);
+  transition: background 0.15s, width 0.15s, left 0.15s;
+}
+
+.design-shell-splitter:hover::after,
+.design-shell-splitter--active::after {
+  left: 1px;
+  width: 3px;
+  background: var(--me-primary, #0d9488);
+}
+
+.design-shell-splitter:focus-visible {
+  outline: none;
+}
+
+.design-shell-splitter:focus-visible::after {
+  left: 1px;
+  width: 3px;
+  background: var(--me-primary, #0d9488);
+}
+
+body.design-shell-split-active {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .design-panel__toolbar {
@@ -2871,11 +3185,9 @@ body.design-mode--panels .field-palette--vertical {
 .design-shell .display-style-form label,
 .design-shell .display-style-form input,
 .design-shell .display-style-form select,
-.design-shell .display-style-form__preview,
 .design-shell .display-style-form__reset,
 .design-shell .display-style-form__toolbar .rich-text-toolbar__btn,
 .design-shell .field-highlight-form,
-.design-shell .field-highlight-form legend,
 .design-shell .field-highlight-form label,
 .design-shell .field-highlight-form input,
 .design-shell .formula-field-picker,
@@ -2898,13 +3210,6 @@ body.design-mode--panels .field-palette--vertical {
   font-size: inherit;
   font-weight: inherit;
   font-style: inherit;
-}
-
-/* Preview must not inherit panel textStyle bold/italic — form controls set those explicitly. */
-.design-shell .display-style-form__preview {
-  font-weight: normal;
-  font-style: normal;
-  text-decoration: none;
 }
 
 body.design-mode--panels,
@@ -3385,20 +3690,6 @@ body.design-mode--panels .editor-top-chrome {
   cursor: pointer;
 }
 
-.display-style-form__preview {
-  margin-top: 0;
-  padding: 8px 10px;
-  border: 1px dashed #bbb;
-  border-radius: 6px;
-  background: #fff;
-  line-height: 1.45;
-  min-height: 2.5em;
-  word-break: break-word;
-  font-weight: normal;
-  font-style: normal;
-  text-decoration: none;
-}
-
 .display-style-form .schema-form__row {
   margin-bottom: 8px;
 }
@@ -3495,40 +3786,6 @@ body.design-mode--panels .editor-top-chrome {
   flex-direction: column;
   gap: 10px;
   margin-bottom: 12px;
-}
-
-.field-highlight-form__preview {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-}
-
-.field-highlight-form__preview-caption {
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.field-highlight-form__preview-sample {
-  font-size: 13px;
-  line-height: 1.45;
-  color: #334155;
-}
-
-.field-highlight-form__preview-token {
-  display: inline;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--me-accent-surface, #f0fdfa);
-  color: var(--me-primary, #0d9488);
-  font-weight: 500;
 }
 
 .field-highlight-form__options {
@@ -3978,6 +4235,24 @@ body.field-mapping-split-active {
   cursor: default;
 }
 
+.document-section__header--mapping-drop {
+  outline: 2px dashed var(--me-accent-color, #2563eb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.document-section__header--sourced {
+  box-shadow: inset 0 0 0 1px var(--me-accent-color, #2563eb);
+}
+
+.document-section__source-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--me-accent-color, #2563eb);
+  white-space: nowrap;
+}
+
 .field-token--mapping-drop {
   outline: 2px dashed var(--me-accent-color, #2563eb);
   outline-offset: 2px;
@@ -4168,7 +4443,8 @@ body.field-mapping-split-active {
 .preview-modal__body--html {
   display: flex;
   flex-direction: column;
-  background: #fff;
+  /* Same desk color as fill-mode page chrome (.editor-holder--fill-page). */
+  background: #f1f5f9;
 }
 
 .preview-modal__body--pdf {
@@ -4181,15 +4457,26 @@ body.field-mapping-split-active {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 20px 24px;
+  padding: 20px 16px 28px;
+  box-sizing: border-box;
+  background: #f1f5f9;
 }
 
+/* Page sheet — match fill-mode .editor-holder--fill-page .codex-editor */
 .preview-modal__sheet {
-  width: min(100%, var(--doc-page-content-width, 180mm));
-  max-width: min(100%, var(--doc-page-content-width, 180mm));
+  width: min(100%, var(--doc-page-width, 231mm));
+  max-width: var(--doc-page-width, 231mm);
+  min-height: var(--doc-page-min-height, 326.7mm);
   margin: 0 auto;
   box-sizing: border-box;
-  background: #fff;
+  padding: var(--doc-page-margin, 16.5mm);
+  background: #ffffff;
+  border: 1px solid rgb(15 23 42 / 0.08);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 8px 24px rgb(15 23 42 / 0.08),
+    0 24px 48px -12px rgb(15 23 42 / 0.12);
 }
 
 .preview-modal__html .preview-document {
@@ -4340,7 +4627,8 @@ body.field-mapping-split-active {
 }
 
 .preview-modal__save.btn-icon,
-.preview-modal__share.btn-icon {
+.preview-modal__share.btn-icon,
+.preview-modal__print.btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4351,9 +4639,53 @@ body.field-mapping-split-active {
 }
 
 .preview-modal__save.btn-icon svg,
-.preview-modal__share.btn-icon svg {
+.preview-modal__share.btn-icon svg,
+.preview-modal__print.btn-icon svg {
   width: 16px;
   height: 16px;
+}
+
+/* LWS-safe print: off-screen root shown only during @media print */
+.docengine-print-root {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 210mm;
+  max-width: 100%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
+}
+
+.docengine-print-sheet {
+  background: #fff;
+  color: #000;
+}
+
+@media print {
+  html.docengine-printing,
+  html.docengine-printing body {
+    background: #fff !important;
+  }
+
+  html.docengine-printing body > *:not(.docengine-print-root) {
+    display: none !important;
+  }
+
+  html.docengine-printing .docengine-print-root {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: auto !important;
+  }
+
+  html.docengine-printing .docengine-print-sheet {
+    box-shadow: none !important;
+  }
 }
 
 .preview-document {

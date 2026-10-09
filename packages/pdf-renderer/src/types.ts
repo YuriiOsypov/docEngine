@@ -30,8 +30,12 @@ export interface PdfFooterSetup {
 }
 
 export interface PdfPageSetup {
-  format?: 'a4' | 'letter' | string;
+  format?: 'a4' | 'letter' | 'custom' | string;
   orientation?: 'portrait' | 'landscape' | string;
+  /** Custom page width in mm (portrait base). Used when format is "custom". */
+  widthMm?: number;
+  /** Custom page height in mm (portrait base). Used when format is "custom". */
+  heightMm?: number;
   /** top, right, bottom, left in mm */
   margin?: number | [number, number, number, number];
   title?: string;

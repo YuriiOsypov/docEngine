@@ -60,7 +60,13 @@ export function createHtmlTextModal({ parent = null }: { parent?: HTMLElement | 
       <div class="modal__header"></div>
       <div class="html-text-modal__toolbar" data-role="toolbar"></div>
       <div class="modal__body">
-        <div class="html-text-modal__editor" contenteditable="true" spellcheck="true" data-role="editor"></div>
+        <div
+          class="html-text-modal__editor cke_editable"
+          contenteditable="true"
+          spellcheck="true"
+          data-role="editor"
+          tabindex="0"
+        ></div>
       </div>
       <div class="modal__footer">
         <button type="button" class="btn" data-action="clear">Clear</button>
@@ -168,6 +174,9 @@ export function createHtmlTextModal({ parent = null }: { parent?: HTMLElement | 
       }
       mountFieldModalOverlay(overlay, parent);
       overlay.hidden = false;
+      // Ensure editable under Lightning LWS (attribute can be stripped on re-parent).
+      editor.setAttribute('contenteditable', 'true');
+      editor.setAttribute('tabindex', '0');
       releaseFocus = wireFieldModalFocus(overlay, editor);
       rememberSelection();
     });

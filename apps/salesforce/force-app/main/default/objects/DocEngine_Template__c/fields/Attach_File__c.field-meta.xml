@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Attach_File__c</fullName>
+    <defaultValue>true</defaultValue>
+    <description>When true, Finish attaches a PDF or HTML file (per Output Format) to the document and source record.</description>
+    <label>Attach File</label>
+    <type>Checkbox</type>
+</CustomField>

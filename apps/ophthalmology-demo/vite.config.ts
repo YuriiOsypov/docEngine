@@ -40,6 +40,15 @@ export default defineConfig({
         find: '@docengine/editor',
         replacement: path.resolve(__dirname, '../../packages/editor/src/index.ts'),
       },
+      // Prefer engine source so mapping/preview fixes hot-reload without a dist rebuild.
+      {
+        find: /^@docengine\/engine\/(.*)/,
+        replacement: `${path.resolve(__dirname, '../../packages/engine/src')}/$1`,
+      },
+      {
+        find: '@docengine/engine',
+        replacement: path.resolve(__dirname, '../../packages/engine/src/index.ts'),
+      },
     ],
   },
 });

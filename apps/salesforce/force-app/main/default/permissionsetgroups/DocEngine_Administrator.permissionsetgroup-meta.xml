@@ -3,6 +3,6 @@
     <description>Assign to DocEngine template designers and org admins. Includes full template, button-config, and document access.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <label>DocEngine Administrator</label>
-    <permissionSets>logicomapp__DocEngine_Admin</permissionSets>
+    <permissionSets>DocEngine_Admin</permissionSets>
     <status>Updated</status>
 </PermissionSetGroup>

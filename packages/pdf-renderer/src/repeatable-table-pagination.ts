@@ -1,21 +1,23 @@
 import { cssFontSizeToPdfPt, DEFAULT_BODY_FONT_PT } from './style-mapper.js';
 import { DOCUMENT_BODY_LINE_HEIGHT } from '@docengine/editor/node';
 import type { PdfPageSetup } from './types.js';
-import { mmToPt, normalizeMarginMm } from './units.js';
+import { mmToPt, normalizeMarginMm, resolvePageSize } from './units.js';
 import { TABLE_CELL_PAD_V, TABLE_PDF_LINE_HEIGHT } from './table-layout.js';
 
-const PAGE_SIZE_PT: Record<string, { width: number; height: number }> = {
-  A4: { width: 595.28, height: 841.89 },
-  LETTER: { width: 612, height: 792 },
-};
-
 function resolveOrientedPageSizePt(pageSetup: PdfPageSetup = {}) {
-  const format = String(pageSetup.format ?? 'a4').toLowerCase();
-  const size = PAGE_SIZE_PT[format === 'letter' ? 'LETTER' : 'A4'];
-  const landscape = String(pageSetup.orientation ?? 'portrait').toLowerCase() === 'landscape';
-  return landscape
-    ? { width: size.height, height: size.width }
-    : { width: size.width, height: size.height };
+  const size = resolvePageSize(pageSetup.format, pageSetup, pageSetup.orientation);
+  if (typeof size === 'string') {
+    // Named sizes: resolvePageSize returns A4/LETTER; apply orientation here.
+    const named =
+      size === 'LETTER'
+        ? { width: 612, height: 792 }
+        : { width: 595.28, height: 841.89 };
+    const landscape = String(pageSetup.orientation ?? 'portrait').toLowerCase() === 'landscape';
+    return landscape
+      ? { width: named.height, height: named.width }
+      : named;
+  }
+  return size;
 }
 
 const PAD_V = TABLE_CELL_PAD_V;

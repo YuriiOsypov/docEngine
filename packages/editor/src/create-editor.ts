@@ -45,7 +45,7 @@ import { DEFAULT_FIELD_VALUE_STYLE_OPTIONS, DOCUMENT_TABLE_TEXT_STYLE } from './
 import { cloneHistorySnapshot, createDocumentHistory } from './core/document-history.js';
 import {
   applyDocumentBodyTextStyle,
-  applyDesignPanelTextStyle,
+  applyDocumentTextStyleCssVars,
   refreshDocumentFieldTokenStyles,
   resolvePageSetupFieldValueStyle,
   resolvePageSetupTextStyle,
@@ -66,10 +66,18 @@ import {
   applyFieldMapping as runFieldMapping,
   previewFieldMapping as runFieldMappingPreview,
   normalizeFieldMappingSpec,
+  syncFieldMappingSpecToSchema,
   evaluateSectionVisibility,
   registerFormulaFunction,
   omitMappedFields,
+  createMappingRulesFromDrop,
 } from '@docengine/engine';
+import { applyMappingBadges } from './ui/field-mapping-badges.js';
+import {
+  classifySourcePathDrop,
+  buildTableMappingRulesFromSourceDrop,
+  mergeMappingRulesIntoSpec,
+} from './ui/source-path-canvas-drop.js';
 
 import {
   buildTemplateExport,
@@ -131,7 +139,7 @@ import {
   recoverImageValuesFromDom,
 } from './fields/inline-fields.js';
 import { saveSelection } from './fields/rich-text.js';
-import { readTableRowsFromDom, refreshTableHeadersInDom, applyTableColumnWidthsToElement } from './fields/table-field.js';
+import { readTableRowsFromDom, refreshTableHeadersInDom, applyTableColumnWidthsToElement, addTableColumnToWrapper } from './fields/table-field.js';
 import {
   setFieldSelectionChangeCallback,
   clearAllDesignTokenSelection,
@@ -442,8 +450,11 @@ export function createEditor(options: any = {}) {
     const resolved = resolvePageSetupFieldValueStyle(documentPageSetup, options.fieldValueStyle);
     Object.assign(fieldValueStyle.default, resolved.default);
 
+    const textStyle = resolvePageSetupTextStyle(documentPageSetup);
+    // Scope Default text style to the template canvas only — never Interface chrome.
+    applyDocumentTextStyleCssVars(holder, textStyle);
     for (const body of holder.querySelectorAll('.document-section__body')) {
-      applyDocumentBodyTextStyle(body, resolvePageSetupTextStyle(documentPageSetup));
+      applyDocumentBodyTextStyle(body, textStyle);
     }
 
     syncFieldHighlightStyles();
@@ -460,7 +471,6 @@ export function createEditor(options: any = {}) {
       fieldValueStyle,
       getDocumentTextStyle: () => resolvePageSetupTextStyle(documentPageSetup),
     });
-    syncDesignChromeTypography();
   }
 
   /** Editor window sized from Page Setup format/orientation (+10%), fill and design. */
@@ -512,15 +522,6 @@ export function createEditor(options: any = {}) {
     return hosts;
   }
 
-  function syncDesignChromeTypography() {
-    if (designShell?.element) {
-      applyDesignPanelTextStyle(designShell.element, documentPageSetup);
-    }
-    if (topChrome) {
-      applyDesignPanelTextStyle(topChrome, documentPageSetup);
-    }
-  }
-
   function resolveFieldHighlightStyle() {
     return resolvePageSetupFieldHighlightStyle(documentPageSetup, options.ui?.fieldHighlight);
   }
@@ -549,6 +550,8 @@ export function createEditor(options: any = {}) {
   let documentPageSetup: any = {};
   /** @type {import('./types.d.ts').FieldMappingSpec | null} */
   let documentFieldMapping: any = null;
+  /** Set once the field palette is created (vertical Source / Database tab). */
+  let refreshDatabaseSourceTree: (() => void) | null = null;
   const getFormTextStyle = () => resolvePageSetupTextStyle(documentPageSetup);
   /** @type {Record<string, import('./types.d.ts').DocumentSectionValues> | null} */
   let loadedDocumentSections: any = null;
@@ -632,13 +635,12 @@ export function createEditor(options: any = {}) {
   });
   const schemaEditor = createSchemaEditorModal({
     getRegistry: () => registry,
-    getTextStyle: getFormTextStyle,
     onRepeaterTemplateChange: (fieldId: any,schema: any) => applyRepeaterSchemaUpdate(fieldId, schema),
     getRemoteListCollections: options.remoteListCollections ?? null,
     getRemoteListLabelFields: options.remoteListLabelFields ?? null,
   });
 
-  configureSchemaItemsDesignerModal({ getTextStyle: getFormTextStyle });
+  configureSchemaItemsDesignerModal();
 
   const previewModal = createPreviewModal({
     getFieldValueStyle: () => fieldValueStyle,
@@ -665,6 +667,8 @@ export function createEditor(options: any = {}) {
         }),
         onSave: (spec: any) => {
           documentFieldMapping = spec;
+          refreshDatabaseSourceTree?.();
+          refreshDesignMappingBadges();
         },
       });
   const richTextToolbar = createRichTextToolbar();
@@ -815,6 +819,42 @@ export function createEditor(options: any = {}) {
     ));
   }
 
+  function refreshDesignMappingBadges() {
+    if (!holder || options.mappingMode) return;
+    applyMappingBadges(holder, documentFieldMapping?.rules ?? [], {
+      getRegistry: () => registry,
+      fieldValueStyle,
+    });
+  }
+
+  /**
+   * Keep fieldMapping.rules section/field/child names (and fieldIds) aligned with
+   * the live template after renames.
+   */
+  function syncDocumentFieldMappingNames(
+    blocks: any = registry.getBlocks() ?? [],
+    fieldSchemas: any = registry.getFieldSchemas(),
+    fieldIdRenames: Record<string, string> | null = null,
+  ) {
+    if (!documentFieldMapping?.rules?.length) return;
+    documentFieldMapping = syncFieldMappingSpecToSchema(
+      documentFieldMapping,
+      blocks,
+      fieldSchemas,
+      fieldIdRenames ? { fieldIdRenames } : undefined,
+    );
+    refreshDesignMappingBadges();
+  }
+
+  function commitMappingRules(rules: any[]) {
+    if (!rules?.length) return;
+    documentFieldMapping = normalizeFieldMappingSpec(
+      mergeMappingRulesIntoSpec(documentFieldMapping, rules),
+    );
+    refreshDesignMappingBadges();
+    scheduleHistoryRecord();
+  }
+
   function getInlineFieldOptions() {
     return {
       getRegistry: () => registry,
@@ -828,10 +868,17 @@ export function createEditor(options: any = {}) {
         handleDeleteSchema(fieldId);
       },
       onPaletteDrop: handlePaletteDrop,
+      onSourcePathCanvasDrop: handleSourcePathCanvasDrop,
       onSchemaChange: (schemas: any) => options.onSchemaChange?.(schemas),
       onTableColumnWidthsChange: handleTableColumnWidthsChange,
       onTableColumnWidthsPreview: handleTableColumnWidthsPreview,
       onTableColumnResizeStart: handleTableColumnResizeStart,
+      onTableColumnsChange: (tableId: any, columns: any) => {
+        propertiesPanel?.cancelPersist?.();
+        propertiesPanel?.syncTableColumns?.(tableId, columns);
+        options.onSchemaChange?.(registry.getFieldSchemas());
+        scheduleHistoryRecord();
+      },
       onColumnsWidthsChange: (columnsEl: any) => {
         // Keep the columns block selected in the properties panel after a splitter drag.
         if (columnsEl?.isConnected) {
@@ -989,6 +1036,8 @@ export function createEditor(options: any = {}) {
     documentFieldMapping = snapshot.fieldMapping
       ? normalizeFieldMappingSpec(snapshot.fieldMapping)
       : null;
+    refreshDatabaseSourceTree?.();
+    refreshDesignMappingBadges();
     syncStylesFromPageSetup();
 
     const liveBlocks = listEditorBlocks();
@@ -1275,6 +1324,7 @@ export function createEditor(options: any = {}) {
       }
 
       options.onSchemaChange?.(registry.getFieldSchemas());
+      syncDocumentFieldMappingNames();
       scheduleHistoryRecord(true);
       return true;
     }
@@ -1324,6 +1374,11 @@ export function createEditor(options: any = {}) {
 
       registry.setFieldSchemas(nextSchemas);
       options.onSchemaChange?.(registry.getFieldSchemas());
+      syncDocumentFieldMappingNames(
+        nextBlocks,
+        nextSchemas,
+        idChanged ? { [previousFieldId]: newFieldId } : null,
+      );
 
       initEditor({
         time: saved.time,
@@ -1368,6 +1423,7 @@ export function createEditor(options: any = {}) {
       }, undefined);
       registry.setFieldSchemas(nextSchemas);
       options.onSchemaChange?.(registry.getFieldSchemas());
+      syncDocumentFieldMappingNames(nextBlocks, nextSchemas);
 
       initEditor({
         time: saved.time,
@@ -1385,6 +1441,7 @@ export function createEditor(options: any = {}) {
       nextBlocks = normalizeRepeaterFieldInBlocks(nextBlocks, previousFieldId, updated);
       registry.setFieldSchemas(registry.getFieldSchemas());
       options.onSchemaChange?.(registry.getFieldSchemas());
+      syncDocumentFieldMappingNames(nextBlocks, registry.getFieldSchemas());
 
       initEditor({
         time: saved.time,
@@ -1410,6 +1467,7 @@ export function createEditor(options: any = {}) {
         fieldValueStyle,
       );
     }
+    syncDocumentFieldMappingNames();
     return true;
   }
 
@@ -1445,6 +1503,153 @@ export function createEditor(options: any = {}) {
       options.onSchemaChange?.(registry.getFieldSchemas());
       await handleEditSchema(fieldId);
     }
+  }
+
+  async function handleSourcePathCanvasDrop(
+    meta: { path: string; type?: string; label?: string },
+    container: any,
+    clientX: any,
+    clientY: any,
+    dropTarget: any,
+  ) {
+    const sourcePath = String(meta?.path ?? '').trim();
+    if (!sourcePath) return;
+
+    const sample = documentFieldMapping?.sourceSample;
+    const plan = classifySourcePathDrop({
+      path: sourcePath,
+      type: meta?.type,
+      label: meta?.label,
+      sample,
+    });
+
+    // Prefer mapping onto an existing field/cell/pivot when dropped on one
+    // (except array-member drops onto a table, which add a column instead).
+    const pivot = dropTarget?.closest?.('.document-table--pivot[data-pivot-field-id]');
+    const token = dropTarget?.closest?.('.field-token');
+    const tableWrapper =
+      dropTarget?.closest?.('.document-table[data-table-id]:not(.document-table--pivot)') ?? null;
+    const mapTargetId = pivot?.dataset?.pivotFieldId || pivot?.dataset?.tableId || token?.dataset?.fieldId;
+
+    const droppingArrayColumnOntoTable =
+      plan.kind === 'table-column' && tableWrapper && !pivot;
+
+    if (mapTargetId && !token?.classList?.contains?.('field-token--computed') && !droppingArrayColumnOntoTable) {
+      let blocks = registry.getBlocks() ?? [];
+      if (editor) {
+        const saved = await editor.save();
+        blocks = saved.blocks ?? blocks;
+        registry.setBlocks(blocks);
+      }
+      const rules = createMappingRulesFromDrop(
+        mapTargetId,
+        sourcePath,
+        blocks,
+        registry.getFieldSchemas(),
+        {
+          childFieldIds: [],
+          bulkChild: !!token?.classList?.contains?.('field-token--repeater'),
+        },
+      );
+      commitMappingRules(rules);
+      return;
+    }
+
+    const opts = {
+      ...getInlineFieldOptions(),
+      openEditor: false,
+    };
+
+    async function syncBlocks() {
+      let blocks = registry.getBlocks() ?? [];
+      if (editor) {
+        const saved = await editor.save();
+        blocks = saved.blocks ?? blocks;
+        registry.setBlocks(blocks);
+      }
+      return blocks;
+    }
+
+    // 1) Scalar → simple typed field (with visible "Label: " before the token)
+    if (plan.kind === 'field') {
+      const { fieldId } = await insertPaletteFieldAtPoint(
+        container,
+        plan.fieldType,
+        clientX,
+        clientY,
+        { ...opts, label: plan.label, insertVisibleLabel: true, readonly: true },
+      );
+      options.onSchemaChange?.(registry.getFieldSchemas());
+      const blocks = await syncBlocks();
+      const rules = createMappingRulesFromDrop(
+        fieldId,
+        plan.sourcePath,
+        blocks,
+        registry.getFieldSchemas(),
+      );
+      commitMappingRules(rules);
+      return;
+    }
+
+    // 2) Array member → add column only when dropped on a table; otherwise new 1-col table
+    if (plan.kind === 'table-column') {
+      if (tableWrapper) {
+        const added = addTableColumnToWrapper(tableWrapper, plan.column, {
+          ...opts,
+          getRegistry: () => registry,
+          onSchemaChange: (schemas: any) => options.onSchemaChange?.(schemas),
+        });
+        if (added) {
+          const sectionBody = tableWrapper.closest?.('.document-section__body') ?? container;
+          sectionBody?.dispatchEvent?.(new InputEvent('input', { bubbles: true }));
+          const blocks = await syncBlocks();
+          const rules = buildTableMappingRulesFromSourceDrop({
+            tableFieldId: added.tableId,
+            blocks,
+            fieldSchemas: registry.getFieldSchemas(),
+            columnSourcePaths: [{ columnKey: added.columnKey, sourcePath: plan.sourcePath }],
+          });
+          commitMappingRules(rules);
+          return;
+        }
+      }
+
+      const { fieldId } = await insertPaletteTableAtPoint(container, clientX, clientY, {
+        ...opts,
+        fieldType: 'table',
+        label: plan.label,
+        columns: [plan.column],
+        readonly: true,
+      });
+      options.onSchemaChange?.(registry.getFieldSchemas());
+      const blocks = await syncBlocks();
+      const rules = buildTableMappingRulesFromSourceDrop({
+        tableFieldId: fieldId,
+        blocks,
+        fieldSchemas: registry.getFieldSchemas(),
+        columnSourcePaths: [{ columnKey: plan.column.key, sourcePath: plan.sourcePath }],
+      });
+      commitMappingRules(rules);
+      return;
+    }
+
+    // 3) Whole array → multi-column table
+    const { fieldId } = await insertPaletteTableAtPoint(container, clientX, clientY, {
+      ...opts,
+      fieldType: 'table',
+      label: plan.label,
+      columns: plan.columns,
+      readonly: true,
+    });
+    options.onSchemaChange?.(registry.getFieldSchemas());
+    const blocks = await syncBlocks();
+    const rules = buildTableMappingRulesFromSourceDrop({
+      tableFieldId: fieldId,
+      blocks,
+      fieldSchemas: registry.getFieldSchemas(),
+      columnSourcePaths: plan.columnSourcePaths,
+    });
+    commitMappingRules(rules);
   }
 
   async function insertDocumentSection(atIndex: any) {
@@ -1487,6 +1692,7 @@ export function createEditor(options: any = {}) {
     hideTitleInPreview,
     borderTop,
     borderBottom,
+    eachRowOnNewPage,
     visibility,
     sectionEl,
   }: any) {
@@ -1519,6 +1725,7 @@ export function createEditor(options: any = {}) {
       hideTitleInPreview: !!hideTitleInPreview,
       borderTop: !!borderTop,
       borderBottom: !!borderBottom,
+      eachRowOnNewPage: !!eachRowOnNewPage,
       visibility: visibility ?? null,
     };
     blocks[blockIndex] = block;
@@ -1542,6 +1749,7 @@ export function createEditor(options: any = {}) {
           hideTitleInPreview: !!hideTitleInPreview,
           borderTop: !!borderTop,
           borderBottom: !!borderBottom,
+          eachRowOnNewPage: !!eachRowOnNewPage,
           visibility: visibility ?? null,
         });
       }
@@ -1568,6 +1776,7 @@ export function createEditor(options: any = {}) {
     registry.setFieldSchemas(nextSchemas);
     options.onSchemaChange?.(registry.getFieldSchemas());
     selectedSectionBlockIndex = blockIndex;
+    syncDocumentFieldMappingNames(nextBlocks, nextSchemas, result.idRenames);
 
     initEditor({
       time: saved.time,
@@ -1967,16 +2176,20 @@ export function createEditor(options: any = {}) {
     const saved = await editor.save();
     let nextSchemas = registry.getFieldSchemas();
     let nextBlocks = saved.blocks;
+    /** @type {Record<string, string>} */
+    const idRenames: Record<string, string> = {};
 
     for (const block of nextBlocks) {
       if (block.type !== 'documentSection') continue;
       const result = rebuildFieldIdsForSection(block, nextSchemas, nextBlocks);
       nextSchemas = result.fieldSchemas;
       nextBlocks = result.blocks;
+      Object.assign(idRenames, result.idRenames);
     }
 
     registry.setFieldSchemas(nextSchemas);
     options.onSchemaChange?.(registry.getFieldSchemas());
+    syncDocumentFieldMappingNames(nextBlocks, nextSchemas, idRenames);
     initEditor({
       time: saved.time,
       fieldSchemas: nextSchemas,
@@ -2004,11 +2217,14 @@ export function createEditor(options: any = {}) {
 
     if (editor && reinit) {
       const nextBlocks = normalizeRepeaterFieldInBlocks(blocks, fieldId, sanitized);
+      syncDocumentFieldMappingNames(nextBlocks, registry.getFieldSchemas());
       initEditor({
         time: savedTime,
         fieldSchemas: registry.getFieldSchemas(),
         blocks: nextBlocks,
       });
+    } else {
+      syncDocumentFieldMappingNames(blocks, registry.getFieldSchemas());
     }
 
     return sanitized;
@@ -2203,12 +2419,14 @@ export function createEditor(options: any = {}) {
       fillModeFieldHighlight: !designMode && showFieldsInFillMode && !options.mappingMode,
       mappingMode: !!options.mappingMode,
       onMappingRuleChange: options.onMappingRuleChange,
+      getMappingRules: options.getMappingRules,
       designPropertiesPanel: useDesignPanels && designMode,
       openEditor: !(useDesignPanels && designMode),
       onEditSchema: handleEditSchema,
       onDeleteSchema: handleDeleteSchema,
       onSectionNameChange: handleSectionNameChange,
       onPaletteDrop: handlePaletteDrop,
+      onSourcePathCanvasDrop: handleSourcePathCanvasDrop,
       allocateSectionName,
       onSectionDataChange: syncSectionDataToRegistry,
       onFieldValueChange: refreshSectionVisibility,
@@ -2216,6 +2434,12 @@ export function createEditor(options: any = {}) {
       onTableColumnWidthsChange: handleTableColumnWidthsChange,
       onTableColumnWidthsPreview: handleTableColumnWidthsPreview,
       onTableColumnResizeStart: handleTableColumnResizeStart,
+      onTableColumnsChange: (tableId: any, columns: any) => {
+        propertiesPanel?.cancelPersist?.();
+        propertiesPanel?.syncTableColumns?.(tableId, columns);
+        options.onSchemaChange?.(registry.getFieldSchemas());
+        scheduleHistoryRecord();
+      },
       onColumnsWidthsChange: (columnsEl: any) => {
         if (columnsEl?.isConnected) {
           selectColumnsEl(columnsEl);
@@ -2357,6 +2581,17 @@ export function createEditor(options: any = {}) {
     } else if (normalized.fieldMapping) {
       documentFieldMapping = normalizeFieldMappingSpec(normalized.fieldMapping);
     }
+    // Heal stale section/field names left over from renames before re-init.
+    if (documentFieldMapping?.rules?.length) {
+      documentFieldMapping = syncFieldMappingSpecToSchema(
+        documentFieldMapping,
+        registry.getBlocks() ?? [],
+        registry.getFieldSchemas(),
+      );
+    }
+    // Palette may already exist on re-init; keep Database tab + badges in sync.
+    refreshDatabaseSourceTree?.();
+    refreshDesignMappingBadges();
     syncStylesFromPageSetup();
 
     // EditorJS.destroy() deletes its own methods; never call destroy twice on the same instance.
@@ -2466,6 +2701,7 @@ export function createEditor(options: any = {}) {
   }
 
   function attachRepeatableInstances(doc: any) {
+    // Clone from loaded instance arrays and/or explicit `repeatable` — never from `_source` alone.
     const plan = resolveRepeatablePagePlan(
       doc.blocks ?? [],
       doc.fieldSchemas ?? {},
@@ -2532,25 +2768,27 @@ export function createEditor(options: any = {}) {
   const palette = createFieldPalette((item: any) => addPaletteItem(item), {
     layout: useDesignPanels ? 'vertical' : 'horizontal',
     excludeTypes: ui.embedded ? ['child'] : [],
+    getSourceSample: () => documentFieldMapping?.sourceSample ?? null,
+    onSourceSampleChange: (sample: unknown) => {
+      documentFieldMapping = normalizeFieldMappingSpec({
+        ...(documentFieldMapping ?? {}),
+        sourceSample: sample,
+        rules: documentFieldMapping?.rules ?? [],
+      });
+      scheduleHistoryRecord();
+    },
   });
+  refreshDatabaseSourceTree = () => palette.refreshDatabase();
 
-  async function handlePreview() {
-    documentActions.setBusy(true);
-    try {
-      if (editor) await editor.save();
-      await previewModal.open(await getDocument());
-    } catch (err: any) {
-      showNotification(err?.message ?? 'Preview failed.', { type: 'error' });
-    } finally {
-      documentActions.setBusy(false);
-      refreshTableCellTokens(holder, { getRegistry: () => registry, fieldValueStyle });
-      pruneTableCellCaretAnchors(holder);
-    }
-  }
+  // Declared later on the public instance; Preview chrome must use the same
+  // mapping-aware path (nested $values rows), not a bare getDocument() open.
+  let runPreview: (options?: any) => Promise<void> = async () => {};
 
   const documentActions = createDocumentActions({
     onPreview: ui.showPreview === false ? null : () => {
-      void handlePreview();
+      void runPreview().catch((err: any) => {
+        showNotification(err?.message ?? 'Preview failed.', { type: 'error' });
+      });
     },
   });
 
@@ -2598,7 +2836,8 @@ export function createEditor(options: any = {}) {
       onInsertSection: (index: any) => insertDocumentSection(index),
     });
 
-    syncDesignChromeVisibility();
+    palette.refreshDatabase();
+    refreshDesignMappingBadges();
   }
 
   if (showPalette || (showToolbar && !useDesignPanels)) {
@@ -2611,6 +2850,10 @@ export function createEditor(options: any = {}) {
     }
     mountTopChrome(topChrome, holder, ui);
   }
+
+  // Always sync after mount — chrome fill mode (SF modal / no design panels) also
+  // mounts the toolbar, and must hide it when designMode is false.
+  syncDesignChromeVisibility();
 
   if (ui.documentActions !== false) {
     if (!mountInContainer(documentActions.element, ui.documentActionsContainer)) {
@@ -2661,6 +2904,7 @@ export function createEditor(options: any = {}) {
           hideTitleInPreview: !!block.data?.hideTitleInPreview,
           borderTop: !!block.data?.borderTop,
           borderBottom: !!block.data?.borderBottom,
+          eachRowOnNewPage: !!block.data?.eachRowOnNewPage,
           visibility: block.data?.visibility ?? null,
         },
         section,
@@ -2683,8 +2927,9 @@ export function createEditor(options: any = {}) {
 
   function onDesignHolderClick(e: any) {
     if (!designMode || !useDesignPanels || !propertiesPanel) return;
-    // Ignore leftover clicks from a table or columns resize drag.
+    // Ignore leftover clicks from a table or columns resize / reorder drag.
     if (document.body.classList.contains('vision-table-col-resize-active')) return;
+    if (document.body.classList.contains('vision-table-col-reorder-active')) return;
     if (document.body.classList.contains('document-columns-col-resize-active')) return;
     if (e.target?.closest?.('.vision-table__col-resizer')) return;
     if (e.target?.closest?.('.document-columns__col-resizer')) return;
@@ -3032,9 +3277,14 @@ export function createEditor(options: any = {}) {
   syncShowFieldsHighlight();
   initEditor(options.data ?? options.defaultDocument ?? DEFAULT_EMPTY_DOCUMENT);
 
-  async function applyFieldMappingToEditor(payload: any) {
+  async function applyFieldMappingToEditor(payload: any, specOverride: any = null) {
     const doc = await getDocument();
-    const spec = documentFieldMapping;
+    const spec = specOverride
+      ? normalizeFieldMappingSpec(specOverride)
+      : documentFieldMapping;
+    if (specOverride) {
+      documentFieldMapping = spec;
+    }
     if (!spec?.rules?.length && !spec?.expression?.trim()) {
       throw new Error('No field mapping configured.');
     }
@@ -3062,6 +3312,57 @@ export function createEditor(options: any = {}) {
     });
     return result;
   }
+
+  runPreview = async (previewOptions: any = {}) => {
+    if (editor) await editor.save();
+    documentActions.setBusy(true);
+    try {
+      // Re-apply mapping in memory (do not remount the editor). Remounting lets
+      // EditorJS mutate the shared blocks reference back to a single seed row
+      // before Preview clones them — dropping nested $values detail rows.
+      const sample = documentFieldMapping?.sourceSample;
+      const hasRules =
+        Array.isArray(documentFieldMapping?.rules) && documentFieldMapping.rules.length > 0;
+      let previewDoc: any = null;
+      if (sample != null && hasRules) {
+        try {
+          const doc = await getDocument();
+          const result = runFieldMapping(sample, documentFieldMapping, {
+            blocks: doc.blocks,
+            fieldSchemas: doc.fieldSchemas,
+          });
+          const sections = result.fieldsExport?.sections
+            ? JSON.parse(JSON.stringify(result.fieldsExport.sections))
+            : null;
+          loadedDocumentSections = sections;
+          previewDoc = {
+            time: Date.now(),
+            blocks: JSON.parse(JSON.stringify(result.blocks)),
+            fieldSchemas: JSON.parse(JSON.stringify(result.fieldSchemas)),
+            loadedDocumentSections: sections,
+          };
+          if (Object.keys(documentPageSetup).length > 0) {
+            previewDoc.pageSetup = JSON.parse(JSON.stringify(documentPageSetup));
+          }
+          if (documentFieldMapping) {
+            previewDoc.fieldMapping = JSON.parse(JSON.stringify(documentFieldMapping));
+          }
+          attachRepeatableInstances(previewDoc);
+        } catch (err: any) {
+          console.warn('[docengine] preview mapping apply failed', err);
+          showNotification(err?.message ?? 'Preview mapping failed.', { type: 'error' });
+          previewDoc = null;
+        }
+      }
+      await previewModal.open(previewDoc ?? (await getDocument()), {
+        hideEmptyValues: previewOptions.hideEmptyValues === true,
+      });
+    } finally {
+      documentActions.setBusy(false);
+      refreshTableCellTokens(holder, { getRegistry: () => registry, fieldValueStyle });
+      pruneTableCellCaretAnchors(holder);
+    }
+  };
 
   /**
    * Build an HTML or PDF blob for the host to email / Slack / attach.
@@ -3299,17 +3600,7 @@ export function createEditor(options: any = {}) {
     getShowFieldsInFillMode: () => showFieldsInFillMode,
 
     async preview(options: any = {}) {
-      if (editor) await editor.save();
-      documentActions.setBusy(true);
-      try {
-        await previewModal.open(await getDocument(), {
-          hideEmptyValues: options.hideEmptyValues === true,
-        });
-      } finally {
-        documentActions.setBusy(false);
-        refreshTableCellTokens(holder, { getRegistry: () => registry, fieldValueStyle });
-        pruneTableCellCaretAnchors(holder);
-      }
+      return runPreview(options);
     },
 
     isPreviewOpen: () => previewModal.isOpen(),
@@ -3364,6 +3655,12 @@ export function createEditor(options: any = {}) {
 
     setFieldMapping(spec: any) {
       documentFieldMapping = spec ? normalizeFieldMappingSpec(spec) : null;
+      if (documentFieldMapping?.rules?.length) {
+        syncDocumentFieldMappingNames();
+      } else {
+        refreshDesignMappingBadges();
+      }
+      refreshDatabaseSourceTree?.();
     },
 
     async previewFieldMapping(payload: any) {
@@ -3384,12 +3681,29 @@ export function createEditor(options: any = {}) {
         throw new Error('Field mapping editor is not available in this editor.');
       }
       const spec = options.spec ?? documentFieldMapping ?? normalizeFieldMappingSpec(null);
+      // Keep Database tab Source payload in sync with the sample Mapping will show.
+      if (spec?.sourceSample != null) {
+        documentFieldMapping = normalizeFieldMappingSpec({
+          ...(documentFieldMapping ?? spec),
+          sourceSample: spec.sourceSample,
+          rules: documentFieldMapping?.rules ?? spec.rules ?? [],
+          expression: documentFieldMapping?.expression ?? spec.expression ?? '',
+        });
+      } else if (!documentFieldMapping && spec) {
+        documentFieldMapping = normalizeFieldMappingSpec(spec);
+      }
+      // Align rule section/field names with current template before editing.
+      syncDocumentFieldMappingNames();
+      refreshDatabaseSourceTree?.();
       const saved = await fieldMappingModal.open({
-        spec,
-        onApply: applyFieldMappingToEditor,
+        spec: documentFieldMapping ?? spec,
+        onApply: (payload: any, mappingSpec: any) =>
+          applyFieldMappingToEditor(payload, mappingSpec ?? null),
         onExpandSourcePath: options.onExpandSourcePath,
       });
       documentFieldMapping = saved;
+      refreshDatabaseSourceTree?.();
+      refreshDesignMappingBadges();
       options.onChange?.(await getDocument());
       return saved;
     },

@@ -32,7 +32,15 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
   @api configName;
 
   columns = [
-    { label: 'Name', fieldName: 'name', type: 'text' },
+    {
+      label: 'Name',
+      type: 'button',
+      typeAttributes: {
+        label: { fieldName: 'name' },
+        name: 'name_click',
+        variant: 'base'
+      }
+    },
     { label: 'Template', fieldName: 'templateName', type: 'text' },
     { label: 'Status', fieldName: 'status', type: 'text' },
     {
@@ -111,14 +119,22 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
   }
 
   _getRowActions(row, doneCallback) {
-    const actions = [
-      { label: 'Edit', name: 'edit' },
-      { label: 'Delete', name: 'delete' }
-    ];
-    if (row && row.contentDocumentId) {
-      actions.unshift({ label: 'Preview', name: 'preview' });
+    const actions = [];
+    if (this._isCompleted(row)) {
+      // Completed documents are read-only — HTML preview only.
+      actions.push({ label: 'Preview', name: 'preview' });
+    } else {
+      actions.push({ label: 'Edit', name: 'edit' });
+      if (row && row.contentDocumentId) {
+        actions.push({ label: 'Preview file', name: 'preview_file' });
+      }
     }
+    actions.push({ label: 'Delete', name: 'delete' });
     doneCallback(actions);
+  }
+
+  _isCompleted(row) {
+    return row && String(row.status || '').trim().toLowerCase() === 'completed';
   }
 
   get hasRows() {
@@ -159,7 +175,11 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
     const action = event.detail.action;
     const row = event.detail.row;
     if (!action || !row) return;
-    if (action.name === 'preview') {
+    if (action.name === 'preview' || (action.name === 'name_click' && this._isCompleted(row))) {
+      await this._previewHtml(row);
+    } else if (action.name === 'name_click') {
+      await this._editInstance(row);
+    } else if (action.name === 'preview_file') {
       this._previewFile(row);
     } else if (action.name === 'edit') {
       await this._editInstance(row);
@@ -181,6 +201,36 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
         actionName: 'view'
       }
     });
+  }
+
+  /** Open read-only HTML document preview (same as document record page). */
+  async _previewHtml(row) {
+    if (this.busy || this._modalOpen || !row) return;
+    this._modalOpen = true;
+    this.busy = true;
+    try {
+      if (row.templateId) {
+        await this._applyConfigForTemplate(row.templateId);
+      }
+      await DocEngineModal.open({
+        size: 'full',
+        recordId: this.recordId,
+        objectApiName: this.objectApiName,
+        templateId: row.templateId,
+        instanceId: row.id,
+        fillMode: false,
+        previewOnly: true,
+        exportMode: this._exportMode,
+        showPreview: true,
+        hideEmpty: this._hideEmpty,
+        attachToRecord: this._attachToRecord
+      });
+    } catch (err) {
+      this._showError('Preview failed', err);
+    } finally {
+      this.busy = false;
+      this._modalOpen = false;
+    }
   }
 
   async handleRefresh() {
@@ -327,6 +377,10 @@ export default class DocEngineInstanceList extends NavigationMixin(LightningElem
 
   async _editInstance(row) {
     if (this.busy) return;
+    if (this._isCompleted(row)) {
+      await this._previewHtml(row);
+      return;
+    }
     this.busy = true;
     try {
       // Apply button config when available (export/attach/hide empty), keep Preview on for Edit.

@@ -1,3 +1,4 @@
+import { isSectionSourceRule, SECTION_SOURCE_KEY } from '@docengine/engine';
 import { updateFieldToken } from '../fields/inline-fields.js';
 
 /**
@@ -129,6 +130,28 @@ export function findRuleForMappedToken(token: any, rules: any = []) {
  * @param {import('../types.d.ts').FieldMappingRule[]} rules
  * @param {Record<string, unknown>} [context]
  */
+function clearSectionSourceBadge(header: any) {
+  header?.classList?.remove('document-section__header--sourced');
+  header?.querySelector?.(':scope > .document-section__source-badge')?.remove();
+  delete header?.dataset?.sectionSource;
+}
+
+function markSectionSourceBadge(header: any, sourcePath: any) {
+  if (!header) return;
+  const path = String(sourcePath ?? '').trim();
+  header.classList.add('document-section__header--sourced');
+  header.dataset.sectionSource = path;
+  let badge = header.querySelector(':scope > .document-section__source-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'document-section__source-badge';
+    header.appendChild(badge);
+  }
+  const leaf = path.replace(/^\$payload\.?/, '').split('.').filter(Boolean).pop() || path;
+  badge.textContent = `${SECTION_SOURCE_KEY}: ${leaf}`;
+  badge.title = path || SECTION_SOURCE_KEY;
+}
+
 export function applyMappingBadges(holder: any, rules: any = [], context: any = {}) {
   const badgeContext = {
     ...context,
@@ -140,13 +163,30 @@ export function applyMappingBadges(holder: any, rules: any = [], context: any = 
   holder.querySelectorAll('.field-token').forEach((token: any) => {
     clearMappedToken(token);
   });
-  holder.querySelectorAll('.document-table--pivot').forEach((el: any) => {
+  holder.querySelectorAll('.document-table--pivot, .document-table--mapped').forEach((el: any) => {
     clearMappedPivot(el);
+  });
+  holder.querySelectorAll('.document-section__header').forEach((header: any) => {
+    clearSectionSourceBadge(header);
   });
 
   for (const rule of rules ?? []) {
     const hasPath = !!(rule?.sourcePath || rule?.sourceArrayPath);
     if (!hasPath) continue;
+
+    if (isSectionSourceRule(rule)) {
+      const path = String(rule.sourceArrayPath || rule.sourcePath || '').trim();
+      const sectionName = String(rule.section ?? '');
+      if (!path || !sectionName) continue;
+      const section =
+        holder.querySelector(`.document-section[data-section-name="${CSS.escape(sectionName)}"]`) ||
+        [...holder.querySelectorAll('.document-section')].find(
+          (el: any) => String(el.dataset.sectionName ?? '') === sectionName,
+        );
+      const header = section?.querySelector?.('.document-section__header');
+      if (header) markSectionSourceBadge(header, path);
+      continue;
+    }
 
     if (rule.sourceArrayPath && !rule.columnKey && rule.fieldId) {
       const pivot = holder.querySelector(
@@ -166,7 +206,25 @@ export function applyMappingBadges(holder: any, rules: any = [], context: any = 
           `.field-token--cell[data-table-id="${CSS.escape(rule.fieldId)}"][data-col-key="${CSS.escape(rule.columnKey)}"]`,
         )
         .forEach((token: any) => markMappedToken(token, badgeContext, rule));
+      // Also mark the table chrome so whole-array → column mappings are visible.
+      const tableWrap = holder.querySelector(
+        `.document-table[data-table-id="${CSS.escape(rule.fieldId)}"]`,
+      );
+      if (tableWrap && !tableWrap.classList.contains('document-table--mapped')) {
+        markMappedPivot(tableWrap, rule);
+      }
       continue;
+    }
+
+    // Whole-table sourcePath (no columnKey) — mark the table wrapper.
+    if (rule.fieldId && !rule.columnKey && !rule.childFieldId) {
+      const tableWrap = holder.querySelector(
+        `.document-table[data-table-id="${CSS.escape(rule.fieldId)}"]`,
+      );
+      if (tableWrap) {
+        markMappedPivot(tableWrap, rule);
+        continue;
+      }
     }
 
     if (rule.fieldId && rule.childFieldId) {

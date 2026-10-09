@@ -55,6 +55,8 @@ export default class DocEngineModal extends LightningModal {
   @api exportMode = 'pdf';
   @api showPreview;
   @api hideEmpty;
+  /** When false, Finish saves Completed without attaching a file. Default true when unset. */
+  @api attachFile;
   @api attachToRecord;
   /** When set, reopen an existing DocEngine_Document__c for edit. */
   @api instanceId;
@@ -505,48 +507,57 @@ export default class DocEngineModal extends LightningModal {
 
       await this._saveInstanceOnly('Completed');
 
-      // Completing always attaches (or revises) the PDF/HTML file on the document + source record.
+      // Completing attaches (or revises) the PDF/HTML file when the template has Attach file on.
       // Default / none → PDF; only an explicit Export Mode = HTML attaches HTML.
-      const exportMode = this._asExportMode(this.exportMode);
-      const format = exportMode === 'html' ? 'html' : 'pdf';
+      const shouldAttach = this._asBool(this.attachFile, true);
       let warningToast = null;
       let successToast = {
-        title: 'Saved & attached',
-        message: 'Document saved. PDF attached to Notes & Attachments / Files.',
+        title: 'Saved',
+        message: 'Document saved.',
         variant: 'success'
       };
 
-      if (format === 'pdf') {
-        if (!this._pdfAvailable) {
-          warningToast = {
-            title: 'PDF unavailable',
-            message:
-              'Uncheck DocEngine Settings → Use External PDF, or install DocEngine_PDF for External. Attaching HTML instead.',
-            variant: 'warning'
-          };
+      if (shouldAttach) {
+        const exportMode = this._asExportMode(this.exportMode);
+        const format = exportMode === 'html' ? 'html' : 'pdf';
+        successToast = {
+          title: 'Saved & attached',
+          message: 'Document saved. PDF attached to Notes & Attachments / Files.',
+          variant: 'success'
+        };
+
+        if (format === 'pdf') {
+          if (!this._pdfAvailable) {
+            warningToast = {
+              title: 'PDF unavailable',
+              message:
+                'Uncheck DocEngine Settings → Use External PDF, or install DocEngine_PDF for External. Attaching HTML instead.',
+              variant: 'warning'
+            };
+            await this._attachHtml();
+            successToast = {
+              title: 'Saved & attached',
+              message: 'Document saved. HTML attached to Notes & Attachments / Files.',
+              variant: 'success'
+            };
+          } else {
+            const html =
+              this._pdfProvider === 'Salesforce'
+                ? await exportHtmlForPdf(this._editor, {
+                    title: (this._templateDto && this._templateDto.name) || 'document',
+                    hideEmptyValues: this._asBool(this.hideEmpty, false)
+                  })
+                : null;
+            await generateAndSavePdf({ docInstanceId: this._instanceId, html });
+          }
+        } else {
           await this._attachHtml();
           successToast = {
             title: 'Saved & attached',
             message: 'Document saved. HTML attached to Notes & Attachments / Files.',
             variant: 'success'
           };
-        } else {
-          const html =
-            this._pdfProvider === 'Salesforce'
-              ? await exportHtmlForPdf(this._editor, {
-                  title: (this._templateDto && this._templateDto.name) || 'document',
-                  hideEmptyValues: this._asBool(this.hideEmpty, false)
-                })
-              : null;
-          await generateAndSavePdf({ docInstanceId: this._instanceId, html });
         }
-      } else {
-        await this._attachHtml();
-        successToast = {
-          title: 'Saved & attached',
-          message: 'Document saved. HTML attached to Notes & Attachments / Files.',
-          variant: 'success'
-        };
       }
 
       this._closeWithResult({
@@ -979,12 +990,15 @@ export default class DocEngineModal extends LightningModal {
   }
 
   /**
-   * Template Hide Empty / Output Format win over Button Config / App Builder props.
+   * Template Hide Empty / Attach File / Output Format win over Button Config / App Builder props.
    */
   _applyTemplateRunSettings(dto) {
     if (!dto) return;
     if (dto.hideEmpty != null) {
       this.hideEmpty = dto.hideEmpty === true;
+    }
+    if (dto.attachFile != null) {
+      this.attachFile = dto.attachFile !== false;
     }
     if (dto.outputFormat != null && String(dto.outputFormat).trim() !== '') {
       this.exportMode = this._asExportMode(dto.outputFormat);

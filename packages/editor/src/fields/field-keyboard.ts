@@ -967,10 +967,14 @@ export function wireFieldTokenKeyboard(container: any, options: any = {}) {
   }
 
   function handleSelectionChange() {
+    // Field dialogs own keyboard/selection while open — don't heal canvas carets
+    // (arrows would otherwise keep moving "selected" text behind the overlay).
+    if (isFillModalOverlayOpen()) return;
     normalizeCollapsedCaret(container);
   }
 
   function handleInput(e: any) {
+    if (isFillModalOverlayOpen()) return;
     // Native deletes can still collapse bridges (e.g. selecting ZWSP+text). Re-anchor.
     if (
       e.inputType === 'deleteContentBackward' ||
@@ -986,6 +990,7 @@ export function wireFieldTokenKeyboard(container: any, options: any = {}) {
   }
 
   function handleBeforeInput(e: any) {
+    if (isFillModalOverlayOpen()) return;
     if (
       e.inputType === 'insertParagraph' &&
       !e.ctrlKey &&
@@ -1093,6 +1098,7 @@ export function wireFieldTokenKeyboard(container: any, options: any = {}) {
   }
 
   function handleArrowKey(e: any) {
+    if (isFillModalOverlayOpen()) return false;
     if (!shouldIgnoreFieldDeleteKey(e.target)) {
       const range = getCollapsedCaretRange(container);
       if (!range) return false;
@@ -1117,6 +1123,10 @@ export function wireFieldTokenKeyboard(container: any, options: any = {}) {
   }
 
   function handleKeyDown(e: any) {
+    // While a field dialog is open, ignore canvas keyboard entirely — even if
+    // focus/selection leaked back onto a contenteditable behind the overlay.
+    if (isFillModalOverlayOpen()) return;
+
     if (handleFillFieldFocusKeys(e)) return;
 
     if (

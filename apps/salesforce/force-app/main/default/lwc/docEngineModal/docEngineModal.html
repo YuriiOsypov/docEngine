@@ -17,22 +17,26 @@
       </template>
 
       <template if:true={showEditor}>
-        <!-- Mounted for editor.preview(); hidden when previewOnly -->
+        <!-- Preview (+ format chrome) and scenario toggle share one toolbar row -->
         <div class="chrome-row fill-chrome">
-          <div lwc:dom="manual" class="doc-editor-host__sticky sticky-chrome"></div>
-          <div lwc:dom="manual" class="doc-editor-host__actions doc-actions"></div>
+          <div class="chrome-row__editor">
+            <div lwc:dom="manual" class="doc-editor-host__sticky sticky-chrome"></div>
+            <div lwc:dom="manual" class="doc-editor-host__actions doc-actions"></div>
+          </div>
+          <template if:true={showScenarioBar}>
+            <div class="scenario-toggle">
+              <lightning-input
+                type="checkbox"
+                label="Use scenario"
+                checked={scenarioPanelOpen}
+                onchange={handleScenarioPanelToggle}
+                disabled={busy}
+              ></lightning-input>
+            </div>
+          </template>
         </div>
 
         <template if:true={showScenarioBar}>
-          <div class="scenario-toggle">
-            <lightning-input
-              type="checkbox"
-              label="Use scenario"
-              checked={scenarioPanelOpen}
-              onchange={handleScenarioPanelToggle}
-              disabled={busy}
-            ></lightning-input>
-          </div>
           <template if:true={scenarioPanelOpen}>
             <div class="scenario-row">
               <lightning-combobox

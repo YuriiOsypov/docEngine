@@ -452,44 +452,26 @@ public with sharing class DocEngineFormLinkController {
       System.debug(LoggingLevel.FINE, 'Experience domain lookup is unavailable.');
     }
 
-    List<Network> networks = [
-      SELECT Id, Name, UrlPathPrefix, Status
-      FROM Network
-      WHERE Status IN ('Live', 'UnderConstruction')
-      WITH USER_MODE
-      ORDER BY CreatedDate ASC
-      LIMIT 10
-    ];
-    if (networks.isEmpty()) {
-      return null;
-    }
-    Network pick = networks[0];
-    for (Network n : networks) {
-      String label =
-        (n.Name == null ? '' : n.Name) +
-        ' ' +
-        (n.UrlPathPrefix == null ? '' : n.UrlPathPrefix);
-      if (
-        label.toLowerCase().contains('docengine') ||
-        label.toLowerCase().contains('doeengine') ||
-        label.toLowerCase().contains('doc')
-      ) {
-        pick = n;
-        break;
-      }
-    }
+    // Experience Cloud / Networks is optional. Typed Schema.Network fails to compile when
+    // the feature is off, so use dynamic SOQL only. Network.getLoginUrl requires the same
+    // type at compile time — when Domains did not resolve, we cannot safely build a site URL.
     try {
-      String loginUrl = Network.getLoginUrl(pick.Id);
-      if (String.isBlank(loginUrl)) {
+      List<SObject> networks = Database.query(
+        'SELECT Id, Name, UrlPathPrefix, Status FROM Network ' +
+          'WHERE Status IN (\'Live\', \'UnderConstruction\') ' +
+          'WITH USER_MODE ORDER BY CreatedDate ASC LIMIT 10'
+      );
+      if (networks == null || networks.isEmpty()) {
         return null;
       }
-      String base = loginUrl;
-      Integer loginIdx = base.toLowerCase().indexOf('/login');
-      if (loginIdx > 0) {
-        base = base.substring(0, loginIdx);
-      }
-      return normalizeSiteBaseUrl(base);
+      // Without Network.getLoginUrl (compile-gated), Domain lookup above is the supported path.
+      System.debug(
+        LoggingLevel.FINE,
+        'Network rows exist but login URL resolution requires Experiences-enabled compile context.'
+      );
+      return null;
     } catch (Exception e) {
+      System.debug(LoggingLevel.FINE, 'Network lookup is unavailable.');
       return null;
     }
   }

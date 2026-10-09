@@ -9,6 +9,7 @@ import {
   migratePageSetup,
   normalizeFieldHighlightStyle,
   applyDesignPanelTextStyle,
+  applyDocumentTextStyleCssVars,
   applyPageFormatCssVars,
   clearPageFormatCssVars,
   FILL_MODE_PAGE_SCALE,
@@ -35,6 +36,22 @@ describe('resolvePageFormatSizeMm', () => {
       heightMm: 215.9,
     });
   });
+
+  it('uses custom width/height and swaps for landscape', () => {
+    assert.deepEqual(
+      resolvePageFormatSizeMm({ format: 'custom', widthMm: 100, heightMm: 200 }),
+      { widthMm: 100, heightMm: 200 },
+    );
+    assert.deepEqual(
+      resolvePageFormatSizeMm({
+        format: 'custom',
+        widthMm: 100,
+        heightMm: 200,
+        orientation: 'landscape',
+      }),
+      { widthMm: 200, heightMm: 100 },
+    );
+  });
 });
 
 describe('resolvePageContentWidthMm', () => {
@@ -52,6 +69,13 @@ describe('resolvePageContentWidthMm', () => {
 
   it('uses letter width when format is letter', () => {
     assert.equal(resolvePageContentWidthMm({ format: 'letter', margin: 15 }), 185.9);
+  });
+
+  it('uses custom width when format is custom', () => {
+    assert.equal(
+      resolvePageContentWidthMm({ format: 'custom', widthMm: 100, heightMm: 200, margin: 10 }),
+      80,
+    );
   });
 });
 
@@ -100,7 +124,7 @@ describe('resolvePageSetupTextStyle', () => {
 });
 
 describe('applyDesignPanelTextStyle', () => {
-  it('applies page text typography to design panel roots', () => {
+  it('does not apply Default text style to Interface chrome', () => {
     const { document } = parseHTML('<!DOCTYPE html><html><body></body></html>');
     globalThis.document = document;
     globalThis.HTMLElement = document.defaultView.HTMLElement;
@@ -120,9 +144,32 @@ describe('applyDesignPanelTextStyle', () => {
       textStyle: { fontFamily: 'Georgia', fontSize: '18px', fontWeight: 'bold' },
     });
 
-    assert.match(panel.style.fontFamily, /Georgia/);
-    assert.equal(panel.style.fontSize, '18px');
-    assert.equal(panel.style.fontWeight, 'bold');
+    assert.ok(!panel.style.fontFamily);
+    assert.ok(!panel.style.fontSize);
+    assert.ok(!panel.style.fontWeight);
+  });
+});
+
+describe('applyDocumentTextStyleCssVars', () => {
+  it('sets document font vars on the template host only', () => {
+    const { document } = parseHTML('<!DOCTYPE html><html><body></body></html>');
+    globalThis.document = document;
+    globalThis.HTMLElement = document.defaultView.HTMLElement;
+
+    const holder = document.createElement('div');
+    holder.className = 'editor-holder';
+    document.body.appendChild(holder);
+
+    applyDocumentTextStyleCssVars(holder, {
+      fontFamily: 'Georgia, serif',
+      fontSize: '18px',
+      fontWeight: 'bold',
+    });
+
+    assert.equal(holder.style.getPropertyValue('--me-document-font-family'), 'Georgia, serif');
+    assert.equal(holder.style.getPropertyValue('--me-document-font-size'), '18px');
+    assert.equal(holder.style.getPropertyValue('--me-document-font-weight'), '700');
+    assert.ok(!holder.style.fontFamily);
   });
 });
 

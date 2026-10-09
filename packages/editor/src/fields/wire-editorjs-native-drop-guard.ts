@@ -3,7 +3,7 @@ import {
   PALETTE_DRAG_MIME,
   isPaletteDragSessionActive,
 } from '../design/field-palette.js';
-import { SOURCE_PATH_DRAG_MIME } from '../ui/mapping-drag-drop.js';
+import { SOURCE_PATH_DRAG_MIME, SOURCE_PATH_META_MIME } from '../ui/mapping-drag-drop.js';
 import { getRegistryFromNode } from '../registry/registry-context.js';
 import { remapperMovedSubtreeToSection } from './cross-section-reposition.js';
 import {
@@ -83,7 +83,8 @@ export function isDocEngineCustomDrag(dataTransfer: any) {
     dataTransferHasType(dataTransfer, INTERNAL_DRAG_MIME) ||
     dataTransferHasType(dataTransfer, PALETTE_DRAG_MIME) ||
     dataTransferHasType(dataTransfer, PALETTE_BLOCK_MIME) ||
-    dataTransferHasType(dataTransfer, SOURCE_PATH_DRAG_MIME)
+    dataTransferHasType(dataTransfer, SOURCE_PATH_DRAG_MIME) ||
+    dataTransferHasType(dataTransfer, SOURCE_PATH_META_MIME)
   );
 }
 

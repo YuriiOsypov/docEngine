@@ -1,5 +1,6 @@
 import { getFieldTypes } from '../fields/handlers/index.js';
 import { getPaletteIcon } from '../ui/palette-icons.js';
+import { mountDatabaseSourceTree } from '../ui/source-schema-tree.js';
 
 let paletteDragActive = false;
 
@@ -46,14 +47,22 @@ export function parsePaletteDrag(dataTransfer: any) {
 
 /**
  * @param {(item: { kind: string, type: string, label: string }) => void} onAddItem
- * @param {{ layout?: 'horizontal' | 'vertical' }} [options]
+ * @param {{
+ *   layout?: 'horizontal' | 'vertical';
+ *   excludeTypes?: string[];
+ *   getSourceSample?: () => unknown;
+ *   onSourceSampleChange?: (sample: unknown) => void;
+ * }} [options]
  */
-export function createFieldPalette(onAddItem: any,options: any = {}) {
+export function createFieldPalette(onAddItem: any, options: any = {}) {
   const layout = options.layout ?? 'horizontal';
   const excludeTypes = new Set(options.excludeTypes ?? []);
   const fieldItems = getFieldTypes().filter((item: any) => !excludeTypes.has(item.type));
   const bar = document.createElement('div');
   bar.className = layout === 'vertical' ? 'field-palette field-palette--vertical' : 'field-palette';
+
+  /** @type {{ refresh: () => void } | null} */
+  let databaseTree: { refresh: () => void } | null = null;
 
   if (layout === 'vertical') {
     const header = document.createElement('div');
@@ -63,6 +72,35 @@ export function createFieldPalette(onAddItem: any,options: any = {}) {
     headerTitle.textContent = 'Source';
     header.appendChild(headerTitle);
     bar.appendChild(header);
+
+    const tabs = document.createElement('div');
+    tabs.className = 'field-palette__tabs';
+    tabs.setAttribute('role', 'tablist');
+
+    const fieldsTab = document.createElement('button');
+    fieldsTab.type = 'button';
+    fieldsTab.className = 'field-palette__tab field-palette__tab--active';
+    fieldsTab.setAttribute('role', 'tab');
+    fieldsTab.setAttribute('aria-selected', 'true');
+    fieldsTab.dataset.tab = 'fields';
+    fieldsTab.textContent = 'Fields';
+
+    const databaseTab = document.createElement('button');
+    databaseTab.type = 'button';
+    databaseTab.className = 'field-palette__tab';
+    databaseTab.setAttribute('role', 'tab');
+    databaseTab.setAttribute('aria-selected', 'false');
+    databaseTab.dataset.tab = 'database';
+    databaseTab.textContent = 'Database';
+
+    tabs.appendChild(fieldsTab);
+    tabs.appendChild(databaseTab);
+    bar.appendChild(tabs);
+
+    const fieldsPane = document.createElement('div');
+    fieldsPane.className = 'field-palette__pane field-palette__pane--fields';
+    fieldsPane.dataset.pane = 'fields';
+    fieldsPane.setAttribute('role', 'tabpanel');
 
     const body = document.createElement('div');
     body.className = 'field-palette__body';
@@ -90,7 +128,7 @@ export function createFieldPalette(onAddItem: any,options: any = {}) {
       fieldsGroup.appendChild(createPaletteItem(item, onAddItem, { draggable: true }));
     }
     body.appendChild(fieldsGroup);
-    bar.appendChild(body);
+    fieldsPane.appendChild(body);
 
     const footer = document.createElement('div');
     footer.className = 'field-palette__footer';
@@ -98,7 +136,40 @@ export function createFieldPalette(onAddItem: any,options: any = {}) {
     hint.className = 'field-palette__hint';
     hint.textContent = 'Drag into the editor or click to insert at caret.';
     footer.appendChild(hint);
-    bar.appendChild(footer);
+    fieldsPane.appendChild(footer);
+
+    const databasePane = document.createElement('div');
+    databasePane.className = 'field-palette__pane field-palette__pane--database';
+    databasePane.dataset.pane = 'database';
+    databasePane.setAttribute('role', 'tabpanel');
+    databasePane.hidden = true;
+
+    const databaseHost = document.createElement('div');
+    databaseHost.className = 'field-palette__database';
+    databasePane.appendChild(databaseHost);
+
+    bar.appendChild(fieldsPane);
+    bar.appendChild(databasePane);
+
+    function setActiveTab(tab: 'fields' | 'database') {
+      const isFields = tab === 'fields';
+      fieldsTab.classList.toggle('field-palette__tab--active', isFields);
+      databaseTab.classList.toggle('field-palette__tab--active', !isFields);
+      fieldsTab.setAttribute('aria-selected', isFields ? 'true' : 'false');
+      databaseTab.setAttribute('aria-selected', isFields ? 'false' : 'true');
+      fieldsPane.hidden = !isFields;
+      databasePane.hidden = isFields;
+      if (!isFields) databaseTree?.refresh();
+    }
+
+    fieldsTab.addEventListener('click', () => setActiveTab('fields'));
+    databaseTab.addEventListener('click', () => setActiveTab('database'));
+
+    databaseTree = mountDatabaseSourceTree(databaseHost, {
+      getSample: () => options.getSourceSample?.() ?? null,
+      onSampleChange: (sample: unknown) => options.onSourceSampleChange?.(sample),
+      emptyMessage: 'No source sample available. Upload JSON or open Field Mapping.',
+    });
   } else {
     const title = document.createElement('span');
     title.className = 'field-palette__title';
@@ -122,10 +193,15 @@ export function createFieldPalette(onAddItem: any,options: any = {}) {
     bar.appendChild(hint);
   }
 
-  return { element: bar };
+  return {
+    element: bar,
+    refreshDatabase() {
+      databaseTree?.refresh();
+    },
+  };
 }
 
-function createPaletteItem(item: any,onAddItem: any,{ draggable = false }: any = {}) {
+function createPaletteItem(item: any, onAddItem: any, { draggable = false }: any = {}) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'field-palette__item';

@@ -3,6 +3,7 @@ import { resolvePdfSectionHeaderStyle, resolvePdfTextStyle } from './style-mappe
 import { buildPdfDocumentDefinition } from './document-pdf-definition-factory.js';
 import { buildRepeatableSectionPageHeader } from './repeatable-section-header.js';
 import { previewDomToPdfContent } from './preview-dom-to-pdf.js';
+import { estimateContentWidthPt } from './repeatable-table-pagination.js';
 import type { buildFontRegistry } from './fonts-registry.js';
 
 type FontRegistry = ReturnType<typeof buildFontRegistry>;
@@ -47,6 +48,7 @@ export function createRenderDocumentToPdfDefinitionFromPreview(
       baseFontSize: Number(bodyStyle.fontSize),
       sectionHeaderStyle: { ...sectionHeaderStyle, font: defaultFont },
       imageMap: options.imageMap,
+      contentWidthPt: estimateContentWidthPt(pageSetup),
     });
 
     return buildPdfDocumentDefinition(

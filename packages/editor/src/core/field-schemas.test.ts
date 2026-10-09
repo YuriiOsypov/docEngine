@@ -169,6 +169,46 @@ describe('syncTableColumnKeyChanges', () => {
     assert.equal(result.blocks[0].data.fieldValues[newCellId], 'normal');
     assert.equal(result.blocks[0].data.fieldValues[oldCellId], undefined);
   });
+
+  it('clears stale Column N placeholder values when renaming to a field name', () => {
+    const tableId = 'list_table';
+    const oldColumns = [
+      { key: 'column_1', label: 'Column 1', name: 'Column 1' },
+      { key: 'column_2', label: 'Column 2', name: 'Column 2' },
+    ];
+    const newColumns = [
+      { key: 'name', label: 'name', name: 'name' },
+      { key: 'facility', label: 'facility', name: 'facility' },
+    ];
+    const oldCellId = cellFieldId(tableId, 'row1', 'column_1');
+    const newCellId = cellFieldId(tableId, 'row1', 'name');
+    const fieldSchemas = {
+      [tableId]: { type: 'table', label: 'list', name: 'list', columns: newColumns },
+      [oldCellId]: { type: 'text', label: 'Column 1' },
+    };
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          fieldValues: {
+            [oldCellId]: 'Column 1',
+          },
+        },
+      },
+    ];
+
+    const result = syncTableColumnKeyChanges(
+      tableId,
+      oldColumns,
+      newColumns,
+      fieldSchemas,
+      blocks,
+    );
+
+    assert.equal(result.fieldSchemas[newCellId]?.label, 'name');
+    assert.equal(result.fieldSchemas[newCellId]?.name, 'name');
+    assert.equal(result.blocks[0].data.fieldValues[newCellId], '');
+  });
 });
 
 describe('ensureCellSchemasForRows', () => {

@@ -6,7 +6,7 @@ import {
 } from './table-field.js';
 import { renderRepeaterFieldPreview } from './repeater-field.js';
 import { repeaterHasContent } from '../core/repeater-io.js';
-import { collectAllValues, enrichComputedValues } from '../core/document-io.js';
+import { applySectionInstanceToBlocks, collectAllValues, enrichComputedValues } from '../core/document-io.js';
 import {
   applyDocumentBodyTextStyle,
   applyFieldHighlightCssVars,
@@ -24,6 +24,10 @@ import {
 } from './inline-fields.js';
 import { isSchemaRequired } from '../core/field-schemas.js';
 import { evaluateSectionVisibility } from '@docengine/engine';
+import {
+  findRepeatableSectionBlock,
+  resolveRepeatablePagePlan,
+} from '../core/field-io/sectioned-document-io.js';
 
 function resolveFieldValue(fieldId: any, fieldValues: any, fieldSchemas: any, blocks: any = []) {
   const schema = fieldSchemas?.[fieldId];
@@ -545,7 +549,11 @@ function renderPreviewTemplateBlock(blockData: any, fieldValues: any, fieldSchem
   if (blockData.fieldType === 'text') {
     if (value && !isFieldEmpty(value, { htmlEditor: !!schema?.htmlEditor })) {
       if (schema?.htmlEditor) {
-        appendHtmlToFragment(line, String(value));
+        // Same chrome as inline HTML fields so lists/align match fill + Preview.
+        const htmlHost = document.createElement('span');
+        htmlHost.className = 'field-token field-token--html field-token--preview';
+        appendHtmlToFragment(htmlHost, String(value));
+        line.appendChild(htmlHost);
       } else {
         line.appendChild(textToFragment(String(value)));
       }
@@ -569,6 +577,96 @@ function renderPreviewTemplateBlock(blockData: any, fieldValues: any, fieldSchem
 
   wrap.appendChild(line);
   return wrap;
+}
+
+function resolvePreviewRepeatPlan(doc: any) {
+  if (doc?.repeatablePagePlan?.instances?.length > 1) {
+    return doc.repeatablePagePlan;
+  }
+  const blocks = doc?.blocks ?? [];
+  const fieldSchemas = doc?.fieldSchemas ?? {};
+  const flatValues = collectAllValues(blocks);
+  // Prefer attached instances; fall back to full loaded sections shape.
+  const loaded =
+    doc?.repeatableSectionInstances ??
+    doc?.loadedDocumentSections ??
+    doc?.sections ??
+    null;
+  return resolveRepeatablePagePlan(blocks, fieldSchemas, flatValues, loaded);
+}
+
+/**
+ * Render one documentSection block into the preview root (optional per-instance values).
+ * @param {{ showTitle?: boolean; borderTop?: boolean; borderBottom?: boolean; eachRowOnNewPage?: boolean }} [chrome]
+ *        Overrides for repeated `_source` instances (title / borders per row).
+ */
+function appendPreviewSection(
+  root: HTMLElement,
+  block: any,
+  values: any,
+  fieldSchemas: any,
+  previewContext: any,
+  textStyle: any,
+  hideEmpty: boolean,
+  lastTableRef: { current: any },
+  chrome: any = {},
+) {
+  const data = block.data ?? {};
+  if (!evaluateSectionVisibility(data.visibility, values, fieldSchemas)) return;
+
+  const sectionLabel = String(data.label ?? '').trim();
+  const showTitle =
+    chrome.showTitle !== undefined
+      ? !!chrome.showTitle && !!sectionLabel
+      : !!sectionLabel && !data.hideTitleInPreview;
+  const borderTop = chrome.borderTop !== undefined ? !!chrome.borderTop : !!data.borderTop;
+  const borderBottom =
+    chrome.borderBottom !== undefined ? !!chrome.borderBottom : !!data.borderBottom;
+  const eachRowOnNewPage = !!chrome.eachRowOnNewPage;
+  const segments = hideEmpty
+    ? filterSegmentsForPreview(data.segments, values, fieldSchemas)
+    : (data.segments ?? []);
+
+  let bodyEl = null;
+  if (segments.length) {
+    bodyEl = document.createElement('div');
+    bodyEl.className = 'preview-document__section document-section__body';
+    applyDocumentBodyTextStyle(bodyEl, textStyle);
+    bodyEl.appendChild(
+      renderSegmentsToDom(segments, values, {
+        ...previewContext,
+        lastTableSegForColumns: lastTableRef.current,
+        onLastTableSegForColumns: (seg: any) => {
+          lastTableRef.current = seg;
+        },
+      }),
+    );
+    if (hideEmpty && !bodyEl.textContent?.trim() && !bodyEl.querySelector('img')) {
+      bodyEl = null;
+    }
+  }
+
+  if (!showTitle && !bodyEl) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'preview-document__section-wrap';
+  if (data.repeatable) wrap.dataset.repeatable = 'true';
+  if (borderTop) wrap.classList.add('document-section--border-top');
+  if (borderBottom) wrap.classList.add('document-section--border-bottom');
+  if (eachRowOnNewPage) wrap.classList.add('preview-document__section-wrap--new-page');
+
+  if (showTitle) {
+    const header = document.createElement('div');
+    header.className = 'document-section__header';
+    const text = document.createElement('span');
+    text.className = 'document-section__label-text';
+    text.textContent = sectionLabel;
+    header.appendChild(text);
+    wrap.appendChild(header);
+  }
+
+  if (bodyEl) wrap.appendChild(bodyEl);
+  root.appendChild(wrap);
 }
 
 export function renderDocumentPreview(doc: any, options: any = {}) {
@@ -602,58 +700,106 @@ export function renderDocumentPreview(doc: any, options: any = {}) {
 
   // Carry the last table across consecutive sections so a Totals "2 columns"
   // block in the next section can inherit that table's right-column split.
-  let lastTableSegForColumns: any = null;
+  const lastTableRef = { current: null as any };
+  const repeatPlan = resolvePreviewRepeatPlan(doc);
+  const pageHeaderSection = findRepeatableSectionBlock(blocks);
+  // Separate "Show on each page" section (PDF page header) vs `_source` expand target.
+  const pageHeaderIsSeparate =
+    !!pageHeaderSection &&
+    !!repeatPlan &&
+    repeatPlan.instances?.length > 1 &&
+    pageHeaderSection.index !== repeatPlan.repeatableBlockIndex;
+  const expandEachRowOnNewPage =
+    pageHeaderIsSeparate &&
+    !!blocks[repeatPlan.repeatableBlockIndex]?.data?.eachRowOnNewPage;
 
-  for (const block of blocks) {
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+    const block = blocks[blockIndex];
     const data = block.data ?? {};
 
     if (block.type === 'documentSection') {
-      if (!evaluateSectionVisibility(data.visibility, values, fieldSchemas)) continue;
-      const sectionLabel = String(data.label ?? '').trim();
-      const showTitle = !!sectionLabel && !data.hideTitleInPreview;
-      const segments = hideEmpty
-        ? filterSegmentsForPreview(data.segments, values, fieldSchemas)
-        : (data.segments ?? []);
+      // Page-header section is re-emitted before every row when rows are paginated,
+      // matching PDF page-header behavior — skip the single standalone render.
+      if (pageHeaderIsSeparate && expandEachRowOnNewPage && blockIndex === pageHeaderSection.index) {
+        continue;
+      }
 
-      let bodyEl = null;
-      if (segments.length) {
-        bodyEl = document.createElement('div');
-        bodyEl.className = 'preview-document__section document-section__body';
-        applyDocumentBodyTextStyle(bodyEl, textStyle);
-        bodyEl.appendChild(
-          renderSegmentsToDom(segments, values, {
-            ...previewContext,
-            lastTableSegForColumns,
-            onLastTableSegForColumns: (seg: any) => {
-              lastTableSegForColumns = seg;
+      const isRepeatTarget =
+        repeatPlan &&
+        repeatPlan.instances?.length > 1 &&
+        blockIndex === repeatPlan.repeatableBlockIndex;
+
+      if (isRepeatTarget) {
+        const instanceCount = repeatPlan.instances.length;
+        const baseData = block.data ?? {};
+        const titleVisible =
+          !!String(baseData.label ?? '').trim() && !baseData.hideTitleInPreview;
+        for (let i = 0; i < instanceCount; i += 1) {
+          const instance = repeatPlan.instances[i];
+          const applied = applySectionInstanceToBlocks(
+            blocks,
+            fieldSchemas,
+            blockIndex,
+            instance,
+          );
+          const instanceBlock = applied.blocks[blockIndex] ?? block;
+          const instanceValues = collectAllValues(applied.blocks);
+          enrichComputedValues(instanceValues, applied.fieldSchemas ?? fieldSchemas, applied.blocks);
+          const eachRowOnNewPage = !!baseData.eachRowOnNewPage;
+          const titleOnEveryInstance = !!baseData.repeatable || eachRowOnNewPage;
+
+          if (pageHeaderIsSeparate && (eachRowOnNewPage || i === 0)) {
+            appendPreviewSection(
+              root,
+              pageHeaderSection.block,
+              values,
+              fieldSchemas,
+              previewContext,
+              textStyle,
+              hideEmpty,
+              lastTableRef,
+              {
+                eachRowOnNewPage: eachRowOnNewPage && i > 0,
+              },
+            );
+          }
+
+          appendPreviewSection(
+            root,
+            instanceBlock,
+            instanceValues,
+            applied.fieldSchemas ?? fieldSchemas,
+            {
+              ...previewContext,
+              fieldSchemas: applied.fieldSchemas ?? fieldSchemas,
+              blocks: applied.blocks,
             },
-          }),
-        );
-        if (hideEmpty && !bodyEl.textContent?.trim() && !bodyEl.querySelector('img')) {
-          bodyEl = null;
+            textStyle,
+            hideEmpty,
+            lastTableRef,
+            {
+              showTitle: titleVisible && (titleOnEveryInstance || i === 0),
+              borderTop: !!baseData.borderTop,
+              borderBottom: !!baseData.borderBottom,
+              // Header already carries the new-page marker when separate.
+              eachRowOnNewPage:
+                eachRowOnNewPage && i > 0 && !pageHeaderIsSeparate,
+            },
+          );
         }
+        continue;
       }
 
-      if (!showTitle && !bodyEl) continue;
-
-      const wrap = document.createElement('div');
-      wrap.className = 'preview-document__section-wrap';
-      if (data.repeatable) wrap.dataset.repeatable = 'true';
-      if (data.borderTop) wrap.classList.add('document-section--border-top');
-      if (data.borderBottom) wrap.classList.add('document-section--border-bottom');
-
-      if (showTitle) {
-        const header = document.createElement('div');
-        header.className = 'document-section__header';
-        const text = document.createElement('span');
-        text.className = 'document-section__label-text';
-        text.textContent = sectionLabel;
-        header.appendChild(text);
-        wrap.appendChild(header);
-      }
-
-      if (bodyEl) wrap.appendChild(bodyEl);
-      root.appendChild(wrap);
+      appendPreviewSection(
+        root,
+        block,
+        values,
+        fieldSchemas,
+        previewContext,
+        textStyle,
+        hideEmpty,
+        lastTableRef,
+      );
       continue;
     }
 
