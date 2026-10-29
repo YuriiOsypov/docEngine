@@ -5,20 +5,16 @@
 #
 # ─── ONE-TIME SETUP ────────────────────────────────────────────────────────────
 #
-# Option A — OIDC Trusted Publishing (recommended, no long-lived secrets):
-# 1. https://www.npmjs.com/package/n8n-nodes-docengine → Settings → Trusted Publishers
-# 2. Add GitHub Actions publisher:
-#      Repository owner: YuriiOsypov
-#      Repository name:  docEngine
-#      Workflow name:    publish.yml
-#      Environment:      (leave blank)
-# 3. Do NOT set NPM_TOKEN / NODE_AUTH_TOKEN in this repo.
+# Option A — OIDC Trusted Publishing (recommended):
+#   npm trust github n8n-nodes-docengine \
+#     --repo YuriiOsypov/docEngine --file publish.yml --allow-publish -y
+#   Or UI: package Settings → Trusted Publishers → GitHub Actions
+#     owner: YuriiOsypov  repo: docEngine  workflow: publish.yml
+#     (must allow npm publish, not only stage publish)
 #
 # Option B — GitHub Actions secret NPM_TOKEN (granular automation token).
 #
-# Release (from monorepo root):
-#   npm run release -w n8n-nodes-docengine
-#   npm run release -w n8n-nodes-docengine -- 0.0.118
+# Release: npm run release -w n8n-nodes-docengine
 
 name: Publish
 
@@ -33,7 +29,6 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      # Required to mint an OIDC token for npm provenance + Trusted Publishing.
       id-token: write
       contents: read
 
@@ -44,15 +39,20 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          # Trusted Publishing needs Node >= 22.14 and npm >= 11.5.1
+          node-version: '24'
           cache: 'npm'
-          # Do NOT set registry-url here. setup-node would write a placeholder
-          # NODE_AUTH_TOKEN that makes `npm publish` return 404 and blocks OIDC.
+          # Do NOT set registry-url — placeholder NODE_AUTH_TOKEN breaks OIDC.
+
+      - name: Ensure npm supports Trusted Publishing
+        run: |
+          npm install -g npm@latest
+          node -v
+          npm -v
 
       - name: Install dependencies
         run: |
           test -f package-lock.json
-          # Skip prepare/tsc on workspaces — the n8n bundle resolves DocEngine from source.
           npm install --no-fund --no-audit --ignore-scripts
           npm rebuild esbuild
 
@@ -70,11 +70,12 @@ jobs:
           npm run scan:bundle -w n8n-nodes-docengine
 
       - name: Publish to npm with provenance
+        working-directory: apps/n8n-nodes-docengine
         run: |
-          # Clear any leftover auth that would override Trusted Publishing / OIDC.
+          # Clear token auth so OIDC Trusted Publishing can run.
           unset NODE_AUTH_TOKEN
-          unset NPM_CONFIG_USERCONFIG
-          rm -f "$HOME/.npmrc"
+          npm config delete //registry.npmjs.org/:_authToken || true
+          rm -f "$HOME/.npmrc" .npmrc || true
 
           if [ -n "${NPM_TOKEN:-}" ]; then
             echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
@@ -82,8 +83,11 @@ jobs:
             echo "Using NPM_TOKEN secret for publish auth"
           else
             echo "Using npm Trusted Publishing (OIDC) — no NPM_TOKEN set"
+            echo "GITHUB_ACTIONS=${GITHUB_ACTIONS:-}"
+            echo "OIDC URL set: $([ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && echo yes || echo no)"
           fi
 
-          npm publish -w n8n-nodes-docengine --access public --provenance
+          # Publish from package dir (not -w) so OIDC auth applies cleanly.
+          npm publish --access public --provenance
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
