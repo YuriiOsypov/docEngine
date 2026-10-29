@@ -223,6 +223,13 @@ export function buildFullDocumentExport(template: TemplateExport, rawValues: unk
 
 type RenderOptions = BuildOptions & { outputFormat?: 'html' | 'pdf' };
 
+/** Match Node DocEngine defaults: only DejaVu is embedded in the n8n VFS bundle. */
+const N8N_PDF_FONTS = { preset: 'dejavu' } as const;
+
+function asBinary(data: Buffer | Uint8Array): Buffer {
+  return Buffer.isBuffer(data) ? data : Buffer.from(data);
+}
+
 export async function renderDocument(template: TemplateExport, rawValues: unknown, options: RenderOptions = {}) {
   const hideEmptyValues = options.hideEmptyValues === true;
   const outputFormat = options.outputFormat === 'pdf' ? 'pdf' : 'html';
@@ -241,8 +248,12 @@ export async function renderDocument(template: TemplateExport, rawValues: unknow
       pageSetup,
     };
     if (outputFormat === 'pdf') {
-      const data = await generateDocumentPdf(doc, { pageSetup, hideEmptyValues });
-      return { mimeType: 'application/pdf', fileExtension: 'pdf', data };
+      const data = await generateDocumentPdf(doc, {
+        pageSetup,
+        hideEmptyValues,
+        fonts: N8N_PDF_FONTS,
+      });
+      return { mimeType: 'application/pdf', fileExtension: 'pdf', data: asBinary(data) };
     }
     const html = await generateDocumentHtml(doc, { pageSetup, fullDocument: true, hideEmptyValues });
     return {
@@ -259,8 +270,9 @@ export async function renderDocument(template: TemplateExport, rawValues: unknow
       template,
       document,
       hideEmptyValues,
+      fonts: N8N_PDF_FONTS,
     });
-    return { mimeType: 'application/pdf', fileExtension: 'pdf', data };
+    return { mimeType: 'application/pdf', fileExtension: 'pdf', data: asBinary(data) };
   }
 
   const html = await generateHtmlFromTemplate({

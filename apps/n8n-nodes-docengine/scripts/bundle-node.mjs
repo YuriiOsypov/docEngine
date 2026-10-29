@@ -1,18 +1,39 @@
 import * as esbuild from 'esbuild';
-import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const fontsShim = join(root, 'scripts/n8n-fonts-shim.mjs');
+const canvasStub = join(root, 'scripts/canvas-stub.cjs');
 
-/** CJS bundles have no import.meta.url; createRequire() accepts __filename. */
-const cjsImportMetaUrlPlugin = {
-  name: 'cjs-import-meta-url',
+/**
+ * Force the browser/VFS PDF path for the n8n community bundle.
+ * Node PdfPrinter + dejavu-fonts-ttf + fontkit (data.trie) cannot ship
+ * as a zero-dep, no-filesystem verified community node.
+ */
+const browserPdfPlugin = {
+  name: 'n8n-browser-pdf',
   setup(build) {
-    build.onLoad({ filter: /[\\/]pdf-renderer[\\/]dist[\\/]fonts\.js$/ }, async (args) => ({
-      contents: (await readFile(args.path, 'utf8')).replaceAll('import.meta.url', '__filename'),
-      loader: 'js',
-    }));
+    const rewrite = (fromFile, toFile) => {
+      build.onResolve({ filter: new RegExp(`^\\./${fromFile.replace(/\./g, '\\.')}$`) }, (args) => {
+        const importer = args.importer.replace(/\\/g, '/');
+        if (!importer.includes('/pdf-renderer/')) return null;
+        return { path: join(dirname(args.importer), toFile) };
+      });
+    };
+
+    rewrite('generate-pdf.js', 'generate-pdf-browser.js');
+    rewrite('document-pdf-definition-node.js', 'document-pdf-definition-browser.js');
+    rewrite('document-pdf-definition-preview-node.js', 'document-pdf-definition-preview-browser.js');
+    // Disk fonts use createRequire(import.meta.url) + dejavu-fonts-ttf — invalid in CJS bundle.
+    build.onResolve({ filter: /^\.\/fonts\.js$/ }, (args) => {
+      const importer = args.importer.replace(/\\/g, '/');
+      if (!importer.includes('/pdf-renderer/')) return null;
+      return { path: fontsShim };
+    });
+
+    // linkedom optionally requires native `canvas`; stub it so the bundle has no npm deps.
+    build.onResolve({ filter: /^canvas$/ }, () => ({ path: canvasStub }));
   },
 };
 
@@ -26,13 +47,15 @@ await esbuild.build({
   target: 'node20',
   sourcemap: false,
   logLevel: 'info',
-  plugins: [cjsImportMetaUrlPlugin],
-  // n8n loads community nodes with require(); keep host + native/fs packages external.
-  external: ['n8n-workflow', 'pdfmake', 'dejavu-fonts-ttf', 'linkedom'],
+  plugins: [browserPdfPlugin],
+  // Verified community nodes: only n8n-workflow may stay external.
+  external: ['n8n-workflow'],
+  // Third-party console.* trips n8n's no-console scanner once bundled.
+  drop: ['console'],
   define: {
     'import.meta.env.VITE_UPLOAD_BASE_URL': '""',
     'import.meta.env.VITE_IMAGE_UPLOAD_STUB': 'true',
   },
 });
 
-console.log('bundled DocEngine.node.cjs');
+console.log('bundled DocEngine.node.cjs (browser/VFS PDF, zero runtime npm deps)');

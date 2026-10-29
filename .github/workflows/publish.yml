@@ -1,0 +1,87 @@
+# Publishes n8n-nodes-docengine to npm with a provenance attestation.
+#
+# Required for n8n Creator Portal verification (from May 1 2026).
+# Adapted from https://github.com/n8n-io/n8n-nodes-starter for this monorepo.
+#
+# ─── ONE-TIME SETUP ────────────────────────────────────────────────────────────
+#
+# Option A — OIDC Trusted Publishing (recommended, no long-lived secrets):
+# 1. Log in to npmjs.com → package n8n-nodes-docengine → Settings
+# 2. Publish access → Trusted Publishers → Add a publisher → GitHub Actions
+# 3. Fill in:
+#      Repository owner: YuriiOsypov
+#      Repository name:  docEngine
+#      Workflow name:    publish.yml
+#      Environment:      (leave blank)
+#
+# Option B — npm Automation Token (fallback):
+# 1. npmjs.com → Access Tokens → Granular Access Token (read+write for this package)
+# 2. GitHub → Settings → Secrets and variables → Actions → NPM_TOKEN
+#
+# ─── RELEASE ───────────────────────────────────────────────────────────────────
+#
+# From repo root (or apps/n8n-nodes-docengine):
+#
+#   npm run release -w n8n-nodes-docengine
+#   # or: node apps/n8n-nodes-docengine/scripts/release.mjs [patch|minor|major|x.y.z]
+#
+# That bumps version, commits, tags n8n-nodes-docengine-vX.Y.Z, and pushes.
+# This workflow then builds, tests, and publishes with --provenance.
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'n8n-nodes-docengine-v*'
+
+jobs:
+  publish:
+    name: Publish n8n-nodes-docengine
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build DocEngine packages used by the node
+        run: |
+          npm run build -w @docengine/engine
+          npm run build -w @docengine/field-date
+          npm run build -w @docengine/editor
+          npm run build -w @docengine/pdf-renderer
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#n8n-nodes-docengine-v}"
+          PKG="$(node -p "require('./apps/n8n-nodes-docengine/package.json').version")"
+          echo "tag=$TAG package=$PKG"
+          test "$TAG" = "$PKG"
+
+      - name: Test and scan bundle
+        run: |
+          npm test -w n8n-nodes-docengine
+          npm run scan:bundle -w n8n-nodes-docengine
+
+      - name: Publish to npm with provenance
+        run: |
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+          fi
+          npm publish -w n8n-nodes-docengine --access public --provenance
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

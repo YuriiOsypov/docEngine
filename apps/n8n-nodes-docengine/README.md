@@ -2,9 +2,9 @@
 
 n8n community node: bind JSON values (or a source **payload** + template `fieldMapping`) to a DocEngine template and output **HTML** or **PDF**.
 
-## Install
+The published package has **zero runtime `dependencies`**. PDF/HTML engines (`pdfmake`, `linkedom`, DocEngine packages) and DejaVu fonts are bundled into `dist/nodes/DocEngine/DocEngine.node.cjs` for n8n community-node verification.
 
-### n8n (self-hosted community node)
+## Install
 
 In n8n: **Settings → Community nodes → Install** and enter:
 
@@ -12,13 +12,7 @@ In n8n: **Settings → Community nodes → Install** and enter:
 n8n-nodes-docengine
 ```
 
-Or from the n8n nodes directory:
-
-```bash
-npm install n8n-nodes-docengine
-```
-
-Unverified community nodes are available on self-hosted n8n only. See [n8n community node install docs](https://docs.n8n.io/integrations/community-nodes/installation-and-management/).
+After n8n verifies the package, it also appears in the editor nodes panel (verified badge) and on [n8n.io/integrations](https://n8n.io/integrations). See [n8n community node install docs](https://docs.n8n.io/integrations/community-nodes/installation-and-management/).
 
 ### From this monorepo
 
@@ -26,9 +20,37 @@ Unverified community nodes are available on self-hosted n8n only. See [n8n commu
 cd apps/n8n-nodes-docengine
 npm install
 npm run build
+npm test
+npm run scan:bundle
 ```
 
 Link or copy into your n8n `custom` / community nodes folder per [n8n docs](https://docs.n8n.io/integrations/creating-nodes/deploy/install-community-nodes/).
+
+## Publish (npm provenance / Creator Portal)
+
+Publishing must go through GitHub Actions with provenance — local `npm publish` is not accepted for verification.
+
+### One-time npm Trusted Publisher
+
+1. [npmjs.com/package/n8n-nodes-docengine](https://www.npmjs.com/package/n8n-nodes-docengine) → **Settings** → **Trusted Publishers** → **GitHub Actions**
+2. Repository owner: `YuriiOsypov`  
+   Repository name: `docEngine`  
+   Workflow name: `publish.yml`  
+   Environment: leave blank  
+3. Or set repo secret `NPM_TOKEN` (granular automation token) as a fallback
+
+### Release a version
+
+```bash
+# from monorepo root — bumps patch by default
+npm run release -w n8n-nodes-docengine
+# or: npm run release -w n8n-nodes-docengine -- minor
+# or: npm run release -w n8n-nodes-docengine -- 0.0.110
+```
+
+That commits, tags `n8n-nodes-docengine-vX.Y.Z`, pushes, and triggers [`.github/workflows/publish.yml`](../../.github/workflows/publish.yml) to build, test, scan, and `npm publish --provenance`.
+
+Then re-submit the new version in the [n8n Creator Portal](https://creators.n8n.io/).
 
 ## Salesforce / custom app → PDF
 

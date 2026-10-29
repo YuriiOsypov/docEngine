@@ -10,6 +10,7 @@ import {
   buildFullDocumentExport,
   getByPath,
   isFilledDocumentSnapshot,
+  renderDocument,
   resolveInputValues,
   resolveTemplateFromItem,
 } from './docengine-utils.js';
@@ -204,11 +205,18 @@ test('resolveInputValues does not fall back to the incoming document for a missi
   );
 });
 
-test('CJS bundle exports DocEngine and resolves PDF fonts', () => {
+test('CJS bundle exports DocEngine and resolves PDF fonts', async () => {
   const require = createRequire(import.meta.url);
   const { DocEngine } = require('./DocEngine.node.cjs');
   assert.equal(typeof DocEngine, 'function');
   const node = new DocEngine();
   assert.equal(node.description.name, 'docEngine');
   assert.equal(node.description.displayName, 'DocEngine');
+
+  const template = JSON.parse(readFileSync(exampleTemplatePath, 'utf8'));
+  const result = await renderDocument(template, { sections: {} }, { outputFormat: 'pdf' });
+  assert.equal(result.mimeType, 'application/pdf');
+  assert.ok(Buffer.isBuffer(result.data));
+  assert.ok(result.data.length > 100);
+  assert.equal(result.data.subarray(0, 4).toString('utf8'), '%PDF');
 });

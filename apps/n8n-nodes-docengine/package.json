@@ -1,13 +1,14 @@
 {
   "name": "n8n-nodes-docengine",
-  "version": "0.0.108",
+  "version": "0.0.109",
   "description": "Generate HTML/PDF documents from editor templates in n8n workflows",
   "type": "module",
   "main": "dist/nodes/DocEngine/DocEngine.node.cjs",
   "files": [
     "dist/nodes/DocEngine/DocEngine.node.cjs",
     "dist/nodes/DocEngine/docengine.svg",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "keywords": [
     "n8n-community-node-package",
@@ -47,19 +48,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs && node scripts/bundle-node.mjs",
     "typecheck": "tsc -p tsconfig.json --pretty false",
-    "prepare": "npm run build",
     "prepublishOnly": "npm test",
-    "test": "npm run build && node --test dist/nodes/DocEngine/docengine-utils.test.js"
+    "test": "npm run build && node --test dist/nodes/DocEngine/docengine-utils.test.js",
+    "scan:bundle": "node scripts/scan-bundle.mjs",
+    "release": "node ./scripts/release.mjs"
   },
-  "dependencies": {
-    "dejavu-fonts-ttf": "^2.37.3",
-    "linkedom": "^0.18.12",
-    "pdfmake": "^0.2.20"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@docengine/engine": "0.0.105",
     "@docengine/pdf-renderer": "0.0.105",
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.25.12",
+    "linkedom": "^0.18.12",
+    "pdfmake": "^0.2.20"
   },
   "peerDependencies": {
     "n8n-workflow": ">=1.0.0"
