@@ -17,9 +17,9 @@ const pkgPath = join(pkgDir, 'package.json');
 const bumpArg = process.argv[2] ?? 'patch';
 
 function run(cmd, args, opts = {}) {
+  // Do not use shell:true — on Windows it mangles args like commit messages with ':' / '()'.
   const result = spawnSync(cmd, args, {
     stdio: 'inherit',
-    shell: process.platform === 'win32',
     ...opts,
   });
   if (result.status !== 0) {
