@@ -130,6 +130,10 @@ function isFieldTokenElement(node: any) {
 
 export function ensureCaretAnchorAfter(node: any) {
   if (!node?.isConnected || !node.parentNode) return null;
+  // Only field tokens need a ZWSP bridge. Calling this after a <br> (Enter)
+  // used to prefix the next line with an invisible anchor and made ArrowRight
+  // look stuck at the start of that line.
+  if (!isFieldTokenElement(node)) return null;
   if (node.classList?.contains('field-token--cell')) return null;
 
   const next = node.nextSibling;
@@ -2323,9 +2327,24 @@ export function focusCaretAtEnd(editable: any) {
 export function focusCaretAfter(node: any) {
   if (!node?.isConnected) return;
   try {
-    const anchor = ensureCaretAnchorAfter(node);
-    if (anchor) {
-      focusCaretAtFieldBridge(anchor);
+    if (isFieldTokenElement(node)) {
+      const anchor = ensureCaretAnchorAfter(node);
+      if (anchor) {
+        focusCaretAtFieldBridge(anchor);
+        return;
+      }
+    }
+
+    // After a line break, land inside the following text so arrow keys can move.
+    const next = node.nextSibling;
+    if (next?.nodeType === Node.TEXT_NODE) {
+      const range = document.createRange();
+      range.setStart(next, 0);
+      range.collapse(true);
+      const sel = window.getSelection();
+      if (!sel) return;
+      sel.removeAllRanges();
+      sel.addRange(range);
       return;
     }
 

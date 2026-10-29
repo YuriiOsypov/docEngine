@@ -1367,22 +1367,58 @@ export function resolvePathForSectionItem(sourcePath: any, payload: any, item: a
 
   const { path, dateFormat } = parseMappingSourcePath(full);
   let relative = String(path || full).trim();
-  if (relative.startsWith('$item.')) {
-    relative = relative.slice('$item.'.length);
-  } else if (relative.startsWith('$item')) {
-    relative = relative.slice('$item'.length).replace(/^\./, '');
+  /** Helix M2O field named `item` vs Salesforce `$item` = current-row alias. */
+  let preferItemM2O = false;
+  if (relative === '$item') {
+    preferItemM2O = true;
+    relative = 'item';
+  } else if (relative.startsWith('$item.')) {
+    preferItemM2O = true;
+    relative = `item.${relative.slice('$item.'.length)}`;
   } else if (relative.startsWith('$')) {
     relative = relative.slice(1);
   }
 
   let value: unknown;
   if (item != null && typeof item === 'object' && !Array.isArray(item)) {
-    value =
-      relative.includes('.') || relative.startsWith('[')
-        ? getPayloadByPath(relative, item)
-        : /** @type {Record<string, unknown>} */ (item)[relative];
-    if (value === undefined && relative) {
-      value = getPayloadByPath(relative, item);
+    const row = /** @type {Record<string, unknown>} */ (item);
+    if (preferItemM2O) {
+      value =
+        relative.includes('.') || relative.startsWith('[')
+          ? getPayloadByPath(relative, row)
+          : row[relative];
+      // Salesforce fallback: `$item.Foo` → row.Foo when no M2O `item` object.
+      if (value === undefined && relative.startsWith('item.')) {
+        const fallback = relative.slice('item.'.length);
+        value =
+          fallback.includes('.') || fallback.startsWith('[')
+            ? getPayloadByPath(fallback, row)
+            : row[fallback];
+      }
+      if (value === undefined && relative === 'item') {
+        value = row;
+      }
+      // Whole `$item` with a related record object → Display Template label when present.
+      if (
+        relative === 'item' &&
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+      ) {
+        const related = value as Record<string, unknown>;
+        const label = related['__helixDisplayLabel'];
+        if (label != null && String(label).trim() !== '') {
+          value = label;
+        }
+      }
+    } else {
+      value =
+        relative.includes('.') || relative.startsWith('[')
+          ? getPayloadByPath(relative, row)
+          : row[relative];
+      if (value === undefined && relative) {
+        value = getPayloadByPath(relative, row);
+      }
     }
   }
 

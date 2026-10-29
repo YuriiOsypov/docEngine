@@ -305,6 +305,83 @@ function stripLeadingOrphanRowSeparatorFromSegment(seg: any) {
   return { ...seg, content: stripped };
 }
 
+/** True when a text segment is only whitespace, newlines, or `<br>` (no real content). */
+function isBlankSpacingTextSegment(seg: any): boolean {
+  if (!seg || seg.type !== 'text') return false;
+  if (seg.html) {
+    const plain = getTextSegmentPlainText(seg).replace(/\u200B/g, '');
+    if (plain.trim()) return false;
+    // Keep non-break HTML (e.g. empty styled spans) only when it has no breaks either.
+    const html = String(seg.html);
+    return /^(?:\s|&nbsp;|<br\s*\/?>)*$/i.test(html.replace(/\u200B/g, ''));
+  }
+  const content = String(seg.content ?? '').replace(/\u200B/g, '');
+  return content.trim() === '';
+}
+
+function trimTrailingBreaksFromTextSegment(seg: any): any {
+  if (!seg || seg.type !== 'text') return seg;
+  if (seg.html) {
+    const trimmed = String(seg.html)
+      .replace(/(?:\s|&nbsp;|<br\s*\/?>)+$/gi, '')
+      .replace(/\n+$/g, '');
+    if (!trimmed.trim()) return null;
+    return { ...seg, html: trimmed };
+  }
+  const trimmed = String(seg.content ?? '').replace(/[^\S\n]*\n+[^\S\n]*$/g, '').replace(/\s+$/g, '');
+  if (!trimmed) return null;
+  return { ...seg, content: trimmed };
+}
+
+/**
+ * Drop blank line / `<br>` padding that sits immediately before a table,
+ * and strip trailing blank spacing at the end of a section (table may be the
+ * next sibling block). Fill editor softens these; HTML/PDF preview does not.
+ */
+export function collapseBlankSpacingBeforeTables(segments: any): any[] {
+  const list = Array.isArray(segments) ? segments : [];
+  const result: any[] = [];
+
+  for (let i = 0; i < list.length; i += 1) {
+    const seg = list[i];
+
+    if (seg?.type === 'columns') {
+      const cols = (seg.columns ?? [[], []]).map((col: any) =>
+        collapseBlankSpacingBeforeTables(col),
+      );
+      const entry: any = { type: 'columns', columns: cols };
+      if (seg.id) entry.id = seg.id;
+      if (seg.widths?.[0] || seg.widths?.[1]) entry.widths = seg.widths;
+      result.push(entry);
+      continue;
+    }
+
+    if (seg?.type === 'table') {
+      trimTrailingBlankSpacingInPlace(result);
+      result.push({ ...seg });
+      continue;
+    }
+
+    result.push(seg);
+  }
+
+  // Section body often ends with Enter-spacing before a following table block.
+  trimTrailingBlankSpacingInPlace(result);
+  return result;
+}
+
+function trimTrailingBlankSpacingInPlace(segments: any[]): void {
+  while (segments.length > 0 && isBlankSpacingTextSegment(segments[segments.length - 1])) {
+    segments.pop();
+  }
+  if (segments.length === 0) return;
+  const last = segments[segments.length - 1];
+  if (last?.type !== 'text') return;
+  const trimmed = trimTrailingBreaksFromTextSegment(last);
+  if (!trimmed) segments.pop();
+  else segments[segments.length - 1] = trimmed;
+}
+
 function cleanupSegments(segments: any) {
   const cleaned = [];
 
@@ -623,9 +700,10 @@ function appendPreviewSection(
   const borderBottom =
     chrome.borderBottom !== undefined ? !!chrome.borderBottom : !!data.borderBottom;
   const eachRowOnNewPage = !!chrome.eachRowOnNewPage;
-  const segments = hideEmpty
+  const rawSegments = hideEmpty
     ? filterSegmentsForPreview(data.segments, values, fieldSchemas)
     : (data.segments ?? []);
+  const segments = collapseBlankSpacingBeforeTables(rawSegments);
 
   let bodyEl = null;
   if (segments.length) {
@@ -718,9 +796,10 @@ export function renderDocumentPreview(doc: any, options: any = {}) {
     const data = block.data ?? {};
 
     if (block.type === 'documentSection') {
-      // Page-header section is re-emitted before every row when rows are paginated,
-      // matching PDF page-header behavior — skip the single standalone render.
-      if (pageHeaderIsSeparate && expandEachRowOnNewPage && blockIndex === pageHeaderSection.index) {
+      // Page-header section is re-emitted before the first `_source` instance (and
+      // before every row when eachRowOnNewPage) — skip the standalone pass so HTML
+      // does not show "Main price" (etc.) twice. PDF already avoids this.
+      if (pageHeaderIsSeparate && blockIndex === pageHeaderSection.index) {
         continue;
       }
 

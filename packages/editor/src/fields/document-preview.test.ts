@@ -12,6 +12,7 @@ const mammologyTemplate = JSON.parse(
 );
 
 let filterSegmentsForPreview: any;
+let collapseBlankSpacingBeforeTables: any;
 let renderDocumentPreview: any;
 
 const mammologySegments = mammologyTemplate.blocks[0].data.segments;
@@ -52,7 +53,42 @@ before(async () => {
 
   const preview = await import('./document-preview.js');
   filterSegmentsForPreview = preview.filterSegmentsForPreview;
+  collapseBlankSpacingBeforeTables = preview.collapseBlankSpacingBeforeTables;
   renderDocumentPreview = preview.renderDocumentPreview;
+});
+
+describe('collapseBlankSpacingBeforeTables', () => {
+  it('removes blank line segments immediately before a table', () => {
+    const collapsed = collapseBlankSpacingBeforeTables([
+      { type: 'text', content: 'Name: Acme\n' },
+      { type: 'text', content: '\n\n\n' },
+      { type: 'text', html: '<br><br>' },
+      { type: 'table', id: 'items', rows: [{ key: 'row1' }] },
+    ]);
+    assert.equal(collapsed.length, 2);
+    assert.equal(collapsed[0].type, 'text');
+    assert.equal(collapsed[0].content, 'Name: Acme');
+    assert.equal(collapsed[1].type, 'table');
+  });
+
+  it('trims trailing breaks from the text segment before a table', () => {
+    const collapsed = collapseBlankSpacingBeforeTables([
+      { type: 'text', content: 'Discount: 20\n\n' },
+      { type: 'table', id: 'items', rows: [{ key: 'row1' }] },
+    ]);
+    assert.equal(collapsed[0].content, 'Discount: 20');
+    assert.equal(collapsed[1].type, 'table');
+  });
+
+  it('strips trailing blank spacing at end of section (table as next block)', () => {
+    const collapsed = collapseBlankSpacingBeforeTables([
+      { type: 'text', content: 'Name: Acme' },
+      { type: 'text', content: '\n\n\n' },
+      { type: 'text', html: '<br><br>' },
+    ]);
+    assert.equal(collapsed.length, 1);
+    assert.equal(collapsed[0].content, 'Name: Acme');
+  });
 });
 
 describe('filterSegmentsForPreview', () => {
@@ -1365,6 +1401,49 @@ describe('renderDocumentPreview', () => {
     assert.equal(root.querySelectorAll('.document-section__header').length, 2);
     assert.equal(wraps[0].classList.contains('preview-document__section-wrap--new-page'), false);
     assert.equal(wraps[1].classList.contains('preview-document__section-wrap--new-page'), true);
+  });
+
+  it('shows a separate Show-on-each-page header once when _source expands without eachRowOnNewPage', () => {
+    const doc = {
+      fieldSchemas: {
+        amount: { type: 'number', name: 'amount', label: 'amount' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'Main price',
+            label: 'Main price',
+            repeatable: true,
+            segments: [{ type: 'text', content: 'Name: Diller' }],
+            fieldValues: {},
+          },
+        },
+        {
+          type: 'documentSection',
+          data: {
+            name: 'items',
+            label: 'Items',
+            hideTitleInPreview: true,
+            eachRowOnNewPage: false,
+            segments: [
+              { type: 'text', content: 'amount: ' },
+              { type: 'field', id: 'amount' },
+            ],
+            fieldValues: { amount: 2 },
+          },
+        },
+      ],
+      repeatableSectionInstances: {
+        items: [{ amount: 2 }, { amount: 5 }],
+      },
+    };
+
+    const root = renderDocumentPreview(doc);
+    const text = root.textContent ?? '';
+    assert.equal([...text.matchAll(/Main price/g)].length, 1, text);
+    assert.equal([...text.matchAll(/Name: Diller/g)].length, 1, text);
+    assert.match(text, /Name: Diller[\s\S]*amount:\s*2[\s\S]*amount:\s*5/);
   });
 
   it('repeats a separate Show-on-each-page header before every eachRowOnNewPage row', () => {

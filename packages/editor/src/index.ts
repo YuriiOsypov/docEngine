@@ -18,6 +18,7 @@ export {
   pruneUnusedFieldSchemas,
   pruneUnusedBlockValues,
   normalizeDocumentValues,
+  stripValuesFromBlocks,
 } from './core/document-io.js';
 
 export {
@@ -210,7 +211,11 @@ export type {
   FormulaFunctionKind,
   FormulaFunctionArity,
 } from './core/computed-formula.js';
-export { renderDocumentPreview, filterSegmentsForPreview } from './fields/document-preview.js';
+export {
+  renderDocumentPreview,
+  filterSegmentsForPreview,
+  collapseBlankSpacingBeforeTables,
+} from './fields/document-preview.js';
 export {
   formatFieldDisplay,
   getFieldDisplayLabel,

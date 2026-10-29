@@ -78,7 +78,11 @@ export {
   repeaterHasContent,
 } from './core/repeater-io.js';
 
-export { filterSegmentsForPreview, renderDocumentPreview } from './fields/document-preview.js';
+export {
+  collapseBlankSpacingBeforeTables,
+  filterSegmentsForPreview,
+  renderDocumentPreview,
+} from './fields/document-preview.js';
 
 export {
   formatFieldDisplay,

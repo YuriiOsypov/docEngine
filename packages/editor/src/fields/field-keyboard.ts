@@ -597,6 +597,16 @@ function handleArrowNavigation(range: any, direction: any, container: any) {
         // Nothing further on this line — let the browser handle (e.g. next block).
         return false;
       }
+      // After a field token, offset 1 is the visible landing spot.
+      // Stray leading ZWSP (e.g. leftover after Enter) is invisible — skip it and
+      // step into the first visible character so ArrowRight is not a no-op.
+      if (!isFieldToken(textNode.previousSibling)) {
+        const enter = caretPositionAfterFieldToken(textNode);
+        const len = textNode.textContent?.length ?? 0;
+        const visibleLen = stripFieldTokenCaretAnchors(textNode.textContent).length;
+        focusCaretInText(textNode, visibleLen > 0 ? Math.min(enter + 1, len) : enter);
+        return true;
+      }
       focusCaretInText(textNode, 1);
       return true;
     }
@@ -638,6 +648,21 @@ function handleArrowNavigation(range: any, direction: any, container: any) {
         return true;
       }
       focusCaretBefore(normalized);
+      return true;
+    }
+
+    // Plain text after a <br> (or other non-field boundary): placing the caret at
+    // the visual start is a no-op vs sitting just before the node, and
+    // preventDefault would freeze ArrowRight at the start of the new line.
+    const prev = skipBridgeNodes(normalized.previousSibling, 'backward', container);
+    if (forward && !isFieldToken(prev)) {
+      if (!hasLeadingCaretAnchor(normalized.textContent)) {
+        return false;
+      }
+      const enter = caretPositionAfterFieldToken(normalized);
+      const len = normalized.textContent?.length ?? 0;
+      const visibleLen = stripFieldTokenCaretAnchors(normalized.textContent).length;
+      focusCaretInText(normalized, visibleLen > 0 ? Math.min(enter + 1, len) : enter);
       return true;
     }
 

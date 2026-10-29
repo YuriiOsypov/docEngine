@@ -5,6 +5,7 @@ import {
   DOCUMENT_TABLE_TEXT_STYLE,
   enrichComputedValues,
   evaluateComputedField,
+  collapseBlankSpacingBeforeTables,
   filterSegmentsForPreview,
   formatFieldDisplay,
   getFieldDisplayLabel,
@@ -278,8 +279,12 @@ function createProseParagraphBuilder(content: any, defaultFont?: any) {
     noteOmittedField() {
       collapseDoubledNewline = true;
     },
-    flush() {
-      const text = pdfTextContent(paragraphParts);
+    flush(options: { trimTrailingBreaks?: boolean } = {}) {
+      let sourceParts = paragraphParts;
+      if (options.trimTrailingBreaks) {
+        sourceParts = stripTrailingNewlinesFromParts(sourceParts);
+      }
+      const text = pdfTextContent(sourceParts);
       if (!text) {
         paragraphParts = [];
         blockStyle = {};
@@ -287,7 +292,7 @@ function createProseParagraphBuilder(content: any, defaultFont?: any) {
         collapseDoubledNewline = false;
         return;
       }
-      const parts = finalizePdfInlineParts(paragraphParts, { font: defaultFont });
+      const parts = finalizePdfInlineParts(sourceParts, { font: defaultFont });
       content.push({ text: parts, margin: [0, 0, 0, 0], ...blockStyle });
       paragraphParts = [];
       blockStyle = {};
@@ -331,6 +336,30 @@ function stripLeadingNewlineFromParts(parts: any[]): any[] {
   return [{ ...first, text: trimmed }, ...parts.slice(1)];
 }
 
+/** Remove all trailing newlines before a block-level node (table / columns). */
+function stripTrailingNewlinesFromParts(parts: any[]): any[] {
+  const next = [...parts];
+  while (next.length > 0) {
+    const last = next[next.length - 1];
+    const text = partTextValue(last);
+    if (!text) {
+      next.pop();
+      continue;
+    }
+    if (!/\n/.test(text)) break;
+    const trimmed = text.replace(/[^\S\n]*\n+[^\S\n]*$/g, '').replace(/[ \t]+$/g, '');
+    if (!trimmed) {
+      next.pop();
+      continue;
+    }
+    if (trimmed === text) break;
+    if (typeof last === 'string') next[next.length - 1] = trimmed;
+    else next[next.length - 1] = { ...last, text: trimmed };
+    break;
+  }
+  return next;
+}
+
 function appendPlainTextToProseParagraph(raw: any, inlineStyle: any, builder: any) {
   const value = String(raw ?? '');
   if (!value) return;
@@ -345,8 +374,9 @@ export function renderSegmentsToPdfProseBlocks(segments: any, ctx: PdfRenderCont
     baseFontSize: Number(ctx.bodyPdfStyle.fontSize) || DEFAULT_BODY_FONT_PT,
     baseFont: documentFont || undefined,
   };
+  const normalizedSegments = collapseBlankSpacingBeforeTables(segments ?? []);
 
-  for (const seg of segments) {
+  for (const seg of normalizedSegments) {
     const segAlign = seg.align;
     const alignmentStyle = segAlign ? { alignment: segAlign } : {};
 
@@ -465,20 +495,20 @@ export function renderSegmentsToPdfProseBlocks(segments: any, ctx: PdfRenderCont
     }
 
     if (seg.type === 'columns') {
-      builder.flush();
+      builder.flush({ trimTrailingBreaks: true });
       const columnBlocks = renderColumnsSegmentPdf(seg, ctx);
       if (columnBlocks) content.push(columnBlocks);
       continue;
     }
 
     if (seg.type === 'table') {
-      builder.flush();
+      builder.flush({ trimTrailingBreaks: true });
       const tableBlock = renderTableSegmentPdf(seg, ctx);
       if (tableBlock) content.push(tableBlock);
     }
   }
 
-  builder.flush();
+  builder.flush({ trimTrailingBreaks: true });
   return content;
 }
 
@@ -1243,8 +1273,9 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
           ctx.fieldSchemas,
         )
         : (data.segments ?? []);
+      const spacingCollapsed = collapseBlankSpacingBeforeTables(filtered);
       const excludeTableIds = consumedMeta?.excludeTableIds ?? new Set();
-      const renderableSegments = filtered.filter(
+      const renderableSegments = spacingCollapsed.filter(
         (seg: any) => !(seg.type === 'table' && seg.id && excludeTableIds.has(String(seg.id))),
       );
       const hasTableWithContent = renderableSegments.some(

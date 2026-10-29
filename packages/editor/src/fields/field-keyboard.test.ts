@@ -12,6 +12,7 @@ let insertElementAfterPreservingCaretBridge: any;
 let getFieldTokensForClipboard: any;
 let normalizeEditableLineStructure: any;
 let insertPlainTextAtCaret: any;
+let focusCaretAfter: any;
 
 before(async () => {
   const { window } = parseHTML('<!DOCTYPE html><html><body></body></html>');
@@ -79,6 +80,7 @@ before(async () => {
   insertElementAfterPreservingCaretBridge = inline.insertElementAfterPreservingCaretBridge;
   normalizeEditableLineStructure = inline.normalizeEditableLineStructure;
   insertPlainTextAtCaret = inline.insertPlainTextAtCaret;
+  focusCaretAfter = inline.focusCaretAfter;
 
   const selection = await import('./field-selection.js');
   getFieldTokensForClipboard = selection.getFieldTokensForClipboard;
@@ -362,5 +364,83 @@ describe('insertPlainTextAtCaret', () => {
 
     assert.deepEqual(texts, ['first name', 'last name']);
     assert.ok(brCount >= 2);
+  });
+});
+
+describe('Enter mid-text line break caret', () => {
+  function mockCollapsedRange(startContainer: any, startOffset: any) {
+    return {
+      collapsed: true,
+      startContainer,
+      startOffset,
+      endContainer: startContainer,
+      endOffset: startOffset,
+      commonAncestorContainer: startContainer.parentNode ?? startContainer,
+      setStart(node: any, offset: any) {
+        this.startContainer = node;
+        this.startOffset = offset;
+        this.endContainer = node;
+        this.endOffset = offset;
+        this.commonAncestorContainer = node.parentNode ?? node;
+      },
+      collapse() {
+        this.endContainer = this.startContainer;
+        this.endOffset = this.startOffset;
+      },
+    };
+  }
+
+  it('does not attach a field caret bridge after a br', () => {
+    const body = buildSectionBody();
+    const br = document.createElement('br');
+    const text = document.createTextNode('45');
+    body.appendChild(br);
+    body.appendChild(text);
+
+    assert.equal(ensureCaretAnchorAfter(br), null);
+    assert.equal(text.textContent, '45');
+  });
+
+  it('focusCaretAfter a br lands in following text without injecting ZWSP', () => {
+    const body = buildSectionBody();
+    const br = document.createElement('br');
+    const text = document.createTextNode('45');
+    body.appendChild(document.createTextNode('123'));
+    body.appendChild(br);
+    body.appendChild(text);
+
+    // Provide a Range implementation focusCaretAfter can write into.
+    const OriginalRange = (window as any).Range;
+    (window as any).Range = function MockRange(this: any) {
+      return mockCollapsedRange(body, 0);
+    };
+    (document as any).createRange = () => mockCollapsedRange(body, 0);
+
+    try {
+      focusCaretAfter(br);
+    } finally {
+      (window as any).Range = OriginalRange;
+    }
+
+    assert.equal(text.textContent, '45');
+    const sel = window.getSelection() as any;
+    assert.equal(sel.anchorNode, text);
+    assert.equal(sel.getRangeAt(0).startOffset, 0);
+  });
+
+  it('keeps field bridges when focusing after a field before text', () => {
+    const body = buildSectionBody();
+    const token = createFieldToken('f1', 'OD', 'OD', {});
+    const text = document.createTextNode(' note');
+    body.appendChild(token);
+    body.appendChild(text);
+
+    (document as any).createRange = () => mockCollapsedRange(body, 0);
+    focusCaretAfter(token);
+
+    assert.equal(text.textContent, `${FIELD_TOKEN_CARET_ANCHOR} note`);
+    const sel = window.getSelection() as any;
+    assert.equal(sel.getRangeAt(0).startContainer, text);
+    assert.equal(sel.getRangeAt(0).startOffset, 1);
   });
 });
