@@ -27,7 +27,14 @@ import {
   selectDesignToken,
   getFieldSelectionContainer,
 } from './field-selection.js';
-import { setFillFieldFocus, restoreFillFieldFocusAfterPicker } from './fill-field-focus.js';
+import {
+  setFillFieldFocus,
+  restoreFillFieldFocusAfterPicker,
+  getNextEditableFillFieldToken,
+  shouldAdvanceFillFieldAfterPicker,
+  scheduleAfterFillModalClose,
+  scrollFillFieldIntoView,
+} from './fill-field-focus.js';
 import {
   evaluateComputedField,
   extractFormulaDependencyFieldIds,
@@ -3603,7 +3610,9 @@ export function refreshFieldSchemaInDom(fieldId: any, context: any, root: any = 
 
 /**
  * Open the fill-mode value picker for a field token (click or keyboard).
- * Keeps `.field-token--focused` after the dialog closes so Tab can continue.
+ * On successful modal save (OK / Ctrl+Enter / Clear), advances to the next editable
+ * field and opens its picker. Cancel keeps focus on the current field.
+ * Logical (inline Yes/No) fields do not advance.
  * @returns {Promise<unknown | undefined>} next value, or undefined when cancelled / not editable
  */
 export async function pickFillFieldFromToken(
@@ -3649,6 +3658,15 @@ export async function pickFillFieldFromToken(
 
   const placeholder = options.placeholder ?? token.dataset.placeholder;
   const updateContext = options.updateContext ?? callbacks;
+  const resolveAdvanceToNext = () => {
+    if (options.advanceToNext !== undefined) return options.advanceToNext !== false;
+    if (typeof callbacks.getAutoAdvanceFillFields === 'function') {
+      return callbacks.getAutoAdvanceFillFields() !== false;
+    }
+    return callbacks.autoAdvanceFillFields !== false;
+  };
+  const advanceToNext = resolveAdvanceToNext();
+  const def = registry?.getFieldDef?.(fieldId);
 
   token.classList.add('field-token--active');
   try {
@@ -3673,10 +3691,36 @@ export async function pickFillFieldFromToken(
         console.warn('[docengine] Failed to refresh field token after pick', err);
       }
     }
-    restoreFillFieldFocusAfterPicker(fieldId, holder, live ?? token);
+
+    const currentToken = live ?? token;
+    const getSchemas = () =>
+      registry?.getFieldSchemas?.() ?? callbacks.fieldSchemas ?? fieldSchemas ?? {};
+    const nextToken =
+      advanceToNext && shouldAdvanceFillFieldAfterPicker(schema, def)
+        ? getNextEditableFillFieldToken(holder, currentToken, getSchemas)
+        : null;
+
+    if (nextToken?.isConnected) {
+      restoreFillFieldFocusAfterPicker(nextToken.dataset.fieldId, holder, nextToken);
+      scrollFillFieldIntoView(nextToken);
+      scheduleAfterFillModalClose(() => {
+        if (!nextToken.isConnected) return;
+        const nextId = nextToken.dataset?.fieldId;
+        const nextSchema = nextId ? getSchemas()?.[nextId] : null;
+        if (!isFieldEditableInFillMode(nextSchema, { fieldId: nextId, fieldSchemas: getSchemas() })) {
+          return;
+        }
+        void pickFillFieldFromToken(nextToken, callbacks, onUpdate, {
+          schema: nextSchema,
+          root: holder,
+        });
+      }, holder);
+    } else {
+      restoreFillFieldFocusAfterPicker(fieldId, holder, currentToken);
+    }
     return next;
   } catch {
-    // cancelled — keep focus on the field
+    // cancelled — keep focus on the field (do not advance)
     restoreFillFieldFocusAfterPicker(fieldId, holder, token);
     return undefined;
   } finally {

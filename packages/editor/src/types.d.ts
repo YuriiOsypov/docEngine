@@ -423,6 +423,8 @@ export interface TemplatePageSetup {
   fieldHighlight?: FieldHighlightStyle;
   /** When true (default), Backspace/Delete cannot remove field tokens in fill mode. */
   protectFieldsInFillMode?: boolean;
+  /** When true (default), after saving a fill field open the next field's editor. */
+  autoAdvanceFillFields?: boolean;
   header?: {
     height?: number;
     /** @deprecated Static header lines are no longer edited in Page setup. Ignored at render time. */
@@ -1713,6 +1715,8 @@ export function pickFillFieldFromToken(
     currentValue?: FieldValue;
     updateContext?: unknown;
     root?: ParentNode;
+    /** When set, overrides pageSetup.autoAdvanceFillFields for this pick. */
+    advanceToNext?: boolean;
   },
 ): Promise<FieldValue | undefined>;
 

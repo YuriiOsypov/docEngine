@@ -112,13 +112,22 @@ export function moveFillFieldFocus(holder: any, direction: 1 | -1, getFieldSchem
 
   const next = tokens[nextIndex];
   setFillFieldFocus(next, holder);
-  try {
-    next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  } catch {
-    next.scrollIntoView?.();
-  }
+  scrollFillFieldIntoView(next);
   placeCaretNearFillField(next);
   return next;
+}
+
+/**
+ * Same scroll behavior as Tab between fill fields: only move when the token
+ * is outside the visible area (`block: 'nearest'`).
+ */
+export function scrollFillFieldIntoView(token: any) {
+  if (!token?.isConnected) return;
+  try {
+    token.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  } catch {
+    token.scrollIntoView?.();
+  }
 }
 
 export function resolveFillFocusHolder(container: any, options: any = {}) {
@@ -127,6 +136,38 @@ export function resolveFillFocusHolder(container: any, options: any = {}) {
     container?.closest?.('.codex-editor, .editor-holder, [data-docengine-editor]') ??
     container
   );
+}
+
+/**
+ * Next editable fill token after `currentToken` in document order.
+ * @returns {HTMLElement | null} next token, or null when current is last / unknown
+ */
+export function getNextEditableFillFieldToken(
+  holder: any,
+  currentToken: any,
+  getFieldSchemas: any,
+) {
+  const tokens = collectEditableFillFieldTokens(holder, getFieldSchemas);
+  if (!tokens.length || !currentToken) return null;
+
+  let index = tokens.indexOf(currentToken);
+  if (index < 0) {
+    const fieldId = currentToken?.dataset?.fieldId;
+    if (fieldId) {
+      index = tokens.findIndex((t: any) => t?.dataset?.fieldId === String(fieldId));
+    }
+  }
+  if (index < 0 || index >= tokens.length - 1) return null;
+  return tokens[index + 1] ?? null;
+}
+
+/**
+ * Logical fields cycle inline (no modal) — do not auto-advance after activate.
+ */
+export function shouldAdvanceFillFieldAfterPicker(schema: any, def: any = null) {
+  if (schema?.type === 'logical' || def?.picker === 'logical') return false;
+  if (schema?.type === 'computed' || def?.picker === 'computed') return false;
+  return true;
 }
 
 /**
@@ -181,4 +222,28 @@ export function restoreFillFieldFocusAfterPicker(
   });
 
   return live;
+}
+
+/**
+ * Run `fn` after the fill modal overlay has finished tearing down.
+ * Retries briefly so the next picker does not stack on a closing overlay.
+ */
+export function scheduleAfterFillModalClose(fn: () => void, root: any = document) {
+  const run = (attemptsLeft: number) => {
+    if (typeof fn !== 'function') return;
+    if (isFillModalOverlayOpen(root) && attemptsLeft > 0) {
+      setTimeout(() => run(attemptsLeft - 1), 16);
+      return;
+    }
+    fn();
+  };
+
+  const schedule =
+    typeof requestAnimationFrame === 'function'
+      ? (cb: () => void) => requestAnimationFrame(cb)
+      : (cb: () => void) => setTimeout(cb, 0);
+
+  schedule(() => {
+    setTimeout(() => run(12), 0);
+  });
 }

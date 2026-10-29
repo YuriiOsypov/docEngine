@@ -2415,6 +2415,7 @@ export function createEditor(options: any = {}) {
       fieldValueStyle,
       getDocumentTextStyle: () => resolvePageSetupTextStyle(documentPageSetup),
       getProtectFieldsInFillMode: () => documentPageSetup.protectFieldsInFillMode !== false,
+      getAutoAdvanceFillFields: () => documentPageSetup.autoAdvanceFillFields !== false,
       designMode,
       fillModeFieldHighlight: !designMode && showFieldsInFillMode && !options.mappingMode,
       mappingMode: !!options.mappingMode,

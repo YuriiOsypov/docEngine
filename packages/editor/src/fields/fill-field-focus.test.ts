@@ -193,4 +193,47 @@ describe('fill-field-focus', () => {
     assert.equal(token.classList.contains('field-token--active'), false);
     holder.remove();
   });
+
+  it('resolves the next editable fill token after the current one', async () => {
+    const focus = await import('./fill-field-focus.js');
+    const holder = makeHolder();
+    const a = createFieldToken('a', '', 'A');
+    const b = createFieldToken('b', '', 'B');
+    const c = createFieldToken('c', '', 'C');
+    holder.append(a, b, c);
+
+    const schemas = {
+      a: { type: 'text', name: 'a', label: 'A' },
+      b: { type: 'tree', name: 'b', label: 'B' },
+      c: { type: 'list', name: 'c', label: 'C' },
+    };
+
+    assert.equal(focus.getNextEditableFillFieldToken(holder, a, schemas), b);
+    assert.equal(focus.getNextEditableFillFieldToken(holder, b, schemas), c);
+    assert.equal(focus.getNextEditableFillFieldToken(holder, c, schemas), null);
+    holder.remove();
+  });
+
+  it('does not advance after logical or computed pickers', async () => {
+    const focus = await import('./fill-field-focus.js');
+    assert.equal(focus.shouldAdvanceFillFieldAfterPicker({ type: 'logical' }), false);
+    assert.equal(focus.shouldAdvanceFillFieldAfterPicker({ type: 'text' }, { picker: 'logical' }), false);
+    assert.equal(focus.shouldAdvanceFillFieldAfterPicker({ type: 'computed' }), false);
+    assert.equal(focus.shouldAdvanceFillFieldAfterPicker({ type: 'tree' }), true);
+    assert.equal(focus.shouldAdvanceFillFieldAfterPicker({ type: 'text' }), true);
+  });
+
+  it('scrollFillFieldIntoView uses nearest scrollIntoView like Tab', async () => {
+    const focus = await import('./fill-field-focus.js');
+    const token = createFieldToken('a', '', 'A');
+    document.body.appendChild(token);
+    let calledWith: any = null;
+    token.scrollIntoView = ((opts: any) => {
+      calledWith = opts;
+    }) as any;
+
+    focus.scrollFillFieldIntoView(token);
+    assert.deepEqual(calledWith, { block: 'nearest', inline: 'nearest' });
+    token.remove();
+  });
 });

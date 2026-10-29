@@ -232,11 +232,15 @@ export function createPropertiesPanel({
     <section class="properties-panel__card">
       <h3 class="properties-panel__card-title">
         <span>Fill mode</span>
-        ${infoTipHtml('When checked, Backspace, Delete, area selection delete, and Cut cannot remove field placeholders while filling the document.')}
+        ${infoTipHtml('Protect fields blocks Backspace, Delete, area selection delete, and Cut from removing field placeholders while filling. Advance opens the next field editor after OK / Ctrl+Enter.')}
       </h3>
       <label class="schema-form__row schema-form__row--checkbox">
         <input type="checkbox" data-field="page-protect-fields" />
         <span>Protect fields in fill mode</span>
+      </label>
+      <label class="schema-form__row schema-form__row--checkbox">
+        <input type="checkbox" data-field="page-auto-advance-fields" />
+        <span>Advance to next field after save</span>
       </label>
     </section>
     <div class="properties-panel__style-forms" data-role="style-forms"></div>
@@ -560,6 +564,8 @@ export function createPropertiesPanel({
         !!pageSetup.footer?.showPageNumbers;
       documentWrap.querySelector('[data-field="page-protect-fields"]').checked =
         pageSetup.protectFieldsInFillMode !== false;
+      documentWrap.querySelector('[data-field="page-auto-advance-fields"]').checked =
+        pageSetup.autoAdvanceFillFields !== false;
       // Show resolved defaults (Inter / 16px / #000, highlight blue, etc.), not blank overrides.
       textStyleForm.setStyle(resolvePageSetupTextStyle(pageSetup));
       valueStyleForm.setStyle(resolvePageSetupFieldValueStyle(pageSetup).default);
@@ -635,6 +641,8 @@ export function createPropertiesPanel({
       const showPageNumbers = !!documentWrap.querySelector('[data-field="page-footer-numbers"]')?.checked;
       const protectFieldsInFillMode =
         !!documentWrap.querySelector('[data-field="page-protect-fields"]')?.checked;
+      const autoAdvanceFillFields =
+        !!documentWrap.querySelector('[data-field="page-auto-advance-fields"]')?.checked;
 
       const formatRaw = String(
         documentWrap.querySelector('[data-field="page-format"]')?.value ?? 'a4',
@@ -648,6 +656,7 @@ export function createPropertiesPanel({
             ? 'landscape'
             : 'portrait',
         protectFieldsInFillMode,
+        autoAdvanceFillFields,
       };
       if (format === 'custom') {
         const widthRaw = pageWidthMmInput?.value?.trim() ?? '';

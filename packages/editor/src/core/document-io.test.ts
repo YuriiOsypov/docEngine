@@ -328,6 +328,7 @@ describe('template pageSetup export/import', () => {
         margin: 12,
         title: 'Clinic form',
         protectFieldsInFillMode: true,
+        autoAdvanceFillFields: true,
         footer: { showPageNumbers: true },
       },
     };
@@ -337,6 +338,7 @@ describe('template pageSetup export/import', () => {
     assert.equal(exported.pageSetup.margin, 12);
     assert.equal(exported.pageSetup.title, 'Clinic form');
     assert.equal(exported.pageSetup.protectFieldsInFillMode, true);
+    assert.equal(exported.pageSetup.autoAdvanceFillFields, true);
     assert.equal(exported.pageSetup.footer.showPageNumbers, true);
 
     const imported = normalizeImportedDoc(exported);
