@@ -1,18 +1,24 @@
 # Publishes n8n-nodes-docengine to npm with a provenance attestation.
 #
 # Required for n8n Creator Portal verification (from May 1 2026).
+# Local `npm publish` is NOT accepted — only this GitHub Actions workflow.
 #
 # ─── ONE-TIME SETUP ────────────────────────────────────────────────────────────
 #
-# Option A — OIDC Trusted Publishing (recommended):
-# 1. npmjs.com → n8n-nodes-docengine → Settings → Trusted Publishers → GitHub Actions
-# 2. Repository owner: YuriiOsypov
-#    Repository name:  docEngine
-#    Workflow name:    publish.yml
+# Option A — OIDC Trusted Publishing (recommended, no long-lived secrets):
+# 1. https://www.npmjs.com/package/n8n-nodes-docengine → Settings → Trusted Publishers
+# 2. Add GitHub Actions publisher:
+#      Repository owner: YuriiOsypov
+#      Repository name:  docEngine
+#      Workflow name:    publish.yml
+#      Environment:      (leave blank)
+# 3. Do NOT set NPM_TOKEN / NODE_AUTH_TOKEN in this repo.
 #
-# Option B — set GitHub Actions secret NPM_TOKEN (granular automation token).
+# Option B — GitHub Actions secret NPM_TOKEN (granular automation token).
 #
-# Release: npm run release -w n8n-nodes-docengine
+# Release (from monorepo root):
+#   npm run release -w n8n-nodes-docengine
+#   npm run release -w n8n-nodes-docengine -- 0.0.118
 
 name: Publish
 
@@ -27,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      # Required to mint an OIDC token for npm provenance + Trusted Publishing.
       id-token: write
       contents: read
 
@@ -39,6 +46,8 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: 'npm'
+          # Do NOT set registry-url here. setup-node would write a placeholder
+          # NODE_AUTH_TOKEN that makes `npm publish` return 404 and blocks OIDC.
 
       - name: Install dependencies
         run: |
@@ -60,17 +69,21 @@ jobs:
           npm run smoke -w n8n-nodes-docengine
           npm run scan:bundle -w n8n-nodes-docengine
 
-      - name: Set up Node.js for npm publish
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-          registry-url: 'https://registry.npmjs.org'
-
       - name: Publish to npm with provenance
         run: |
+          # Clear any leftover auth that would override Trusted Publishing / OIDC.
+          unset NODE_AUTH_TOKEN
+          unset NPM_CONFIG_USERCONFIG
+          rm -f "$HOME/.npmrc"
+
           if [ -n "${NPM_TOKEN:-}" ]; then
-            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+            echo "registry=https://registry.npmjs.org/" >> "$HOME/.npmrc"
+            echo "Using NPM_TOKEN secret for publish auth"
+          else
+            echo "Using npm Trusted Publishing (OIDC) — no NPM_TOKEN set"
           fi
+
           npm publish -w n8n-nodes-docengine --access public --provenance
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
