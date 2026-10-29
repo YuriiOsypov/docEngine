@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-docengine",
-  "version": "0.0.115",
+  "version": "0.0.116",
   "description": "Generate HTML/PDF documents from editor templates in n8n workflows",
   "type": "module",
   "main": "dist/nodes/DocEngine/DocEngine.node.cjs",
@@ -48,8 +48,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs && node scripts/bundle-node.mjs",
     "typecheck": "tsc -p tsconfig.json --pretty false",
-    "prepublishOnly": "npm test",
-    "test": "npm run build && node --test dist/nodes/DocEngine/docengine-utils.test.js",
+    "prepublishOnly": "npm run build && npm run scan:bundle && npm run smoke",
+    "test": "npm run build && npm run smoke",
+    "test:unit": "npm run build && node --test dist/nodes/DocEngine/docengine-utils.test.js",
+    "smoke": "node scripts/smoke-test.mjs",
     "scan:bundle": "node scripts/scan-bundle.mjs",
     "release": "node ./scripts/release.mjs"
   },

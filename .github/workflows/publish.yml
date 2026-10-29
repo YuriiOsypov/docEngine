@@ -54,9 +54,10 @@ jobs:
           echo "tag=$TAG package=$PKG"
           test "$TAG" = "$PKG"
 
-      - name: Test and scan bundle
+      - name: Build, smoke-test, and scan bundle
         run: |
-          npm test -w n8n-nodes-docengine
+          npm run build -w n8n-nodes-docengine
+          npm run smoke -w n8n-nodes-docengine
           npm run scan:bundle -w n8n-nodes-docengine
 
       - name: Set up Node.js for npm publish
