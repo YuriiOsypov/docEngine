@@ -12,12 +12,13 @@
     "strictNullChecks": false,
     "noImplicitAny": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "baseUrl": ".",
+    "paths": {
+      "@docengine/engine": ["./src/stubs/engine.ts"],
+      "@docengine/pdf-renderer": ["./src/stubs/pdf-renderer.ts"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["dist", "node_modules"],
-  "references": [
-    { "path": "../../packages/engine" },
-    { "path": "../../packages/pdf-renderer" }
-  ]
+  "exclude": ["dist", "node_modules"]
 }
