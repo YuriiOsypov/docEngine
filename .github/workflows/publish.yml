@@ -20,13 +20,8 @@
 #
 # ─── RELEASE ───────────────────────────────────────────────────────────────────
 #
-# From repo root (or apps/n8n-nodes-docengine):
-#
+# From repo root:
 #   npm run release -w n8n-nodes-docengine
-#   # or: node apps/n8n-nodes-docengine/scripts/release.mjs [patch|minor|major|x.y.z]
-#
-# That bumps version, commits, tags n8n-nodes-docengine-vX.Y.Z, and pushes.
-# This workflow then builds, tests, and publishes with --provenance.
 
 name: Publish
 
@@ -52,11 +47,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
-          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+          # Do NOT set registry-url here — it injects a temp .npmrc that can
+          # break `npm ci` / workspace installs before publish.
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          test -f package-lock.json
+          npm install --no-fund --no-audit
 
       - name: Build DocEngine packages used by the node
         run: |
@@ -76,6 +74,12 @@ jobs:
         run: |
           npm test -w n8n-nodes-docengine
           npm run scan:bundle -w n8n-nodes-docengine
+
+      - name: Set up Node.js for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to npm with provenance
         run: |
