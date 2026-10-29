@@ -54,7 +54,8 @@ jobs:
       - name: Install dependencies
         run: |
           test -f package-lock.json
-          npm install --no-fund --no-audit
+          # Ignore prepare/build scripts — workspace packages need an ordered build below.
+          npm install --no-fund --no-audit --ignore-scripts
 
       - name: Build DocEngine packages used by the node
         run: |
@@ -62,6 +63,7 @@ jobs:
           npm run build -w @docengine/field-date
           npm run build -w @docengine/editor
           npm run build -w @docengine/pdf-renderer
+          npm rebuild esbuild
 
       - name: Verify tag matches package.json version
         run: |
