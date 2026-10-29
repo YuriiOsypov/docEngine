@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-docengine",
-  "version": "0.0.113",
+  "version": "0.0.114",
   "description": "Generate HTML/PDF documents from editor templates in n8n workflows",
   "type": "module",
   "main": "dist/nodes/DocEngine/DocEngine.node.cjs",

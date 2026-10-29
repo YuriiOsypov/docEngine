@@ -1,27 +1,18 @@
 # Publishes n8n-nodes-docengine to npm with a provenance attestation.
 #
 # Required for n8n Creator Portal verification (from May 1 2026).
-# Adapted from https://github.com/n8n-io/n8n-nodes-starter for this monorepo.
 #
 # ─── ONE-TIME SETUP ────────────────────────────────────────────────────────────
 #
-# Option A — OIDC Trusted Publishing (recommended, no long-lived secrets):
-# 1. Log in to npmjs.com → package n8n-nodes-docengine → Settings
-# 2. Publish access → Trusted Publishers → Add a publisher → GitHub Actions
-# 3. Fill in:
-#      Repository owner: YuriiOsypov
-#      Repository name:  docEngine
-#      Workflow name:    publish.yml
-#      Environment:      (leave blank)
+# Option A — OIDC Trusted Publishing (recommended):
+# 1. npmjs.com → n8n-nodes-docengine → Settings → Trusted Publishers → GitHub Actions
+# 2. Repository owner: YuriiOsypov
+#    Repository name:  docEngine
+#    Workflow name:    publish.yml
 #
-# Option B — npm Automation Token (fallback):
-# 1. npmjs.com → Access Tokens → Granular Access Token (read+write for this package)
-# 2. GitHub → Settings → Secrets and variables → Actions → NPM_TOKEN
+# Option B — set GitHub Actions secret NPM_TOKEN (granular automation token).
 #
-# ─── RELEASE ───────────────────────────────────────────────────────────────────
-#
-# From repo root:
-#   npm run release -w n8n-nodes-docengine
+# Release: npm run release -w n8n-nodes-docengine
 
 name: Publish
 
@@ -48,21 +39,12 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: 'npm'
-          # Do NOT set registry-url here — it injects a temp .npmrc that can
-          # break `npm ci` / workspace installs before publish.
 
       - name: Install dependencies
         run: |
           test -f package-lock.json
-          # Ignore prepare/build scripts — workspace packages need an ordered build below.
+          # Skip prepare/tsc on workspaces — the n8n bundle resolves DocEngine from source.
           npm install --no-fund --no-audit --ignore-scripts
-
-      - name: Build DocEngine packages used by the node
-        run: |
-          npm run build -w @docengine/engine
-          npm run build -w @docengine/field-date
-          npm run build -w @docengine/editor
-          npm run build -w @docengine/pdf-renderer
           npm rebuild esbuild
 
       - name: Verify tag matches package.json version
