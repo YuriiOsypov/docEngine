@@ -200,7 +200,12 @@ See [`integrations/salesforce/README.md`](./integrations/salesforce/README.md) f
 
 ## n8n
 
-The [`n8n-nodes-docengine`](./apps/n8n-nodes-docengine) package generates HTML/PDF from DocEngine templates inside n8n workflows. Install the community node as `n8n-nodes-docengine` on self-hosted n8n, or see the package README for a local build.
+Two options:
+
+1. **DocEngine.pro API** (any n8n, including Cloud) — use the built-in **HTTP Request** node: `POST https://docengine.pro/api/v1/render/pdf` with a Bearer API token from the dashboard. No community package required.
+2. **Self-hosted local render** — install the community node [`n8n-nodes-docengine`](./apps/n8n-nodes-docengine) (**Settings → Community nodes**, self-hosted only). Bundled PDF/HTML; no outbound call to DocEngine.pro.
+
+This node is **not** in n8n’s verified catalog (utility / local renderer). Details, examples, and Salesforce webhook wiring: [`apps/n8n-nodes-docengine/README.md`](./apps/n8n-nodes-docengine/README.md). Community thread: [Built with n8n — DocEngine](https://community.n8n.io/t/docengine-is-an-open-source-visual-document-builder-and-more/309509).
 
 ## Scripts reference
 
