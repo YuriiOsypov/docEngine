@@ -35,10 +35,36 @@ Read-only preview with optional PDF export from the same document model.
 - **Template editor** — Editor.js-based design mode with inline fields, schema editing, and JSON import/export
 - **Logical & signature fields** — built-in Yes/No (`logical`) and canvas signature capture (`signature`, stored as PNG data URLs in JSON). The signature pad is **display-only for internal validation — not a cryptographically signed legal e-signature**.
 - **Headless engine** — field schemas, mapping, formulas, and document I/O without a UI
-- **PDF & HTML export** — pdfmake-based rendering for browser and Node
+- **PDF & HTML export** — pdfmake-based multi-page rendering (page setup, headers/footers, flowing tables) for browser and Node
 - **Salesforce** — managed-package-ready metadata (templates, filler LWCs, Apex controllers)
 - **n8n** — community node to generate HTML/PDF from templates in workflows
 - **Themes** — PrimeVue and Salesforce Lightning (SLDS) bridges
+
+## PDF layout & pagination
+
+Common questions about print output — current behavior:
+
+### Multi-page documents and automatic page breaks
+
+Content flows across pages via pdfmake (block layout, not a fixed X/Y canvas). Optional section flags: `eachRowOnNewPage` (forced break per repeatable row) and `keepOnOnePage` (pdfmake `unbreakable`; PDF only).
+
+### Tables that continue across pages
+
+Tables paginate naturally; column headers repeat (`headerRows`). Long repeatable/inline tables can be chunked to fit the page body.
+
+### Headers, footers and page numbering
+
+Configured on the template/document via `pageSetup`. Mark a section **Show on each page** (`repeatable`) for a dynamic page header. Footer supports static `footer.text` and optional `footer.showPageNumbers`. Deprecated static header `lines` / `variables` — use the repeatable section instead.
+
+### Large images and signature fields
+
+`image` and `signature` (PNG data URL; display-only, not a legal e-signature) render in preview and PDF; `maxWidth` caps size. Prefer a real `uploadUrl` for large images so document JSON stays small. Remote images without CORS may appear blank in the PDF.
+
+### Consistent output between browser preview and generated PDF
+
+HTML preview and pdfmake PDF share the same document model and empty-field filtering. Expect small differences: preview is continuous scroll (print CSS approximates breaks); PDF owns true pagination, headers/footers, and `keepOnOnePage`. Salesforce in-org `Blob.toPdf` from HTML can diverge more than browser / n8n / pdf-service (all pdfmake); External PDF uses the same renderer as the demos.
+
+Details: [`packages/pdf-renderer`](./packages/pdf-renderer/README.md), [editor preview specs](./packages/editor/SPECIFICATIONS.md#11-preview).
 
 ## Architecture
 
@@ -227,7 +253,8 @@ This node is **not** in n8n’s verified catalog (utility / local renderer). Det
 - [Editor README](./packages/editor/README.md) — install & API overview
 - [Editor specifications](./packages/editor/SPECIFICATIONS.md) — data contracts & extension points
 - [Salesforce integration](./integrations/salesforce/README.md) — deploy, packaging, PDF, LWS
-- [PDF renderer](./packages/pdf-renderer/README.md) — browser vs Node entry points
+- [PDF renderer](./packages/pdf-renderer/README.md) — browser vs Node entry points; see also [PDF layout & pagination](#pdf-layout--pagination)
+- [Editor preview specs](./packages/editor/SPECIFICATIONS.md#11-preview) — HTML preview vs PDF export behavior
 
 ## License
 
