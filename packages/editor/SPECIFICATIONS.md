@@ -229,6 +229,11 @@ interface DocumentSectionData {
   borderTop?: boolean;
   /** When true, draw a horizontal rule below the section (editor + preview/PDF). */
   borderBottom?: boolean;
+  /**
+   * When true, PDF keeps this section's content together on one page
+   * (pdfmake `unbreakable`). Does not affect HTML preview.
+   */
+  keepOnOnePage?: boolean;
   segments: Segment[];
   fieldValues: Record<string, FieldValue>;
 }
@@ -1116,16 +1121,16 @@ When `designMode` is **false** (fill / run mode), end users enter values through
 
 **Function:** `renderDocumentPreview(doc: EditorDocument): HTMLElement`
 
-Read-only DOM: hides empty fields, labels, and adjacent punctuation. Used internally for PDF generation (html2canvas capture).
+Read-only DOM: hides empty fields, labels, and adjacent punctuation. Used for HTML preview display and HTML export. Salesforce's default in-org PDF path (`Blob.toPdf`) also consumes this HTML.
 
 - **Section headers:** `documentSection.label` is rendered in preview whenever non-empty, independent of whether any field values remain after filtering. A labeled section with no filled content shows the header only.
 - **Columns:** `columns` segments render as a two-column grid in preview and PDF. Empty columns are omitted only when both columns are empty after field filtering.
 - **Tables:** `table` segments render as vision tables in preview and PDF. Omitted when no cell has a value after filtering.
 - **Collapse:** `collapsed` is not applied in preview; body content is always shown expanded when present.
 
-**Preview modal:** `docEngine.preview()` opens a modal that generates a PDF (via html2canvas + jsPDF) and displays it in an embedded viewer. A **Save PDF** icon button opens the native system save dialog (`showSaveFilePicker` when available).
+**Preview modal:** `docEngine.preview()` opens a modal with HTML preview (`renderDocumentPreview`) and optional **View as PDF**. Browser / playground PDF uses **pdfmake** (`@docengine/pdf-renderer`). The Salesforce Static Resource build stubs client pdfmake (size limit); hosts pass `generatePdfBlob` instead — default provider is Apex `Blob.toPdf(html)`, optional External provider callouts to the pdf-service (also pdfmake). A **Save PDF** icon button opens the native system save dialog (`showSaveFilePicker` when available).
 
-**PDF export:** `generateDocumentPdfBlob(doc, options?)`, `exportDocumentPdf(doc, options?)`, and `docEngine.exportPdf(options?)` generate PDF from the same filtered preview DOM. Options: `filename` (default `document.pdf`), `format` (`a4` | `letter`), `margin` (mm), optional `title`, `download` (default `true`). Saves use the native system save dialog via `saveBlobToDisk()`.
+**PDF export:** `generateDocumentPdfBlob(doc, options?)`, `exportDocumentPdf(doc, options?)`, and `docEngine.exportPdf(options?)` generate PDF via pdfmake from the document model with the same empty-field filtering as preview (or via host `generatePdfBlob` when client pdfmake is unavailable). Options: `filename` (default `document.pdf`), `format` (`a4` | `letter`), `margin` (mm), optional `title`, `download` (default `true`). Saves use the native system save dialog via `saveBlobToDisk()`.
 
 - Remote images without CORS headers may appear blank in the PDF.
 
