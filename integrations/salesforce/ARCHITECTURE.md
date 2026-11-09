@@ -185,20 +185,76 @@ Produces both artifacts and copies them into `apps/salesforce/force-app/main/def
 7. **P7** — Record Quick Action / URL button (`docEngineRun` + `DocEngine_Button_Config__c` with Template lookup, fill, export, preview). ✅
 8. **P8** — Public Forms Mode (Experience Cloud guest link → create/update record + PDF). See [PUBLIC_FORMS.md](./PUBLIC_FORMS.md) (F1–F6 implemented).
 
-## 12. Open questions for review
+## 12. App details (evaluator FAQ)
+
+Status answers for common adoption questions — current product behavior.
+
+### 12.1 PDF rendering consistency
+
+Critical for business documents. Two providers via `DocEngine_Settings__c.Use_External_PDF__c`:
+
+| Provider | Path | Fidelity |
+|---|---|---|
+| **Salesforce** (default) | LWC HTML → Apex `Blob.toPdf` | Good for simple layouts; can diverge on columns, headers/footers, and complex tables |
+| **External** | Named Credential → DocEngine.pro / `pdf-service` (pdfmake) | Matches browser demos, n8n, and root [PDF layout & pagination](../../README.md#pdf-layout--pagination) |
+
+Structure comes from the pinned `Template_Version__c.Template_JSON__c`; values from `Document_JSON__c`. For business-critical or healthcare print fidelity, use **External PDF**.
+
+Details: [PDF.md](./PDF.md), [PDF_PACKAGE.md](./PDF_PACKAGE.md).
+
+### 12.2 Template version lifecycle
+
+Essential for historical documents. See also §4.1b.
+
+- **Save** always inserts a new immutable `DocEngine_Template_Version__c` and advances head `Current_Version__c` / `Version__c` (never mutates an old row).
+- **Builder** can open any version via `listVersions` / `getVersion`.
+- **Documents** pin `Template_Version__c` on first `saveInstance` (lazy find-or-create from current head if missing). Later saves do not retarget.
+- Completed documents keep the layout and Mapping they were filled against.
+
+### 12.3 Security and access management
+
+Important for healthcare and enterprise.
+
+- Permission sets: `DocEngine_Admin` (templates), `DocEngine_User` (fill); optional `DocEngine_PDF_User` for External PDF. Custom permission `Manage_DocEngine` gates admin Apex paths.
+- Apex controllers run `with sharing` and enforce CRUD/FLS (`Security.stripInaccessible` / `WITH SECURITY_ENFORCED`).
+- Optional Public Group restriction via `Access_Group_Id__c`; `DocEngineAccess` asserts membership on template get/list, merge, button resolve, and document get/list/save/delete/file. Documents inherit the parent template’s group. View All Records on templates bypasses the group check.
+- Public Forms use published-link tokens and mapping allowlists (not Public Groups) — see [PUBLIC_FORMS.md](./PUBLIC_FORMS.md).
+
+Details: [SECURITY_REVIEW.md](./SECURITY_REVIEW.md), [security-review/](./security-review/README.md).
+
+### 12.4 Public SDK documentation
+
+Makes external adoption easier.
+
+- Product docs: [docengine.pro/docs](https://docengine.pro/docs)
+- Library contracts: [`packages/editor/SPECIFICATIONS.md`](../../packages/editor/SPECIFICATIONS.md), host contract [`integrations/lwc/doc-editor-contract.d.ts`](../lwc/doc-editor-contract.d.ts)
+- npm packages: `@docengine/editor`, `@docengine/engine`, `@docengine/pdf-renderer`, `@docengine/field-date`
+- Salesforce ops (this folder): architecture, PDF, packaging, LWS, security review
+
+### 12.5 Extension ecosystem
+
+Makes domain-specific fields practical.
+
+- Field plugins: `registerField` (reference plugin `@docengine/field-date`). Formula plugins: `registerFormulaFunction`. See SPECIFICATIONS §14.
+- **Salesforce constraint:** LWCs load the built `DocEngineBundle` Static Resource, not npm at runtime. Domain fields must be registered in the SF IIFE build (`npm run build:sf`) to appear in the org.
+- Hosts outside Salesforce (Vite demos, n8n, pdf-service) can register plugins at process start without a rebuild.
+
+## 13. Open questions for review
 
 - **JSON size:** accept `Long Text Area` cap, or store JSON as Files from day one?
 - **Cascade:** need an Apex trigger to delete `DocEngine_Document__c` when the source record is deleted (since `Record_Id__c` is text)?
-- **Versioning:** `DocEngine_Template_Version__c` immutable history; builder can open any version; save always forks; documents pin a version (lazy snapshot if needed).
+- **Versioning:** answered — see §12.2.
 - **Namespace:** register and set in `sfdx-project.json` before first managed version (see PACKAGING.md).
 
-## 13. Related paths
+## 14. Related paths
 
 | Path | Role |
 |---|---|
 | `integrations/lwc/` | Reference LWC (pre–SFDX); host contract |
 | `integrations/salesforce/` | This architecture + SF build notes |
-| `integrations/salesforce/PUBLIC_FORMS.md` | Public Form Link / Google Forms–style intake (design) |
+| `integrations/salesforce/PDF.md` | External PDF Named Credential + request shape |
+| `integrations/salesforce/SECURITY_REVIEW.md` | AppExchange Security Review checklist |
+| `integrations/salesforce/PUBLIC_FORMS.md` | Public Form Link / Google Forms–style intake |
 | `apps/salesforce/force-app/` | Deployable SFDX metadata (objects, Apex, LWC, Static Resources) |
 | `vite.config.sf.js` | IIFE library build for `loadScript` |
 | `scripts/build-sf.mjs` | CSS + IIFE + copy into `apps/salesforce/force-app` |

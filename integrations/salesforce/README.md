@@ -1,6 +1,6 @@
 # Salesforce integration notes
 
-See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full field-level design.
+See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full field-level design, including [App details (evaluator FAQ)](./ARCHITECTURE.md#12-app-details-evaluator-faq) (PDF consistency, version lifecycle, security, SDK docs, extensions).
 
 | Doc | Topic |
 |---|---|
