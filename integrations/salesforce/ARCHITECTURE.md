@@ -23,12 +23,27 @@ Non-goals (v1): e-signature workflow, multi-recipient approval routing. The engi
 | Share preview (link / email) | `docEngineShareDialog` + `prepareShare` / `sendShareEmail` | Host preview artifact (`Blob` + filename) |
 | Log shared email as Task | Optional **Create a task** on send (default on) | — |
 
-## 3. Current state & prerequisite gaps
+## 3. Current state & deploy prerequisites
 
-Reference (non-deployable) assets already exist under `integrations/lwc/` and a frozen host contract (`integrations/lwc/doc-editor-contract.d.ts`). Two gaps must close before deploy:
+Reference (non-deployable) assets remain under `integrations/lwc/` with a frozen host contract (`integrations/lwc/doc-editor-contract.d.ts`). Deployable source lives in `apps/salesforce/force-app/`.
 
-- **G1 — Bundle format.** The library Vite build produces `formats: ['es']` with `@editorjs/editorjs` as `external`. Salesforce `loadScript` needs a **classic script** that assigns `window.DocEditor` **and inlines EditorJS**. → Dedicated IIFE build (`vite.config.sf.js`) via `npm run build:sf`.
-- **G2 — Lightning Web Security.** The editor mutates `document.body.classList` (design mode), binds a global `focusin` listener, and mounts modals on `document.body`. Must be validated in a scratch org; prefer `ui.designLayout: 'chrome'` to avoid page-wide `body.design-mode--panels` effects.
+### Milestone vocabulary
+
+These labels are distinct. A phase ✅ later means **Implemented** for that phase’s deliverables — **not** that every validation milestone below is complete.
+
+| Milestone | Meaning |
+|---|---|
+| **Implemented** | Code/metadata in repo and deployable |
+| **Unit tested** | Apex (and related) package tests cover the path |
+| **Validated in scratch org** | Manual host/LWS checklist done in a scratch org |
+| **Validated in production-like org** | Smoke on release/dev org (e.g. packaging org) |
+| **Managed package tested** | Beta/released `04t` install or upgrade verified |
+| **AppExchange security review passed** | Partner portal approval (claim only when true) |
+
+### G1 / G2 status
+
+- **G1 — Bundle format — Implemented** (used in managed builds). Salesforce `loadScript` needs a classic script that assigns `window.DocEditor` and inlines EditorJS (the library ES build keeps EditorJS external). Dedicated IIFE build: `vite.config.sf.js` via `npm run build:sf` → Static Resource `DocEngineBundle`.
+- **G2 — Lightning Web Security — mitigations Implemented**; scratch-org validation is a **separate** checklist. The editor can touch `document.body` / global `focusin` / body-mounted modals. Hosts use `ui.designLayout: 'chrome'` (avoid page-wide `body.design-mode--panels`) and destroy on disconnect. Sign-off tracked in [LWS.md](./LWS.md) and [SECURITY_REVIEW.md](./SECURITY_REVIEW.md) — checklist items may still be open.
 
 ## 4. Data model (field-level)
 
@@ -123,7 +138,9 @@ DocEngine_Template__c
 | `DocEngineListController` | `resolveListItems(fieldName, query, sourceCollection)` | Backs editor `resolveListItems`; uses `schema.sourceCollection` (`Object` or `Object.Field`) |
 | `DocEngineObjectDescribeController` | `listSourceObjects`, `buildSourceSampleJson`, `listRemoteCollections`, `listRemoteLabelFields` | Template New picker; Field Mapping sample JSON; Remote search designer catalogs |
 
-All `@AuraEnabled`, `with sharing`, enforce CRUD/FLS (`Security.stripInaccessible` or `WITH SECURITY_ENFORCED`). DTOs are plain Apex classes serialized to/from JSON. Lazy version snapshot for fill users uses a `without sharing` helper so read-only template users can still pin a version.
+All `@AuraEnabled`, `with sharing`, enforce CRUD/FLS (`Security.stripInaccessible` or `WITH SECURITY_ENFORCED`). DTOs are plain Apex classes serialized to/from JSON.
+
+**Version pin (controlled SYSTEM_MODE, not sharing bypass):** fill users call `DocEngineTemplateVersionService.ensureCurrentVersionId` → `DocEngineAccess.assertTemplateAccess` (USER_MODE + Public Group) → statement-scoped `SYSTEM_MODE` find-or-create of a **head-only** snapshot and pin of `Current_Version__c`. Caller-supplied JSON inserts require `Manage_DocEngine` via `insertVersion` (template-save workflow only). **Document DML stays user-mode** (`stripInaccessible` + `AccessLevel.USER_MODE` in `DocEngineInstanceController`); version-pin elevation does not elevate document CRUD.
 
 ### 6.1 Share email + Create a task
 
@@ -152,7 +169,7 @@ Host contract consumed (freeze — `integrations/lwc/doc-editor-contract.d.ts`):
 
 | Static Resource | Source | Build |
 |---|---|---|
-| `DocEngineBundle` (JS) | IIFE target → `packages/editor/dist/editor-lwc.js` | closes G1; sets `window.DocEditor`, inlines EditorJS |
+| `DocEngineBundle` (JS) | IIFE target → `packages/editor/dist/editor-lwc.js` | **G1 Implemented** — sets `window.DocEditor`, inlines EditorJS |
 | `DocEngineCss` | `packages/editor/dist/editor-lwc.css` | existing `scripts/build-lwc-styles.mjs` |
 
 ```bash
@@ -165,10 +182,12 @@ Produces both artifacts and copies them into `apps/salesforce/force-app/main/def
 
 ## 9. Security & packaging
 
-- **FLS/CRUD** enforced in Apex; ship **permission sets**: `DocEngine_Admin` (templates), `DocEngine_User` (fill).
-- **Public Group access** — `DocEngineAccess` asserts `Access_Group_Id__c` (via `GroupMember` / nested Regular groups) on template get/list, merge payload, button resolve, and document get/list/save/delete/file. Documents inherit the parent template’s group. View All Records on templates bypasses the group check.
-- **LWS** validation in scratch org (G2).
-- **Packaging:** `sfdx-project.json`, 2GP **managed** package, namespace, then AppExchange security review. Keep an unmanaged/metadata path for internal deploys during dev.
+- **FLS/CRUD — Implemented.** Apex enforces CRUD/FLS; ship **permission sets**: `DocEngine_Admin` (templates), `DocEngine_User` (fill).
+- **Public Group access — Implemented.** `DocEngineAccess` asserts `Access_Group_Id__c` (via `GroupMember` / nested Regular groups) on template get/list, merge payload, button resolve, and document get/list/save/delete/file. Documents inherit the parent template’s group. View All Records on templates bypasses the group check.
+- **LWS (G2):** mitigations **Implemented** (see §3); **Validated in scratch org** is a separate ongoing checklist — [LWS.md](./LWS.md). Do not read this bullet as “not built.”
+- **Packaging — Managed package tested** (1GP). Canonical release notes in [PACKAGING.md](./PACKAGING.md) (e.g. DocEngine 1.17 / `04t…`). Keep an unmanaged/metadata path for scratch deploys during dev.
+- **AppExchange security review:** checklist and upload drafts in [SECURITY_REVIEW.md](./SECURITY_REVIEW.md) / [security-review/](./security-review/README.md) — **prepared / in progress**, **not** “AppExchange security review passed.” Packaging a managed version ≠ Partner portal approval.
+- **Public Forms elevation:** guest token boundary and elevated writeback/PDF are documented for review in [PUBLIC_FORMS.md — Security boundary](./PUBLIC_FORMS.md#security-boundary).
 
 ## 10. Agentforce (AgentExchange) — later phase
 
@@ -176,14 +195,16 @@ Produces both artifacts and copies them into `apps/salesforce/force-app/main/def
 
 ## 11. Phasing
 
+✅ below = **Implemented** for that phase’s deliverables (see §3 milestone vocabulary). It does **not** imply scratch-org sign-off, production-like validation, or AppExchange security review passed.
+
 1. **P1** — Bundle (G1) + Static Resources. ✅
-2. **P2** — Objects + Apex CRUD. ✅
+2. **P2** — Objects + Apex CRUD. ✅ (unit tested)
 3. **P3** — `docEngineTemplateBuilder` + `docEngineFiller`; merge/pre-fill wiring. ✅
-4. **P4** — PDF→Files (remote), LWS hardening. ✅
-5. **P5** — Managed package + security review. ✅
+4. **P4** — PDF→Files (remote), LWS hardening code. ✅ — scratch-org LWS sign-off remains a separate checklist ([LWS.md](./LWS.md)).
+5. **P5** — Managed package released/tested (see [PACKAGING.md](./PACKAGING.md)). ✅ for packaging — AppExchange security review **not** implied; materials/checklist only until passed.
 6. **P6** — Agentforce action.
 7. **P7** — Record Quick Action / URL button (`docEngineRun` + `DocEngine_Button_Config__c` with Template lookup, fill, export, preview). ✅
-8. **P8** — Public Forms Mode (Experience Cloud guest link → create/update record + PDF). See [PUBLIC_FORMS.md](./PUBLIC_FORMS.md) (F1–F6 implemented).
+8. **P8** — Public Forms Mode (Experience Cloud guest link → create/update record + PDF). ✅ F1–F6 Implemented — **separate guest security boundary** (not equivalent to authenticated fill); see [PUBLIC_FORMS.md — Security boundary](./PUBLIC_FORMS.md#security-boundary).
 
 ## 12. App details (evaluator FAQ)
 
@@ -218,7 +239,7 @@ Important for healthcare and enterprise.
 - Permission sets: `DocEngine_Admin` (templates), `DocEngine_User` (fill); optional `DocEngine_PDF_User` for External PDF. Custom permission `Manage_DocEngine` gates admin Apex paths.
 - Apex controllers run `with sharing` and enforce CRUD/FLS (`Security.stripInaccessible` / `WITH SECURITY_ENFORCED`).
 - Optional Public Group restriction via `Access_Group_Id__c`; `DocEngineAccess` asserts membership on template get/list, merge, button resolve, and document get/list/save/delete/file. Documents inherit the parent template’s group. View All Records on templates bypasses the group check.
-- Public Forms use published-link tokens and mapping allowlists (not Public Groups) — see [PUBLIC_FORMS.md](./PUBLIC_FORMS.md).
+- **Authenticated fill** uses permission sets + optional Public Groups. **Public Forms** are a separate guest boundary: unguessable link tokens, Mapping allowlists, elevated Apex — not Public Groups and not “just another LWC mode.” Status of token/expiry/field allowlist/CAPTCHA gaps: [PUBLIC_FORMS.md — Security boundary](./PUBLIC_FORMS.md#security-boundary).
 
 Details: [SECURITY_REVIEW.md](./SECURITY_REVIEW.md), [security-review/](./security-review/README.md).
 

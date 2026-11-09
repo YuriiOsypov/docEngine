@@ -401,8 +401,9 @@ public with sharing class DocEngineTemplateController {
 
   /**
    * Find-or-create a version row for the template's current head (lazy snapshot for documents).
-   * Prefer Current_Version__c when present. Runs without sharing so fill users can pin
-   * a snapshot even when they only have read access on templates.
+   * Prefer Current_Version__c when present. Delegates to DocEngineTemplateVersionService,
+   * which asserts template/Public Group access then uses statement-scoped SYSTEM_MODE
+   * so fill users can pin a head snapshot even with read-only template FLS.
    */
   public static Id ensureCurrentVersionId(Id templateId) {
     return DocEngineTemplateVersionService.ensureCurrentVersionId(templateId);

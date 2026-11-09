@@ -59,7 +59,7 @@ Prefer rescanning managed package version `04tgK000000MFRpQAO`
 | **Severity** | Serious |
 | **Primary sinks** | `DocEngineTemplateSaveService` `Database.upsert(..., SYSTEM_MODE)`; `DocEngineTemplateVersionService` version insert; `DocEnginePublicFormService` guest writeback, document insert, form-link counter update, Files attach |
 | **Classification** | False positive / required 1GP package-field exception |
-| **Explanation** | Managed 1GP cannot ship subscriber FLS on all required package fields. These writes are fixed allowlists after independent authorization: admin/`Manage_DocEngine` for template save; validated public-form token + pinned mapping for guest submit. Standard objects and authenticated Files/Task/Content paths use user mode and `stripInaccessible`. |
+| **Explanation** | Managed 1GP cannot ship subscriber FLS on all required package fields. These writes are fixed allowlists after independent authorization: admin/`Manage_DocEngine` for template save and caller-JSON version inserts; `assertTemplateAccess` then head-only snapshot + `Current_Version__c` pin for fill-user lazy versions; validated public-form token + pinned mapping for guest submit. Standard objects and authenticated Files/Task/Content paths use user mode and `stripInaccessible`. |
 | **Verification** | Statement-scoped analyzer suppressions document each SYSTEM_MODE DML; security-negative tests cover setup authorization and mapping allowlists. |
 
 ---
@@ -110,8 +110,21 @@ only for:
 1. Package-owned required fields that cannot receive subscriber FLS in 1GP.
 2. Guest Experience Cloud submit (writeback + document + optional file attach).
 3. Install/upgrade bootstrap.
+4. Lazy template-version pin for fill users (see assessment below).
 
 Each boundary validates identity/authorization first. Authenticated standard-object
 and Files operations use user mode. Automatic public `ContentDistribution` for
 preview/images was removed; public links exist only via explicit Share
 (`prepareShare`), with original download disabled and expiry set when supported.
+
+### Template-version pin — separated findings (preserve in review)
+
+Do **not** characterize authenticated version pinning as class-level `without sharing`
+/ unrestricted sharing bypass. It is controlled system-mode execution after auth:
+
+| Finding | Assessment |
+|---|---|
+| **Sound design** | Narrow privilege elevation after authorization. `DocEngineTemplateVersionService` is `with sharing`. `ensureCurrentVersionId` asserts template access (USER_MODE + Public Group), then SYSTEM_MODE snapshots **existing head JSON only** and pins `Current_Version__c`. |
+| **Review item** | `insertVersion` (caller-supplied JSON) requires `assertManageAccess` and template access; authorized workflow is admin template save (`DocEngineTemplateSaveService`). Fill users cannot invoke it with untrusted JSON (`DocEngineTemplateVersionServiceTest`). |
+| **Documentation fix** | Architecture / Apex comments align with SYSTEM_MODE-after-auth (not “without sharing helper”). |
+| **Important boundary** | Document DML (`DocEngineInstanceController` save/delete) and authenticated Files/Task/ContentDistribution remain user-mode + `stripInaccessible`. Version-pin elevation does not bypass document CRUD/FLS. |

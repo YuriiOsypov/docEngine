@@ -8,6 +8,25 @@ Turn DocEngine into an external intake form without rewriting the editor, mappin
 
 ---
 
+## Security boundary
+
+Public Forms are **not** another authenticated LWC mode. Guest Experience Cloud + elevated Apex (`DocEnginePublicFormService`) is a **separate trust boundary** from session users and `DocEngineAccess` Public Groups.
+
+- Guests may call **`DocEnginePublicFormController` only** (get / submit). No Merge, List, or full Template controllers.
+- Writeback and PDF attach run elevated with **hard allowlists** from the pinned template Mapping — not Guest CRUD on arbitrary objects/fields.
+- F1–F6 **Implemented** means the guest surface ships; it does **not** mean every abuse-control below is production-hardened (see Partial rows).
+
+| Requirement | Status | How / gap |
+|---|---|---|
+| Unguessable, revocable, expiring tokens | **Implemented** | `Token__c` = hex of `Crypto.generateAesKey(256)`; revoke via `Is_Active__c`; optional `Expires_At__c` and `Max_Submissions__c` |
+| Strict record/field access | **Implemented** | Writeback only invertible `$payload.{ApiName}` on the bound object (`DocEngineWriteback`); Update target = `Form_Link__c.Record_Id__c` only; no Merge/List Apex for guests |
+| Server-side validation of submitted fields | **Implemented (writeback path)** | Server parses `answersJson` (size-capped); only mapped allowlisted fields applied; system fields blocked; unmapped answers stay in `Document_JSON__c` only |
+| Rate limiting / abuse protection | **Partial** | Max submissions + JSON size caps; `Require_Captcha__c` hook exists — **CAPTCHA provider not wired** (links with CAPTCHA required are rejected); **no IP/time-window rate limit** yet |
+| No SF IDs / sensitive data in URLs | **Implemented** | Guest URL is `?token=` only; `fieldMapping` / `sourceSample` stripped from guest payload |
+| Ownership / audit history | **Implemented** | `DocEngine_Document__c.Form_Link__c`, `Source__c = PublicForm`; optional `Owner_User__c` on the link; `Submission_Count__c` on the link |
+
+---
+
 ## Experience Cloud setup (F4)
 
 1. Create / open an **Experience Cloud** site (or Salesforce Site) with guest access.
@@ -286,12 +305,14 @@ Admin: “Copy public link” on template record (or builder chrome) → `create
 
 ## 7. Security checklist
 
-1. Guest perm set: create on target objects you explicitly support; create on `DocEngine_Document__c`; ContentVersion insert; **Apex class access = PublicFormController only**.
-2. Token = ACL (entropy + expiry + revoke + optional max submissions).
+Operational checks for deploy / AppExchange review. Requirement status lives in **Security boundary** above.
+
+1. Guest perm set: package object / Apex access for public form only; **Apex class access = `DocEnginePublicFormController` only**. Parent object Create/Edit for guests is **not** required when writeback uses elevated `SYSTEM_MODE`.
+2. Token = ACL (entropy + expiry + revoke + optional max submissions) — see Security boundary table.
 3. Strip `sourceSample` and any describe dumps from guest responses.
 4. Allowlisted writeback; no arbitrary SOQL field list from the client.
 5. No `DocEngineAccess` Public Groups for anonymous — use `Public_Form_Enabled__c` + token.
-6. Rate limit / CAPTCHA on Submit; reuse document JSON size caps.
+6. Abuse controls: enforce max submissions + JSON size caps; leave `Require_Captcha__c` **false** until a CAPTCHA provider is wired (required-CAPTCHA links are rejected). IP/time-window rate limit is a follow-up gap.
 7. PDF callout only through existing façade; guest must not pass arbitrary HTML to an open PDF endpoint without token binding.
 8. Security review: material change from “Lightning session only” ([security-review/01-…](./security-review/01-solution-architecture-and-usage.md)).
 

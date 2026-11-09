@@ -105,6 +105,20 @@ All persistent data remains in the subscriber Salesforce org unless the subscrib
 - Template access optionally restricted via `Access_Group_Id__c` (Public Group membership)
 - Named Credential credentials configured by subscriber admin post-install
 
+### Controlled system-mode vs sharing bypass (review narrative)
+
+DocEngine does **not** use class-level `without sharing` for authenticated fill/design
+flows. Where package fields cannot ship subscriber FLS (1GP), elevation is
+**statement-scoped `AccessLevel.SYSTEM_MODE` after authorization**. Preserve this
+distinction in review:
+
+| Finding | Assessment |
+|---|---|
+| **Sound design** | Narrow privilege elevation after authorization. `ensureCurrentVersionId` calls `DocEngineAccess.assertTemplateAccess` (USER_MODE visibility + Public Group) before SYSTEM_MODE find-or-create of a **head-only** snapshot and pin of `Current_Version__c`. |
+| **Review item** | `insertVersion` accepts caller JSON only after `assertManageAccess` (+ template access). It is the admin/template-save path, not the fill-user pin path. Negative test: `DocEngine_User` can ensure/pin head but cannot insert crafted version JSON. |
+| **Documentation** | Architecture and Apex comments describe SYSTEM_MODE after access checks — not unrestricted sharing bypass. |
+| **Important boundary** | `DocEngine_Document__c` save/delete and authenticated Files/Task/ContentDistribution DML remain `stripInaccessible` + `AccessLevel.USER_MODE`. System mode for version pin does not elevate document CRUD. |
+
 ### External PDF auth (optional)
 
 - Named Credential Password protocol; API token stored in Named Credential (encrypted by platform)
