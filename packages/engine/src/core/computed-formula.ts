@@ -10,6 +10,7 @@ import {
   invokeFormulaFunction,
   type FormulaFunctionDef,
 } from './formula-functions.js';
+import { parseNumericValue } from './currency-format.js';
 
 export { extractFormulaDependencyFieldIds } from './formula-field-index.js';
 export {
@@ -102,15 +103,14 @@ function scalarizeRawValue(value: unknown): unknown {
 
 function isNumericValue(value: unknown): boolean {
   if (value === '' || value == null) return false;
-  if (typeof value === 'number' && !Number.isNaN(value)) return true;
-  if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) return true;
-  return false;
+  if (typeof value === 'string' && value.trim() === '') return false;
+  return parseNumericValue(value) != null;
 }
 
 function toNumber(value: unknown): number {
   if (value === '' || value == null) throw new Error('Expected number');
-  const num = Number(value);
-  if (Number.isNaN(num)) throw new Error('Expected number');
+  const num = parseNumericValue(value);
+  if (num == null) throw new Error('Expected number');
   return num;
 }
 

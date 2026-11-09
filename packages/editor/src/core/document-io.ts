@@ -18,5 +18,10 @@ export {
   buildDocExport,
   applyDocumentValues,
   applySectionInstanceToBlocks,
+  materializeRepeatableSectionInstances,
+  collapseMaterializedSourceSections,
+  hasMaterializedSourceSections,
+  SOURCE_INSTANCE_OF_KEY,
+  SOURCE_INSTANCE_INDEX_KEY,
   normalizeImportedDoc,
 } from '@docengine/engine';

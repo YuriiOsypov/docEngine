@@ -44,7 +44,11 @@ import {
   estimatePdfContentHeightPt,
   repeatableChunkFitsPage,
 } from './repeatable-table-pagination.js';
-import { usesRepeatablePageHeader, buildRepeatableSectionPageHeader } from './repeatable-section-header.js';
+import {
+  usesRepeatablePageHeader,
+  buildRepeatableSectionPageHeader,
+  shouldAttachCompanionLeadingToPageHeader,
+} from './repeatable-section-header.js';
 import { parseTableColumnWidth, tableColumnWidthsFromSchema } from './table-column-width.js';
 
 function tableHasRowLabels(rows: any): boolean {
@@ -1101,6 +1105,21 @@ function getCompanionTableSegmentRows(adjacent: any): any {
   return null;
 }
 
+/**
+ * Segments that appear before the companion table in the next section.
+ * Without these, preview-first HTML keeps "Item group" above the table while
+ * PDF would emit the stolen table first and leave the prose for later.
+ */
+function getCompanionLeadingSegments(block: any, tableId: string): any[] {
+  if (block?.type !== 'documentSection') return [];
+  const segments = block.data?.segments ?? [];
+  const tableIndex = segments.findIndex(
+    (seg: any) => seg.type === 'table' && String(seg.id ?? '') === String(tableId),
+  );
+  if (tableIndex <= 0) return [];
+  return segments.slice(0, tableIndex);
+}
+
 function companionTableHasContent(adjacent: any, ctx: PdfRenderContext) {
   if (!ctx.hideEmptyValues) return !!adjacent.tableId;
   const segmentRows = getCompanionTableSegmentRows(adjacent);
@@ -1115,6 +1134,17 @@ function isTableOnlyCompanionSection(block: any) {
   if (block.type !== 'documentSection') return true;
   const segments = block.data?.segments ?? [];
   return !segments.some((seg: any) => seg.type !== 'table');
+}
+
+/** True when the companion section has no segments after the consumed table. */
+function companionHasOnlyLeadingAndTable(block: any, tableId: string): boolean {
+  if (block?.type !== 'documentSection') return true;
+  const segments = block.data?.segments ?? [];
+  const tableIndex = segments.findIndex(
+    (seg: any) => seg.type === 'table' && String(seg.id ?? '') === String(tableId),
+  );
+  if (tableIndex < 0) return isTableOnlyCompanionSection(block);
+  return tableIndex >= segments.length - 1;
 }
 
 function buildFirstRepeatableChunkStack(
@@ -1252,7 +1282,7 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
   const blocks = doc.blocks ?? [];
   /** @type {Set<number>} */
   const consumedBlockIndices = new Set();
-  /** @type {Map<number, { skipEntire: boolean, excludeTableIds?: Set<string> }>} */
+  /** @type {Map<number, { skipEntire: boolean, excludeTableIds?: Set<string>, consumedThroughTableId?: string }>} */
   const consumedCompanionMeta = new Map();
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
@@ -1264,8 +1294,13 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
       if (consumedMeta?.skipEntire) continue;
       if (!evaluateSectionVisibility(data.visibility, ctx.fieldValues, ctx.fieldSchemas)) continue;
 
-      const sectionLabel = resolveVisibleSectionLabel(data);
+      // Title already emitted with the stolen companion table — don't repeat it
+      // when only trailing body content remains.
+      const sectionLabel = consumedMeta?.consumedThroughTableId
+        ? ''
+        : resolveVisibleSectionLabel(data);
       const repeatable = !!data.repeatable;
+      const keepOnOnePage = !!data.keepOnOnePage;
       const filtered = ctx.hideEmptyValues
         ? filterSegmentsForPreview(
           data.segments ?? [],
@@ -1275,7 +1310,21 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
         : (data.segments ?? []);
       const spacingCollapsed = collapseBlankSpacingBeforeTables(filtered);
       const excludeTableIds = consumedMeta?.excludeTableIds ?? new Set();
-      const renderableSegments = spacingCollapsed.filter(
+      const consumedThroughTableId = consumedMeta?.consumedThroughTableId
+        ? String(consumedMeta.consumedThroughTableId)
+        : '';
+      // When a prior "Show on each page" section already emitted this section's
+      // leading prose + table, only keep trailing segments for a later pass.
+      const segmentsAfterConsumedTable = consumedThroughTableId
+        ? (() => {
+            const tableIndex = spacingCollapsed.findIndex(
+              (seg: any) =>
+                seg.type === 'table' && String(seg.id ?? '') === consumedThroughTableId,
+            );
+            return tableIndex >= 0 ? spacingCollapsed.slice(tableIndex + 1) : spacingCollapsed;
+          })()
+        : spacingCollapsed;
+      const renderableSegments = segmentsAfterConsumedTable.filter(
         (seg: any) => !(seg.type === 'table' && seg.id && excludeTableIds.has(String(seg.id))),
       );
       const hasTableWithContent = renderableSegments.some(
@@ -1330,14 +1379,33 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
             : [];
 
           let companionTitleNode = null;
+          let companionLeadingContent: PdfContentNode[] = [];
           if (adjacent.blockKind === 'section') {
             const companionLabel = resolveVisibleSectionLabel(adjacent.block.data);
             if (companionLabel && companionLabel !== sectionLabel) {
               companionTitleNode = buildRepeatableSectionTitleNode(companionLabel, ctx.sectionHeaderPdfStyle);
             }
+            const leadingSegments = getCompanionLeadingSegments(adjacent.block, adjacent.tableId);
+            const leadingFiltered = ctx.hideEmptyValues
+              ? filterSegmentsForPreview(leadingSegments, ctx.fieldValues, ctx.fieldSchemas)
+              : leadingSegments;
+            const leadingCollapsed = collapseBlankSpacingBeforeTables(leadingFiltered);
+            if (leadingCollapsed.length) {
+              companionLeadingContent = renderSegmentsToPdfContent(leadingCollapsed, ctx);
+            }
           }
 
-          const firstChunkOnlyContent = companionTitleNode ? [companionTitleNode] : [];
+          // When companion leading is attached to the page-1 header, keep it out of
+          // the body. Multipage item instances keep leading in the body instead.
+          const pageHeaderMode = usesRepeatablePageHeader(pageSetup);
+          const companionInHeader =
+            pageHeaderMode && shouldAttachCompanionLeadingToPageHeader(doc);
+          const firstChunkOnlyContent = companionInHeader
+            ? []
+            : [
+                ...(companionTitleNode ? [companionTitleNode] : []),
+                ...companionLeadingContent,
+              ];
 
           const chunks = renderRepeatableTableChunks(
             adjacent.tableId,
@@ -1361,12 +1429,16 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
           usedRepeatableTableChunks = true;
 
           consumedBlockIndices.add(adjacent.index);
-          if (isTableOnlyCompanionSection(adjacent.block)) {
+          if (
+            isTableOnlyCompanionSection(adjacent.block)
+            || companionHasOnlyLeadingAndTable(adjacent.block, adjacent.tableId)
+          ) {
             consumedCompanionMeta.set(adjacent.index, { skipEntire: true });
           } else {
             consumedCompanionMeta.set(adjacent.index, {
               skipEntire: false,
               excludeTableIds: new Set([adjacent.tableId]),
+              consumedThroughTableId: String(adjacent.tableId),
             });
           }
         } else if (usesRepeatablePageHeader(pageSetup) && !options.skipRepeatablePageHeader) {
@@ -1405,11 +1477,12 @@ export function renderSinglePagePdfContent(doc: EditorDocument, options: PdfRend
       if (usedRepeatableTableChunks) {
         content.push(...borderedStack);
       } else {
-        // Keep each "Show on each page" instance on one page so internal gaps match.
+        // Keep "Show on each page" / "Keep section on one page" stacks atomic so
+        // headers are not orphaned from following fields/tables across PDF pages.
         content.push({
           stack: borderedStack,
           margin: [0, 0, 0, 6],
-          ...(repeatable ? { unbreakable: true } : {}),
+          ...(repeatable || keepOnOnePage ? { unbreakable: true } : {}),
         });
       }
       continue;

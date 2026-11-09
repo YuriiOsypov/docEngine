@@ -95,13 +95,34 @@ describe('applyPageFormatCssVars', () => {
     assert.equal(el.style.getPropertyValue('--doc-page-width'), '326.7mm');
     assert.equal(el.style.getPropertyValue('--doc-page-min-height'), '231mm');
     assert.equal(el.style.getPropertyValue('--doc-page-margin'), '16.5mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-top'), '16.5mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-right'), '16.5mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-bottom'), '16.5mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-left'), '16.5mm');
     assert.equal(el.style.getPropertyValue('--doc-page-content-width'), '293.7mm');
     assert.equal(el.classList.contains('editor-holder--fill-page'), true);
 
     clearPageFormatCssVars(el);
     assert.ok(!el.style.getPropertyValue('--doc-page-width'));
     assert.ok(!el.style.getPropertyValue('--doc-page-content-width'));
+    assert.ok(!el.style.getPropertyValue('--doc-page-margin-top'));
     assert.equal(el.classList.contains('editor-holder--fill-page'), false);
+  });
+
+  it('applies per-side margins when pageSetup.margin is a tuple', () => {
+    const { document } = parseHTML('<!DOCTYPE html><html><body></body></html>');
+    globalThis.document = document;
+    globalThis.HTMLElement = document.defaultView.HTMLElement;
+
+    const el = document.createElement('div');
+    applyPageFormatCssVars(el, { format: 'a4', margin: [8, 12, 16, 20] });
+
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-top'), '8mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-right'), '12mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-bottom'), '16mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin-left'), '20mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-margin'), '8mm');
+    assert.equal(el.style.getPropertyValue('--doc-page-content-width'), '178mm');
   });
 });
 

@@ -26,16 +26,72 @@ function scalarEmpty(value: unknown): boolean {
   return value == null || value === '' || (Array.isArray(value) && value.length === 0);
 }
 
-/** Parse a numeric payload value (number or numeric string). */
+/**
+ * Parse a numeric payload value.
+ * Accepts a number, a numeric string (`1,234.50`), and a currency-decorated
+ * display string (`53.25 USD`, `USD 53.25`, `$53.25`) so computed formulas
+ * can multiply fields that use a currency interface.
+ */
 export function parseNumericValue(value: unknown): number | null {
   if (scalarEmpty(value)) return null;
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
   }
-  const str = String(value).trim().replace(/,/g, '');
+  if (typeof value === 'boolean') return null;
+
+  const raw = String(value);
+  const direct = parsePlainNumericString(raw);
+  if (direct != null) return direct;
+  // Number('') === 0. Keep that for blank / whitespace-only strings.
+  if (raw.trim().replace(/,/g, '') === '') return 0;
+
+  const stripped = stripCurrencyDecoration(raw);
+  if (stripped == null) return null;
+  return parsePlainNumericString(stripped);
+}
+
+/** Plain numeric string. Commas are thousands separators (existing contract). */
+function parsePlainNumericString(raw: string): number | null {
+  const str = raw.trim().replace(/,/g, '');
   if (!str) return null;
   const num = Number(str);
   return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Drop one leading and one trailing currency symbol or short code
+ * (`USD`, `EUR`, `$`) so the remainder can be parsed as a number.
+ * Returns null when nothing currency-like was removed.
+ */
+function stripCurrencyDecoration(raw: string): string | null {
+  let str = raw.trim();
+  let changed = false;
+
+  if (str.startsWith('(') && str.endsWith(')') && str.length > 2) {
+    str = `-${str.slice(1, -1).trim()}`;
+    changed = true;
+  }
+
+  const withoutSymbols = str.replace(/\p{Sc}/gu, '');
+  if (withoutSymbols !== str) {
+    str = withoutSymbols;
+    changed = true;
+  }
+  str = str.replace(/\s+/g, ' ').trim();
+
+  const withoutLeading = str.replace(/^\p{L}{2,4}(?=\s|\d)/u, '').trim();
+  if (withoutLeading !== str && /\d/.test(withoutLeading)) {
+    str = withoutLeading;
+    changed = true;
+  }
+
+  const withoutTrailing = str.replace(/(?<=\d)\s*\p{L}{2,4}$/u, '').trim();
+  if (withoutTrailing !== str && /\d/.test(withoutTrailing)) {
+    str = withoutTrailing;
+    changed = true;
+  }
+
+  return changed ? str : null;
 }
 
 function normalizeDisplayFormat(format: unknown): IntegerDisplayFormat {

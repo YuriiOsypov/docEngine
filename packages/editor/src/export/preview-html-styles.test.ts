@@ -32,7 +32,22 @@ describe('preview-html-styles', () => {
     assert.equal(vars['--doc-page-width'], '210mm');
     assert.equal(vars['--doc-page-min-height'], '297mm');
     assert.equal(vars['--doc-page-margin'], '20mm');
+    assert.equal(vars['--doc-page-margin-top'], '20mm');
+    assert.equal(vars['--doc-page-margin-right'], '20mm');
+    assert.equal(vars['--doc-page-margin-bottom'], '20mm');
+    assert.equal(vars['--doc-page-margin-left'], '20mm');
     assert.equal(vars['--doc-page-content-width'], '170mm');
+  });
+
+  it('emits per-side margins from a margin tuple', () => {
+    const vars = resolvePreviewHtmlCssVars({
+      pageSetup: { format: 'a4', margin: [5, 10, 15, 20] },
+    });
+    assert.equal(vars['--doc-page-margin-top'], '5mm');
+    assert.equal(vars['--doc-page-margin-right'], '10mm');
+    assert.equal(vars['--doc-page-margin-bottom'], '15mm');
+    assert.equal(vars['--doc-page-margin-left'], '20mm');
+    assert.equal(vars['--doc-page-content-width'], '180mm');
   });
 
   it('keeps </style> out of the stylesheet when font values are hostile', () => {

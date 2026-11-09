@@ -89,6 +89,7 @@ import {
   validateRequiredFields,
   collectAllValues,
   isFieldsExport,
+  materializeRepeatableSectionInstances,
 } from './core/document-io.js';
 import { resolveRepeatablePagePlan } from './core/field-io/sectioned-document-io.js';
 import {
@@ -1693,6 +1694,7 @@ export function createEditor(options: any = {}) {
     borderTop,
     borderBottom,
     eachRowOnNewPage,
+    keepOnOnePage,
     visibility,
     sectionEl,
   }: any) {
@@ -1726,6 +1728,7 @@ export function createEditor(options: any = {}) {
       borderTop: !!borderTop,
       borderBottom: !!borderBottom,
       eachRowOnNewPage: !!eachRowOnNewPage,
+      keepOnOnePage: !!keepOnOnePage,
       visibility: visibility ?? null,
     };
     blocks[blockIndex] = block;
@@ -1750,6 +1753,7 @@ export function createEditor(options: any = {}) {
           borderTop: !!borderTop,
           borderBottom: !!borderBottom,
           eachRowOnNewPage: !!eachRowOnNewPage,
+          keepOnOnePage: !!keepOnOnePage,
           visibility: visibility ?? null,
         });
       }
@@ -1843,6 +1847,53 @@ export function createEditor(options: any = {}) {
   function clearStructureSelection() {
     clearColumnsSelection();
     clearTableSelection();
+  }
+
+  /** Section / table / columns chrome — not free prose the user is typing into. */
+  function isDesignStructureTarget(target: Element | null) {
+    if (!target?.closest) return false;
+    if (
+      target.closest(
+        '.document-section__header, .document-table__toolbar, .document-columns__toolbar, .editor-drag-handle, .vision-table__col-resizer, .document-columns__col-resizer',
+      )
+    ) {
+      return true;
+    }
+    if (target.closest('.document-table')) return true;
+    // Columns wrapper chrome, but not the editable column body.
+    if (target.closest('.document-columns') && !target.closest('.document-columns__col')) {
+      return true;
+    }
+    return false;
+  }
+
+  function shouldClearObjectSelectionForTextTarget(target: Element | null) {
+    if (!target || !designMode || !useDesignPanels) return false;
+    if (target.closest?.('.field-token')) return false;
+    if (isDesignStructureTarget(target)) return false;
+    const prose = target.closest?.('.document-section__body, .document-columns__col');
+    return !!(prose && holder.contains(prose));
+  }
+
+  /** Drop Section/Table/Columns/Setup selection when the caret moves into plain text. */
+  function clearObjectSelectionForTextEdit() {
+    if (!useDesignPanels || !designMode || !propertiesPanel) return;
+    const mode = propertiesPanel.getMode?.();
+    const hadObjectSelection =
+      selectedSectionBlockIndex >= 0 ||
+      !!selectedTableEl?.isConnected ||
+      !!selectedColumnsEl?.isConnected ||
+      mode === 'section' ||
+      mode === 'columns' ||
+      mode === 'document';
+    if (!hadObjectSelection) return;
+
+    selectedSectionBlockIndex = -1;
+    clearStructureSelection();
+    updateSectionSelectionHighlight();
+    if (!getSelectedDesignFieldTokens().length) {
+      propertiesPanel.showEmpty();
+    }
   }
 
   function findLiveTableEl(tableId: any) {
@@ -2906,6 +2957,7 @@ export function createEditor(options: any = {}) {
           borderTop: !!block.data?.borderTop,
           borderBottom: !!block.data?.borderBottom,
           eachRowOnNewPage: !!block.data?.eachRowOnNewPage,
+          keepOnOnePage: !!block.data?.keepOnOnePage,
           visibility: block.data?.visibility ?? null,
         },
         section,
@@ -2988,6 +3040,12 @@ export function createEditor(options: any = {}) {
       e.preventDefault();
       e.stopPropagation();
       selectTableEl(pivotEl);
+      return;
+    }
+
+    // Clicking into prose clears Section/Table selection so Properties don't stick.
+    if (shouldClearObjectSelectionForTextTarget(e.target)) {
+      clearObjectSelectionForTextEdit();
       return;
     }
 
@@ -3162,6 +3220,10 @@ export function createEditor(options: any = {}) {
       return true;
     }
 
+    if (shouldClearObjectSelectionForTextTarget(target)) {
+      clearObjectSelectionForTextEdit();
+    }
+
     const columnEditable = target.closest?.('.document-columns__col');
     if (columnEditable && holder.contains(columnEditable)) {
       lastFocusedEditable = columnEditable;
@@ -3175,6 +3237,11 @@ export function createEditor(options: any = {}) {
 
     const editable = target.closest?.('.document-section__body');
     if (editable && holder.contains(editable)) {
+      // Focusing a selected table/columns block lives inside the section body —
+      // don't treat that as prose editing.
+      if (isDesignStructureTarget(target)) {
+        return false;
+      }
       lastFocusedEditable = editable;
       if (designMode && getSelectedDesignFieldTokens().length) {
         syncFieldStyleToolbar();
@@ -3296,10 +3363,15 @@ export function createEditor(options: any = {}) {
     loadedDocumentSections = result.fieldsExport.sections
       ? JSON.parse(JSON.stringify(result.fieldsExport.sections))
       : null;
+    const mappedMaterialized = materializeRepeatableSectionInstances(
+      result.blocks,
+      result.fieldSchemas,
+      loadedDocumentSections,
+    );
     initEditor({
       time: Date.now(),
-      fieldSchemas: result.fieldSchemas,
-      blocks: result.blocks,
+      fieldSchemas: mappedMaterialized.fieldSchemas,
+      blocks: mappedMaterialized.blocks,
       pageSetup: documentPageSetup,
       fieldMapping: documentFieldMapping,
     });
@@ -3494,17 +3566,25 @@ export function createEditor(options: any = {}) {
           ? JSON.parse(JSON.stringify(fieldsPayload.sections))
           : null;
         const values = normalizeDocumentValues(fieldsPayload, doc.blocks, doc.fieldSchemas);
-        const { blocks, fieldSchemas: nextFieldSchemas } = applyDocumentValues(
+        const applied = applyDocumentValues(
           doc.blocks,
           values,
           doc.fieldSchemas,
+        );
+        // Expand `_source` section arrays into concrete fill blocks (one per
+        // instance, including nested table rows). Preview/PDF already clones via
+        // repeatableSectionInstances; without this the editor only shows [0].
+        const materialized = materializeRepeatableSectionInstances(
+          applied.blocks,
+          applied.fieldSchemas,
+          loadedDocumentSections,
         );
         const resume = documentHistory.suspend();
         try {
           initEditor({
             time: fieldsPayload.time ?? Date.now(),
-            fieldSchemas: nextFieldSchemas,
-            blocks,
+            fieldSchemas: materialized.fieldSchemas,
+            blocks: materialized.blocks,
             pageSetup: documentPageSetup,
           });
           if (editor) await editor.isReady;
@@ -3680,6 +3760,19 @@ export function createEditor(options: any = {}) {
     async openFieldMapping(options: any = {}) {
       if (!fieldMappingModal) {
         throw new Error('Field mapping editor is not available in this editor.');
+      }
+      // Persist live canvas tokens into registry blocks before the modal reads
+      // getTemplate(). Palette drops update fieldSchemas immediately but blocks
+      // stay stale until EditorJS save — without this, new fields (e.g. _root_text)
+      // are pruned from buildTemplateExport and missing from Template fields.
+      if (editor) {
+        try {
+          await editor.isReady;
+          const live = await editor.save();
+          registry.setBlocks(live.blocks ?? []);
+        } catch {
+          // editor not ready — fall through with current registry state
+        }
       }
       const spec = options.spec ?? documentFieldMapping ?? normalizeFieldMappingSpec(null);
       // Keep Database tab Source payload in sync with the sample Mapping will show.

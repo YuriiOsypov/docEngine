@@ -116,4 +116,34 @@ describe('evaluateFormula plugin functions', () => {
       '4',
     );
   });
+
+  it('multiplies and sums currency-formatted values', () => {
+    const schemas = {
+      price: { type: 'text', name: 'Price' },
+      qty: { type: 'text', name: 'Qty' },
+    };
+    const product = evaluateFormula(
+      '{price} * {qty}',
+      { price: '53.25 USD', qty: '2.00' },
+      schemas,
+    );
+    assert.equal(product.error, null);
+    assert.equal(product.value, '106.5');
+
+    const total = evaluateFormula(
+      'sum({price})',
+      { price: '53.25 USD' },
+      { price: { type: 'text', name: 'Price' } },
+    );
+    assert.equal(total.error, null);
+    assert.equal(total.value, '53.25');
+
+    const added = evaluateFormula(
+      '{price} + {qty}',
+      { price: '53.25 USD', qty: '1.00 USD' },
+      schemas,
+    );
+    assert.equal(added.error, null);
+    assert.equal(added.value, '54.25');
+  });
 });

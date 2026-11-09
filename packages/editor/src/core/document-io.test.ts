@@ -9,6 +9,10 @@ import {
   buildDocExport,
   normalizeDocumentValues,
   normalizeImportedDoc,
+  materializeRepeatableSectionInstances,
+  hasMaterializedSourceSections,
+  SOURCE_INSTANCE_OF_KEY,
+  SOURCE_INSTANCE_INDEX_KEY,
 } from './document-io.js';
 import {
   cellFieldId,
@@ -528,5 +532,208 @@ describe('applyDocumentValues computed fields', () => {
     assert.equal(section.fieldValues[cellFieldId(amountTableId, 'row2', 'amount')], undefined);
     assert.equal(result.fieldSchemas[cellFieldId(amountTableId, 'row2', 'amount')], undefined);
     assert.equal(section.fieldValues[totalFieldId], '4');
+  });
+});
+
+describe('materializeRepeatableSectionInstances', () => {
+  it('clones _source section instances into fill-mode blocks with nested table rows', () => {
+    const itemsTableId = 'fld_items_table';
+    const groupFieldId = 'fld_items_group';
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'items',
+          label: 'items',
+          segments: [
+            { type: 'field', id: groupFieldId },
+            {
+              type: 'table',
+              id: itemsTableId,
+              rows: [{ key: 'row1', label: '' }],
+            },
+          ],
+          fieldValues: {
+            [groupFieldId]: 'sample',
+            [cellFieldId(itemsTableId, 'row1', 'item')]: 'sample-item',
+            [cellFieldId(itemsTableId, 'row1', 'price')]: '0',
+          },
+        },
+      },
+    ];
+    const fieldSchemas = {
+      [groupFieldId]: { type: 'string', name: 'Group', label: 'Group' },
+      [itemsTableId]: {
+        type: 'table',
+        name: 'PriceRows',
+        label: 'PriceRows',
+        columns: [
+          { key: 'item', label: 'Item' },
+          { key: 'price', label: 'Price' },
+        ],
+        rows: [{ key: 'row1', label: '' }],
+      },
+      [cellFieldId(itemsTableId, 'row1', 'item')]: { type: 'string', label: 'Item' },
+      [cellFieldId(itemsTableId, 'row1', 'price')]: { type: 'string', label: 'Price' },
+    };
+    const loadedSections = {
+      items: [
+        {
+          Group: 'Product',
+          PriceRows: [{ item: 'test', price: '12.50' }],
+        },
+        {
+          Group: 'Product / Apparel',
+          PriceRows: [
+            { item: 'Cotton Polo Shirt', price: '3.88' },
+            { item: 'Crew Socks Pack', price: '21.75' },
+          ],
+        },
+      ],
+    };
+
+    const result = materializeRepeatableSectionInstances(
+      blocks,
+      fieldSchemas,
+      loadedSections,
+    );
+
+    assert.equal(result.materialized, true);
+    assert.equal(result.blocks.length, 2);
+    assert.equal(result.blocks[0].data[SOURCE_INSTANCE_OF_KEY], 'items');
+    assert.equal(result.blocks[0].data[SOURCE_INSTANCE_INDEX_KEY], 0);
+    assert.equal(result.blocks[1].data[SOURCE_INSTANCE_OF_KEY], 'items');
+    assert.equal(result.blocks[1].data[SOURCE_INSTANCE_INDEX_KEY], 1);
+    assert.equal(result.blocks[0].data.fieldValues[groupFieldId], 'Product');
+    assert.equal(
+      result.blocks[0].data.fieldValues[cellFieldId(itemsTableId, 'row1', 'item')],
+      'test',
+    );
+
+    const secondGroupId = Object.keys(result.fieldSchemas).find(
+      (id) => result.fieldSchemas[id]?.name === 'Group' && id !== groupFieldId,
+    );
+    assert.ok(secondGroupId);
+    assert.equal(result.blocks[1].data.fieldValues[secondGroupId], 'Product / Apparel');
+
+    const secondTableId = result.blocks[1].data.segments.find((seg) => seg.type === 'table')?.id;
+    assert.ok(secondTableId);
+    assert.equal(
+      result.blocks[1].data.fieldValues[cellFieldId(secondTableId, 'row1', 'item')],
+      'Cotton Polo Shirt',
+    );
+    assert.equal(
+      result.blocks[1].data.fieldValues[cellFieldId(secondTableId, 'row2', 'item')],
+      'Crew Socks Pack',
+    );
+    assert.equal(hasMaterializedSourceSections(result.blocks), true);
+
+    const exported = buildFieldsExport({
+      time: Date.now(),
+      blocks: result.blocks,
+      fieldSchemas: result.fieldSchemas,
+    });
+    assert.ok(Array.isArray(exported.sections.items));
+    assert.equal(exported.sections.items.length, 2);
+    assert.equal(exported.sections.items[0].Group, 'Product');
+    assert.equal(exported.sections.items[1].Group, 'Product / Apparel');
+    assert.equal(exported.sections.items[1].PriceRows.length, 2);
+  });
+
+  it('collapses name__srcN clones when source-instance markers were stripped', () => {
+    const itemsTableId = 'fld_items_table';
+    const groupFieldId = 'fld_items_group';
+    const groupFieldId2 = 'fld_items_src1_group';
+    const itemsTableId2 = 'fld_items_src1_table';
+    const blocks = [
+      {
+        type: 'documentSection',
+        data: {
+          name: 'items',
+          label: 'items',
+          segments: [
+            { type: 'field', id: groupFieldId },
+            { type: 'table', id: itemsTableId, rows: [{ key: 'row1', label: '' }] },
+          ],
+          fieldValues: {
+            [groupFieldId]: 'Product',
+            [cellFieldId(itemsTableId, 'row1', 'item')]: 'test',
+            [cellFieldId(itemsTableId, 'row1', 'price')]: '12.50',
+          },
+        },
+      },
+      {
+        type: 'documentSection',
+        data: {
+          name: 'items__src1',
+          label: 'items',
+          segments: [
+            { type: 'field', id: groupFieldId2 },
+            {
+              type: 'table',
+              id: itemsTableId2,
+              rows: [
+                { key: 'row1', label: '' },
+                { key: 'row2', label: '' },
+              ],
+            },
+          ],
+          fieldValues: {
+            [groupFieldId2]: 'Product / Apparel',
+            [cellFieldId(itemsTableId2, 'row1', 'item')]: 'Cotton Polo Shirt',
+            [cellFieldId(itemsTableId2, 'row1', 'price')]: '3.88',
+            [cellFieldId(itemsTableId2, 'row2', 'item')]: 'Crew Socks Pack',
+            [cellFieldId(itemsTableId2, 'row2', 'price')]: '21.75',
+          },
+        },
+      },
+    ];
+    const fieldSchemas = {
+      [groupFieldId]: { type: 'string', name: 'Group', label: 'Group' },
+      [groupFieldId2]: { type: 'string', name: 'Group', label: 'Group' },
+      [itemsTableId]: {
+        type: 'table',
+        name: 'PriceRows',
+        label: 'PriceRows',
+        columns: [
+          { key: 'item', label: 'Item' },
+          { key: 'price', label: 'Price' },
+        ],
+        rows: [{ key: 'row1', label: '' }],
+      },
+      [itemsTableId2]: {
+        type: 'table',
+        name: 'PriceRows',
+        label: 'PriceRows',
+        columns: [
+          { key: 'item', label: 'Item' },
+          { key: 'price', label: 'Price' },
+        ],
+        rows: [
+          { key: 'row1', label: '' },
+          { key: 'row2', label: '' },
+        ],
+      },
+      [cellFieldId(itemsTableId, 'row1', 'item')]: { type: 'string', label: 'Item' },
+      [cellFieldId(itemsTableId, 'row1', 'price')]: { type: 'string', label: 'Price' },
+      [cellFieldId(itemsTableId2, 'row1', 'item')]: { type: 'string', label: 'Item' },
+      [cellFieldId(itemsTableId2, 'row1', 'price')]: { type: 'string', label: 'Price' },
+      [cellFieldId(itemsTableId2, 'row2', 'item')]: { type: 'string', label: 'Item' },
+      [cellFieldId(itemsTableId2, 'row2', 'price')]: { type: 'string', label: 'Price' },
+    };
+
+    assert.equal(hasMaterializedSourceSections(blocks), true);
+
+    const exported = buildFieldsExport({
+      time: Date.now(),
+      blocks,
+      fieldSchemas,
+    });
+    assert.equal(exported.sections.items__src1, undefined);
+    assert.ok(Array.isArray(exported.sections.items));
+    assert.equal(exported.sections.items.length, 2);
+    assert.equal(exported.sections.items[0].Group, 'Product');
+    assert.equal(exported.sections.items[1].Group, 'Product / Apparel');
+    assert.equal(exported.sections.items[1].PriceRows.length, 2);
   });
 });

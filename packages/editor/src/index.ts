@@ -19,6 +19,12 @@ export {
   pruneUnusedBlockValues,
   normalizeDocumentValues,
   stripValuesFromBlocks,
+  materializeRepeatableSectionInstances,
+  collapseMaterializedSourceSections,
+  hasMaterializedSourceSections,
+  applySectionInstanceToBlocks,
+  SOURCE_INSTANCE_OF_KEY,
+  SOURCE_INSTANCE_INDEX_KEY,
 } from './core/document-io.js';
 
 export {

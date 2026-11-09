@@ -12,7 +12,12 @@ import { htmlToPdfBlocks, isBlockLevelHtml, plainTextNewlinesToBrHtml, plainText
 import { renderDocumentToPdfContent, shouldUseLegacyPdfExport } from './multipage-renderer.js';
 import { VISION_TABLE_PDF_LAYOUT, VISION_TABLE_BORDERLESS_PDF_LAYOUT } from './table-layout.js';
 import { marginMmToPt, mmToPt, resolvePageSize } from './units.js';
-import { buildRepeatableSectionPageHeader, computeRepeatableHeaderBandHeightPt, HEADER_LINE_SLACK_PT } from './repeatable-section-header.js';
+import {
+  buildRepeatableSectionPageHeader,
+  computeRepeatableHeaderBandHeightPt,
+  HEADER_HEIGHT_BUFFER_PT,
+  HEADER_LINE_SLACK_PT,
+} from './repeatable-section-header.js';
 import { estimatePdfContentHeightPt } from './repeatable-table-pagination.js';
 import { buildFontRegistry } from './fonts-browser-registry.js';
 
@@ -1209,6 +1214,39 @@ describe('renderDocumentToPdfContent multipage', () => {
     assert.equal(findTextInPdfContent(content, 'Gamma'), true);
   });
 
+  it('marks section stacks unbreakable when keepOnOnePage is set', () => {
+    const template = makeTemplate();
+    template.blocks[0].data.keepOnOnePage = true;
+    template.blocks[0].data.hideTitleInPreview = false;
+
+    const doc = mergeTemplateAndDocument(template, makeDocument());
+    const content = renderDocumentToPdfContent(doc, {
+      resolveFontName: (name: any) => name ?? 'Roboto',
+      defaultFont: 'Roboto',
+      fieldValueStyle: {},
+    });
+
+    const unbreakableStacks = content.filter(
+      (node: any) => Array.isArray(node.stack) && node.unbreakable === true,
+    );
+    assert.ok(unbreakableStacks.length >= 1);
+    assert.equal(findTextInPdfContent(content, 'Stable findings'), true);
+  });
+
+  it('does not mark non-repeatable section stacks unbreakable by default', () => {
+    const doc = mergeTemplateAndDocument(makeTemplate(), makeDocument());
+    const content = renderDocumentToPdfContent(doc, {
+      resolveFontName: (name: any) => name ?? 'Roboto',
+      defaultFont: 'Roboto',
+      fieldValueStyle: {},
+    });
+
+    const unbreakableStacks = content.filter(
+      (node: any) => Array.isArray(node.stack) && node.unbreakable === true,
+    );
+    assert.equal(unbreakableStacks.length, 0);
+  });
+
   it('does not leave a blank line when an optional empty field sits between text', () => {
     const doc = {
       fieldSchemas: {
@@ -1707,7 +1745,11 @@ describe('renderDocumentToPdfContent multipage', () => {
     assert.equal(tables[0].table.headerRows, 1);
     assert.equal(tables[0].table.body[0][0].text, 'Column 1');
     assert.equal(tables[0].table.body.length, rowCount + 1);
-    assert.equal(findTextInPdfContent(content, 'Items'), true);
+    // Items title is page-1 header companion content (with the stolen table in the body).
+    assert.ok(
+      headerContainsText(docDefinition, 'Items') || findTextInPdfContent(content, 'Items'),
+      'Items section title should appear in the PDF',
+    );
     assert.equal(collectPageBreaks(content), 0);
 
     assert.equal(findTextInPdfContent(content, 'Diagnosis note'), true);
@@ -1719,6 +1761,118 @@ describe('renderDocumentToPdfContent multipage', () => {
       return headers.length === 1 && headers[0]?.text === 'Items';
     });
     assert.equal(standaloneItemsSections.length, 0);
+  });
+
+  it('keeps companion section leading prose above the adjacent table', () => {
+    const itemsTableId = 'items_table';
+    const template = {
+      kind: 'template',
+      version: 1,
+      time: Date.now(),
+      fieldSchemas: {
+        price_group_name: { type: 'text', name: 'Name', label: 'Name' },
+        item_group: { type: 'text', name: 'Group', label: 'Group' },
+        [itemsTableId]: {
+          type: 'table',
+          name: 'Items',
+          label: 'Items',
+          columns: [
+            { key: 'item', label: 'Item' },
+            { key: 'price', label: 'Price' },
+          ],
+          cellType: 'text',
+        },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'Price list',
+            label: 'Price list',
+            hideTitleInPreview: true,
+            repeatable: true,
+            segments: [
+              {
+                type: 'text',
+                html: '<div class="document-align document-align--center" style="text-align: center"><b>PRICE LIST</b></div>',
+              },
+              { type: 'text', content: 'Price group: ' },
+              { type: 'field', id: 'price_group_name' },
+            ],
+            fieldValues: { price_group_name: 'sample_name' },
+          },
+        },
+        {
+          type: 'documentSection',
+          data: {
+            name: 'items',
+            label: 'items',
+            hideTitleInPreview: true,
+            segments: [
+              { type: 'text', content: 'Item group ' },
+              { type: 'field', id: 'item_group' },
+              {
+                type: 'table',
+                id: itemsTableId,
+                rows: [{ key: 'row1', label: '' }],
+              },
+            ],
+            fieldValues: {
+              item_group: 'sample_name / sample_name',
+              [cellFieldId(itemsTableId, 'row1', 'item')]: 'sample_description',
+              [cellFieldId(itemsTableId, 'row1', 'price')]: '1',
+            },
+          },
+        },
+      ],
+    };
+
+    const doc = mergeTemplateAndDocument(template, {
+      kind: 'field',
+      version: 2,
+      time: Date.now(),
+      sections: {
+        'Price list': { Name: 'sample_name' },
+        items: {
+          Group: 'sample_name / sample_name',
+          Items: [{ item: 'sample_description', price: '1' }],
+        },
+      },
+    });
+
+    const content = renderDocumentToPdfContent(doc, defaultRenderOptions);
+    const { docDefinition } = renderDocumentToPdfDefinition(doc, defaultRenderOptions);
+    assert.ok(findTextInPdfContent(content, 'sample_description'), 'table cell should appear in body');
+    // Companion leading lives in the page-1 header (same flow as Price group), not the body.
+    assert.equal(
+      findTextInPdfContent(content, 'Item group'),
+      false,
+      'Item group must not sit in the body below a header-band gap',
+    );
+
+    assert.ok(headerContainsText(docDefinition, 'PRICE LIST'));
+    assert.ok(headerContainsText(docDefinition, 'Price group:'));
+    assert.ok(headerContainsText(docDefinition, 'Item group'));
+    assert.ok(headerContainsText(docDefinition, 'sample_name / sample_name'));
+
+    const repeatableHeader = buildRepeatableSectionPageHeader(doc, defaultRenderOptions);
+    assert.ok(repeatableHeader);
+    assert.ok(
+      nodeContainsText({ stack: repeatableHeader.firstPageStack }, 'Item group'),
+      'page-1 header stack includes Item group after Price group',
+    );
+    assert.equal(
+      nodeContainsText({ stack: repeatableHeader.stack }, 'Item group'),
+      false,
+      'continuation-page header must not repeat Item group',
+    );
+    if (typeof docDefinition.header === 'function') {
+      assert.equal(
+        nodeContainsText(docDefinition.header(2), 'Item group'),
+        false,
+        'page 2 header omits companion leading prose',
+      );
+    }
   });
 
   it('reserves enough header height for long wrapped Anamnesis prose', () => {
@@ -1801,17 +1955,81 @@ describe('renderDocumentToPdfContent multipage', () => {
       margin: 15,
       header: { height: repeatableHeader.heightMm, fromRepeatableSection: true },
     };
-    const estimatedPt = estimatePdfContentHeightPt(repeatableHeader.stack, pageSetup);
+    const estimatedPt = estimatePdfContentHeightPt(repeatableHeader.firstPageStack, pageSetup);
     assert.ok(estimatedPt <= mmToPt(repeatableHeader.heightMm));
     assert.equal(
       repeatableHeader.heightPt,
-      computeRepeatableHeaderBandHeightPt(repeatableHeader.stack, pageSetup),
+      computeRepeatableHeaderBandHeightPt(repeatableHeader.firstPageStack, pageSetup),
     );
 
     const { docDefinition } = renderDocumentToPdfDefinition(doc, renderOptions);
     assert.ok(headerContainsText(docDefinition, 'Life history:'));
     assert.ok(headerContainsText(docDefinition, 'Chronic conditions diabetes mellitus'));
     assert.ok(headerContainsText(docDefinition, 'Unremarkable'));
+  });
+
+  it('does not over-reserve empty space after a short Show-on-each-page header', () => {
+    const template = {
+      kind: 'template',
+      version: 1,
+      time: Date.now(),
+      fieldSchemas: {
+        price_group_name: { type: 'text', name: 'Name', label: 'Name' },
+        item_name: { type: 'text', name: 'Item', label: 'Item' },
+      },
+      blocks: [
+        {
+          type: 'documentSection',
+          data: {
+            name: 'header',
+            label: 'Price list',
+            repeatable: true,
+            segments: [
+              { type: 'text', content: 'Price group: ' },
+              { type: 'field', id: 'price_group_name', placeholder: 'Name' },
+            ],
+            fieldValues: { price_group_name: 'Diller' },
+          },
+        },
+        {
+          type: 'documentSection',
+          data: {
+            name: 'items',
+            label: 'items',
+            hideTitleInPreview: true,
+            segments: [
+              { type: 'text', content: 'Item group: ' },
+              { type: 'field', id: 'item_name', placeholder: 'Item' },
+            ],
+            fieldValues: { item_name: '' },
+          },
+        },
+      ],
+    };
+
+    const doc = mergeTemplateAndDocument(template, {
+      kind: 'field',
+      version: 2,
+      time: Date.now(),
+      sections: {
+        header: { Name: 'Diller' },
+        items: [{ Item: 'Product' }, { Item: 'Product / Apparel' }],
+      },
+    });
+
+    const renderOptions = { ...defaultRenderOptions, pageSetup: { format: 'a4', margin: 15 } };
+    const repeatableHeader = buildRepeatableSectionPageHeader(doc, renderOptions);
+    assert.ok(repeatableHeader);
+    const contentPt = estimatePdfContentHeightPt(repeatableHeader.stack, {
+      format: 'a4',
+      margin: 15,
+      header: { height: repeatableHeader.heightMm, fromRepeatableSection: true },
+    });
+    // Reserved band may include a small anti-clip slack, but must not leave
+    // multiple blank lines after a short Show-on-each-page header.
+    const reservedExtraPt = repeatableHeader.heightPt - contentPt;
+    assert.ok(reservedExtraPt <= HEADER_LINE_SLACK_PT + HEADER_HEIGHT_BUFFER_PT + 0.01);
+    assert.ok(reservedExtraPt < 12);
   });
 
   it('reserves header height for trailing prose lines like 123 and 456', () => {

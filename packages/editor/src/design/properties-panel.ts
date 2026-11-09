@@ -7,6 +7,7 @@ import { ACTION_ICONS } from '../ui/action-icons.js';
 import { FORMAT_ICONS } from '../ui/format-icons.js';
 import {
   normalizeCustomPageMm,
+  resolvePageMarginsMm,
   resolvePageSetupFieldHighlightStyle,
   resolvePageSetupFieldValueStyle,
   resolvePageSetupTextStyle,
@@ -23,7 +24,7 @@ function infoTipHtml(text: string) {
 
 /**
  * Right-side properties panel for design mode.
- * @param {{ getRegistry?: () => import('../registry/schema-registry.js').SchemaRegistry, onSaveField?: (result: { fieldId: string, previousFieldId: string, schema: object }) => void | Promise<void>, onSaveSection?: (data: { blockIndex: number, name: string, label: string, repeatable?: boolean, hideTitleInPreview?: boolean, borderTop?: boolean, borderBottom?: boolean, eachRowOnNewPage?: boolean, sectionEl?: HTMLElement }) => void | Promise<void>, onSaveDocument?: (pageSetup: object) => void | Promise<void> }} options
+ * @param {{ getRegistry?: () => import('../registry/schema-registry.js').SchemaRegistry, onSaveField?: (result: { fieldId: string, previousFieldId: string, schema: object }) => void | Promise<void>, onSaveSection?: (data: { blockIndex: number, name: string, label: string, repeatable?: boolean, hideTitleInPreview?: boolean, borderTop?: boolean, borderBottom?: boolean, eachRowOnNewPage?: boolean, keepOnOnePage?: boolean, sectionEl?: HTMLElement }) => void | Promise<void>, onSaveDocument?: (pageSetup: object) => void | Promise<void> }} options
  */
 export function createPropertiesPanel({
   getRegistry,
@@ -143,6 +144,13 @@ export function createPropertiesPanel({
       </span>
     </label>
     <label class="schema-form__row schema-form__row--checkbox">
+      <input type="checkbox" data-field="section-keep-on-one-page" />
+      <span class="schema-form__label-row">
+        <span>Keep section on one page</span>
+        ${infoTipHtml('PDF only. Keeps this section\'s context (title, fields, and tables) together so a header is not left alone at the bottom of a page. May move the whole section to the next page when it no longer fits.')}
+      </span>
+    </label>
+    <label class="schema-form__row schema-form__row--checkbox">
       <input type="checkbox" data-field="section-visibility-enabled" />
       <span>Show/hide by field value</span>
     </label>
@@ -209,10 +217,27 @@ export function createPropertiesPanel({
           <option value="landscape">Landscape</option>
         </select>
       </label>
-      <label class="schema-form__row">
-        <span>Margin (mm)</span>
-        <input type="number" data-field="page-margin" min="0" step="1" placeholder="15" />
-      </label>
+      <div class="schema-form__row properties-panel__margins">
+        <span>Margins (mm)</span>
+        <div class="properties-panel__margin-grid">
+          <label class="properties-panel__margin-cell">
+            <span>Top</span>
+            <input type="number" data-field="page-margin-top" min="0" step="1" placeholder="15" />
+          </label>
+          <label class="properties-panel__margin-cell">
+            <span>Right</span>
+            <input type="number" data-field="page-margin-right" min="0" step="1" placeholder="15" />
+          </label>
+          <label class="properties-panel__margin-cell">
+            <span>Bottom</span>
+            <input type="number" data-field="page-margin-bottom" min="0" step="1" placeholder="15" />
+          </label>
+          <label class="properties-panel__margin-cell">
+            <span>Left</span>
+            <input type="number" data-field="page-margin-left" min="0" step="1" placeholder="15" />
+          </label>
+        </div>
+      </div>
     </section>
     <section class="properties-panel__card">
       <h3 class="properties-panel__card-title">PDF &amp; footer</h3>
@@ -511,6 +536,8 @@ export function createPropertiesPanel({
         !!data.borderBottom;
       sectionWrap.querySelector('[data-field="section-each-row-on-new-page"]').checked =
         !!data.eachRowOnNewPage;
+      sectionWrap.querySelector('[data-field="section-keep-on-one-page"]').checked =
+        !!data.keepOnOnePage;
       const visibility = data.visibility ?? null;
       populateSectionVisibilityFields(visibility?.fieldId ?? '');
       sectionVisibilityEnabled.checked = !!visibility?.fieldId;
@@ -555,8 +582,22 @@ export function createPropertiesPanel({
             : '297';
       }
       syncCustomPageSizeInputs();
-      documentWrap.querySelector('[data-field="page-margin"]').value =
-        pageSetup.margin != null ? String(pageSetup.margin) : '';
+      {
+        const [top, right, bottom, left] = resolvePageMarginsMm(pageSetup);
+        const hasMargin = pageSetup.margin != null;
+        documentWrap.querySelector('[data-field="page-margin-top"]').value = hasMargin
+          ? String(top)
+          : '';
+        documentWrap.querySelector('[data-field="page-margin-right"]').value = hasMargin
+          ? String(right)
+          : '';
+        documentWrap.querySelector('[data-field="page-margin-bottom"]').value = hasMargin
+          ? String(bottom)
+          : '';
+        documentWrap.querySelector('[data-field="page-margin-left"]').value = hasMargin
+          ? String(left)
+          : '';
+      }
       documentWrap.querySelector('[data-field="page-title"]').value = pageSetup.title ?? '';
       documentWrap.querySelector('[data-field="page-footer-text"]').value =
         pageSetup.footer?.text ?? '';
@@ -617,6 +658,9 @@ export function createPropertiesPanel({
       const eachRowOnNewPage = !!sectionWrap.querySelector(
         '[data-field="section-each-row-on-new-page"]',
       )?.checked;
+      const keepOnOnePage = !!sectionWrap.querySelector(
+        '[data-field="section-keep-on-one-page"]',
+      )?.checked;
       const visibility = readSectionVisibilityRule();
       await onSaveSection?.({
         blockIndex: sectionBlockIndex,
@@ -627,6 +671,7 @@ export function createPropertiesPanel({
         borderTop,
         borderBottom,
         eachRowOnNewPage,
+        keepOnOnePage,
         visibility,
         sectionEl: sectionTarget,
       });
@@ -634,8 +679,16 @@ export function createPropertiesPanel({
     }
 
     if (mode === 'document') {
-      const marginRaw = documentWrap.querySelector('[data-field="page-margin"]')?.value?.trim() ?? '';
-      const margin = marginRaw === '' ? undefined : Number(marginRaw);
+      const readMarginSide = (field: string) => {
+        const raw = documentWrap.querySelector(`[data-field="${field}"]`)?.value?.trim() ?? '';
+        if (raw === '') return null;
+        const value = Number(raw);
+        return Number.isFinite(value) && value >= 0 ? value : null;
+      };
+      const marginTop = readMarginSide('page-margin-top');
+      const marginRight = readMarginSide('page-margin-right');
+      const marginBottom = readMarginSide('page-margin-bottom');
+      const marginLeft = readMarginSide('page-margin-left');
       const footerText =
         documentWrap.querySelector('[data-field="page-footer-text"]')?.value?.trim() ?? '';
       const showPageNumbers = !!documentWrap.querySelector('[data-field="page-footer-numbers"]')?.checked;
@@ -664,7 +717,23 @@ export function createPropertiesPanel({
         pageSetup.widthMm = normalizeCustomPageMm(widthRaw === '' ? 210 : Number(widthRaw), 210);
         pageSetup.heightMm = normalizeCustomPageMm(heightRaw === '' ? 297 : Number(heightRaw), 297);
       }
-      if (margin != null && !Number.isNaN(margin)) pageSetup.margin = margin;
+      if (
+        marginTop != null ||
+        marginRight != null ||
+        marginBottom != null ||
+        marginLeft != null
+      ) {
+        const fallback =
+          marginTop ?? marginRight ?? marginBottom ?? marginLeft ?? 15;
+        const top = marginTop ?? fallback;
+        const right = marginRight ?? fallback;
+        const bottom = marginBottom ?? fallback;
+        const left = marginLeft ?? fallback;
+        pageSetup.margin =
+          top === right && right === bottom && bottom === left
+            ? top
+            : [top, right, bottom, left];
+      }
       const title = documentWrap.querySelector('[data-field="page-title"]')?.value?.trim() ?? '';
       if (title) pageSetup.title = title;
       if (footerText || showPageNumbers) {

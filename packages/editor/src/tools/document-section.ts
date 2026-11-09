@@ -18,6 +18,26 @@ import { wireFieldTokenKeyboard } from '../fields/field-keyboard.js';
 import { cellFieldId } from '../core/field-schemas.js';
 import { resolveSectionName } from '../core/field-id.js';
 import { applyDocumentBodyTextStyle } from '../core/page-setup-styles.js';
+import {
+  SOURCE_INSTANCE_INDEX_KEY,
+  SOURCE_INSTANCE_OF_KEY,
+} from '../core/document-io.js';
+
+/** Keep fill-mode `_source` clone markers across construct/save/history. */
+function pickSourceInstanceMeta(data: Record<string, any> | null | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const sourceOf = data?.[SOURCE_INSTANCE_OF_KEY];
+  if (typeof sourceOf === 'string' && sourceOf.trim()) {
+    out[SOURCE_INSTANCE_OF_KEY] = sourceOf.trim();
+  }
+  const index = data?.[SOURCE_INSTANCE_INDEX_KEY];
+  if (typeof index === 'number' && Number.isFinite(index)) {
+    out[SOURCE_INSTANCE_INDEX_KEY] = index;
+  } else if (typeof index === 'string' && index.trim() !== '' && Number.isFinite(Number(index))) {
+    out[SOURCE_INSTANCE_INDEX_KEY] = Number(index);
+  }
+  return out;
+}
 
 export default class DocumentSection {
   [key: string]: any;
@@ -51,9 +71,11 @@ export default class DocumentSection {
       borderTop: !!data.borderTop,
       borderBottom: !!data.borderBottom,
       eachRowOnNewPage: !!data.eachRowOnNewPage,
+      keepOnOnePage: !!data.keepOnOnePage,
       visibility: data.visibility ?? null,
       segments: data.segments ?? [],
       fieldValues: data.fieldValues ?? {},
+      ...pickSourceInstanceMeta(data),
     };
     this.editable = null;
     this.wrapper = null;
@@ -179,9 +201,11 @@ export default class DocumentSection {
       borderTop: !!this.data.borderTop,
       borderBottom: !!this.data.borderBottom,
       eachRowOnNewPage: !!this.data.eachRowOnNewPage,
+      keepOnOnePage: !!this.data.keepOnOnePage,
       visibility: this.data.visibility ?? null,
       segments: this.data.segments,
       fieldValues: this.data.fieldValues,
+      ...pickSourceInstanceMeta(this.data),
     };
   }
 
@@ -201,6 +225,7 @@ export default class DocumentSection {
     borderTop,
     borderBottom,
     eachRowOnNewPage,
+    keepOnOnePage,
     visibility,
   }: any = {}) {
     if (name !== undefined) this.data.name = name;
@@ -210,6 +235,7 @@ export default class DocumentSection {
     if (borderTop !== undefined) this.data.borderTop = !!borderTop;
     if (borderBottom !== undefined) this.data.borderBottom = !!borderBottom;
     if (eachRowOnNewPage !== undefined) this.data.eachRowOnNewPage = !!eachRowOnNewPage;
+    if (keepOnOnePage !== undefined) this.data.keepOnOnePage = !!keepOnOnePage;
     if (visibility !== undefined) this.data.visibility = visibility ?? null;
     if (this.wrapper) {
       this.wrapper.dataset.sectionName = resolveSectionName(this.data);
@@ -261,10 +287,17 @@ export default class DocumentSection {
       borderTop: !!data.borderTop,
       borderBottom: !!data.borderBottom,
       eachRowOnNewPage: !!data.eachRowOnNewPage,
+      keepOnOnePage: !!data.keepOnOnePage,
       visibility: data.visibility ?? null,
       segments: JSON.parse(JSON.stringify(data.segments ?? [])),
       fieldValues: JSON.parse(JSON.stringify(data.fieldValues ?? {})),
+      ...pickSourceInstanceMeta(data),
     };
+    // Drop stale markers when the history snapshot has none.
+    if (!(SOURCE_INSTANCE_OF_KEY in pickSourceInstanceMeta(data))) {
+      delete this.data[SOURCE_INSTANCE_OF_KEY];
+      delete this.data[SOURCE_INSTANCE_INDEX_KEY];
+    }
 
     if (this.wrapper) {
       this.wrapper.dataset.sectionName = resolveSectionName(this.data);
@@ -645,9 +678,11 @@ export default class DocumentSection {
       borderTop: !!this.data.borderTop,
       borderBottom: !!this.data.borderBottom,
       eachRowOnNewPage: !!this.data.eachRowOnNewPage,
+      keepOnOnePage: !!this.data.keepOnOnePage,
       visibility: this.data.visibility ?? null,
       segments: this.data.segments,
       fieldValues: this.data.fieldValues,
+      ...pickSourceInstanceMeta(this.data),
     };
   }
 

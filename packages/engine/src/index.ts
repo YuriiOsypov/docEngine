@@ -21,6 +21,11 @@ export {
   pruneUnusedBlockValues,
   normalizeDocumentValues,
   applySectionInstanceToBlocks,
+  materializeRepeatableSectionInstances,
+  collapseMaterializedSourceSections,
+  hasMaterializedSourceSections,
+  SOURCE_INSTANCE_OF_KEY,
+  SOURCE_INSTANCE_INDEX_KEY,
   stripValuesFromBlocks,
   findMissingRequiredFields,
 } from './core/document-io.js';

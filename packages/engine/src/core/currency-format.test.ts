@@ -4,6 +4,7 @@ import {
   formatNumericDisplay,
   formatCurrencyValue,
   parseCurrencyFormatSuffix,
+  parseNumericValue,
 } from './currency-format.js';
 
 describe('currency-format', () => {
@@ -36,5 +37,15 @@ describe('currency-format', () => {
       maximumFractionDigits: undefined,
     });
     assert.equal(parseCurrencyFormatSuffix('dd/mm/yyyy'), null);
+  });
+
+  it('parses currency-decorated numbers', () => {
+    assert.equal(parseNumericValue('53.25 USD'), 53.25);
+    assert.equal(parseNumericValue('USD 53.25'), 53.25);
+    assert.equal(parseNumericValue('$1,234.50'), 1234.5);
+    assert.equal(parseNumericValue('-53.25 USD'), -53.25);
+    assert.equal(parseNumericValue('1,234.50'), 1234.5);
+    assert.equal(parseNumericValue('hello'), null);
+    assert.equal(parseNumericValue(''), null);
   });
 });

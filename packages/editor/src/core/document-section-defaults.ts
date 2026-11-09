@@ -16,6 +16,7 @@ export function createEmptyDocumentSectionBlock(usedNames?: Set<string>) {
       collapsed: false,
       repeatable: false,
       hideTitleInPreview: false,
+      keepOnOnePage: false,
       segments: [],
       fieldValues: {},
     },

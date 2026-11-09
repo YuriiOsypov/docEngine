@@ -129,9 +129,14 @@ export function buildPdfDocumentDefinition(
   };
 
   if (repeatableHeader) {
-    docDefinition.header = () => ({
+    // Page 1 includes companion leading prose (Item group) in the header stack so it
+    // sits tight under Price group. Later pages repeat only the Show-on-each-page section.
+    docDefinition.header = (currentPage = 1) => ({
       margin: [pageMargins[0], mmToPt(marginTop), pageMargins[2], 0],
-      stack: repeatableHeader.stack,
+      stack:
+        currentPage === 1
+          ? (repeatableHeader.firstPageStack ?? repeatableHeader.stack)
+          : repeatableHeader.stack,
     });
   }
 

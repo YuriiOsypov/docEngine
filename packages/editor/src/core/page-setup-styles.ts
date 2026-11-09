@@ -132,11 +132,16 @@ export function applyPageFormatCssVars(
   const scale = options.scale != null && options.scale > 0 ? options.scale : 1;
   const { widthMm, heightMm } = resolvePageFormatSizeMm(pageSetup);
   const margins = resolvePageMarginsMm(pageSetup);
-  const marginMm = margins[0];
+  const [topMm, rightMm, bottomMm, leftMm] = margins.map((mm) => +(mm * scale).toFixed(2));
   const contentWidthMm = Math.max(40, widthMm - margins[3] - margins[1]);
   element.style.setProperty('--doc-page-width', `${+(widthMm * scale).toFixed(2)}mm`);
   element.style.setProperty('--doc-page-min-height', `${+(heightMm * scale).toFixed(2)}mm`);
-  element.style.setProperty('--doc-page-margin', `${+(marginMm * scale).toFixed(2)}mm`);
+  element.style.setProperty('--doc-page-margin-top', `${topMm}mm`);
+  element.style.setProperty('--doc-page-margin-right', `${rightMm}mm`);
+  element.style.setProperty('--doc-page-margin-bottom', `${bottomMm}mm`);
+  element.style.setProperty('--doc-page-margin-left', `${leftMm}mm`);
+  // Keep legacy single var as top for older CSS/fallbacks.
+  element.style.setProperty('--doc-page-margin', `${topMm}mm`);
   element.style.setProperty('--doc-page-content-width', `${+(contentWidthMm * scale).toFixed(2)}mm`);
   if (options.fillPage) {
     element.classList.add('editor-holder--fill-page');
@@ -151,6 +156,10 @@ export function clearPageFormatCssVars(element: HTMLElement | null | undefined) 
   element.style.removeProperty('--doc-page-width');
   element.style.removeProperty('--doc-page-min-height');
   element.style.removeProperty('--doc-page-margin');
+  element.style.removeProperty('--doc-page-margin-top');
+  element.style.removeProperty('--doc-page-margin-right');
+  element.style.removeProperty('--doc-page-margin-bottom');
+  element.style.removeProperty('--doc-page-margin-left');
   element.style.removeProperty('--doc-page-content-width');
   element.classList.remove('editor-holder--fill-page');
 }

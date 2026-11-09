@@ -55,7 +55,10 @@
   margin-left: auto;
   margin-right: auto;
   box-sizing: border-box;
-  padding: var(--doc-page-margin, 16.5mm);
+  padding: var(--doc-page-margin-top, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-right, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-bottom, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-left, var(--doc-page-margin, 16.5mm));
   background: var(--lwc-colorBackgroundAlt, #fff);
   border: 1px solid var(--lwc-colorBorder, #c9c9c9);
   border-radius: 2px;

@@ -103,6 +103,8 @@ export interface DocumentSectionData {
   repeatable?: boolean;
   /** When true, the section title is omitted from document preview and PDF. */
   hideTitleInPreview?: boolean;
+  /** When true, PDF keeps section content together (unbreakable). HTML preview unchanged. */
+  keepOnOnePage?: boolean;
   visibility?: SectionVisibilityRule | null;
   [key: string]: unknown;
 }

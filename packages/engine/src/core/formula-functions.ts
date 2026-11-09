@@ -6,6 +6,8 @@
  * formula string — never function bodies.
  */
 
+import { parseNumericValue } from './currency-format.js';
+
 export type FormulaFunctionKind = 'scalar' | 'aggregate';
 
 export type FormulaFunctionArity = number | { min?: number; max?: number };
@@ -70,10 +72,14 @@ function ageFromIsoDate(value: unknown): number | string {
 }
 
 function numericValues(values: unknown[]): number[] {
-  return values
-    .map((value) => String(value ?? '').trim())
-    .filter((value) => value !== '' && !Number.isNaN(Number(value)))
-    .map((value) => Number(value));
+  const nums: number[] = [];
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() === '') continue;
+    const num = parseNumericValue(value);
+    if (num == null) continue;
+    nums.push(num);
+  }
+  return nums;
 }
 
 function applyNumericAggregate(

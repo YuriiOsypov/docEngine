@@ -21,7 +21,9 @@ import {
   expandSectionedDocument,
   expandSectionFieldMap,
   filterEmptySections,
+  resolveRepeatablePagePlan,
 } from './field-io/sectioned-document-io.js';
+import { deriveFieldId, resolveSectionName } from './field-id.js';
 import { isFieldEmpty } from '../utils/field-values.js';
 import { evaluateComputedField } from './computed-formula.js';
 import {
@@ -34,6 +36,11 @@ import {
 import { migratePageSetup } from './page-setup-styles.js';
 import { normalizeTemplateFieldSchemas } from '../utils/tree-nodes.js';
 import type { EditorBlock, FieldSchema, TableRowInstance, TemplatePageSetup } from '../types.js';
+
+/** Marks a fill-mode section clone produced from a `_source` instance array. */
+export const SOURCE_INSTANCE_OF_KEY = '_sourceInstanceOf';
+/** 0-based index within the `_source` instance array. */
+export const SOURCE_INSTANCE_INDEX_KEY = '_sourceInstanceIndex';
 
 type FieldSchemaMap = Record<string, FieldSchema>;
 type ValueMap = Record<string, unknown>;
@@ -447,6 +454,15 @@ export function buildFieldsExport(
   if (hideEmpty) {
     sections = filterEmptySections(sections, blocks, fieldSchemas);
   }
+  // Fill mode may have expanded `_source` arrays into cloned section blocks;
+  // collapse them back so export keeps `sections.Name: [{…}, {…}]` for preview/PDF.
+  if (hasMaterializedSourceSections(blocks)) {
+    sections = collapseMaterializedSourceSections(
+      blocks,
+      fieldSchemas,
+      sections,
+    ) as typeof sections;
+  }
   return {
     kind: 'field',
     version: IO_VERSION,
@@ -768,6 +784,252 @@ export function applySectionInstanceToBlocks(
     fieldSchemas ?? {},
   );
   return applyDocumentValues(nextBlocks, flatValues, fieldSchemas);
+}
+
+type SectionFieldMap = Record<string, unknown>;
+type DocumentSectionValues = SectionFieldMap | SectionFieldMap[];
+
+/**
+ * Copy a section block with new field IDs (schemas are copied, not moved) so
+ * multiple `_source` instances can coexist in fill mode.
+ */
+function duplicateSectionBlockWithNewIds(
+  block: EditorBlock,
+  fieldSchemas: FieldSchemaMap,
+  sectionName: string,
+): { block: EditorBlock; fieldSchemas: FieldSchemaMap } {
+  const nextBlock = cloneBlocks([block])[0]!;
+  const data = { ...(nextBlock.data as Record<string, any>) };
+  data.name = sectionName;
+  data.label = data.label ?? sectionName;
+
+  let schemas: FieldSchemaMap = { ...fieldSchemas };
+  const usedIds = new Set(Object.keys(schemas));
+  const idRenames: Record<string, string> = {};
+
+  data.segments = mapSegments(data.segments ?? [], (seg) => {
+    if (seg.type !== 'field' && seg.type !== 'table' && seg.type !== 'child') return seg;
+    const oldId = seg.id;
+    if (!oldId || typeof oldId !== 'string') return seg;
+    if (oldId.startsWith(REPEATER_CHILD_FIELD_PREFIX)) return seg;
+    const schema = schemas[oldId];
+    if (!schema) return seg;
+
+    const fieldName = String(schema.name ?? schema.label ?? oldId);
+    const newId = deriveFieldId(sectionName, fieldName, usedIds);
+    usedIds.add(newId);
+    if (newId === oldId) return seg;
+
+    idRenames[oldId] = newId;
+    schemas[newId] = JSON.parse(JSON.stringify(schema)) as FieldSchema;
+
+    if (schema.type === 'table') {
+      const oldPrefix = `${oldId}_`;
+      for (const key of Object.keys(fieldSchemas)) {
+        if (!key.startsWith(oldPrefix)) continue;
+        const cellNewId = `${newId}_${key.slice(oldPrefix.length)}`;
+        if (schemas[key] && !schemas[cellNewId]) {
+          schemas[cellNewId] = JSON.parse(JSON.stringify(schemas[key])) as FieldSchema;
+          usedIds.add(cellNewId);
+        }
+      }
+    }
+
+    return { ...seg, id: newId };
+  });
+
+  if (data.fieldValues && typeof data.fieldValues === 'object') {
+    const nextFv: ValueMap = {};
+    for (const [key, value] of Object.entries(data.fieldValues as ValueMap)) {
+      let nextKey = key;
+      for (const [oldId, newId] of Object.entries(idRenames)) {
+        if (key === oldId) {
+          nextKey = newId;
+          break;
+        }
+        if (key.startsWith(`${oldId}_`)) {
+          nextKey = `${newId}_${key.slice(oldId.length + 1)}`;
+          break;
+        }
+      }
+      nextFv[nextKey] = value;
+    }
+    data.fieldValues = nextFv;
+  }
+
+  nextBlock.data = data;
+  return { block: nextBlock, fieldSchemas: schemas };
+}
+
+/**
+ * Expand `_source` section instance arrays into concrete fill-mode section blocks
+ * (one block per array element, including nested table rows). Preview/PDF already
+ * clone via `repeatableSectionInstances`; without this, the editor only shows
+ * `instances[0]`.
+ */
+export function materializeRepeatableSectionInstances(
+  blocks: EditorBlock[],
+  fieldSchemas: FieldSchemaMap,
+  loadedSections: Record<string, DocumentSectionValues> | null | undefined,
+): { blocks: EditorBlock[]; fieldSchemas: FieldSchemaMap; materialized: boolean } {
+  const plan = resolveRepeatablePagePlan(blocks, fieldSchemas, {}, loadedSections);
+  if (!plan || plan.instances.length <= 1) {
+    return {
+      blocks: cloneBlocks(blocks),
+      fieldSchemas: { ...fieldSchemas },
+      materialized: false,
+    };
+  }
+
+  const before = cloneBlocks(blocks.slice(0, plan.repeatableBlockIndex));
+  const after = cloneBlocks(blocks.slice(plan.repeatableBlockIndex + 1));
+  const seed = stripValuesFromBlocks(
+    [blocks[plan.repeatableBlockIndex]!],
+    fieldSchemas,
+  )[0]!;
+
+  let schemas: FieldSchemaMap = { ...fieldSchemas };
+  const instanceBlocks: EditorBlock[] = [];
+
+  for (let i = 0; i < plan.instances.length; i += 1) {
+    let block = cloneBlocks([seed])[0]!;
+    const instanceName = i === 0 ? plan.sectionName : `${plan.sectionName}__src${i}`;
+    block.data = {
+      ...(block.data as Record<string, any>),
+      name: instanceName,
+      label: (seed.data as Record<string, any> | undefined)?.label ?? plan.sectionName,
+      [SOURCE_INSTANCE_OF_KEY]: plan.sectionName,
+      [SOURCE_INSTANCE_INDEX_KEY]: i,
+    };
+
+    if (i > 0) {
+      const duplicated = duplicateSectionBlockWithNewIds(block, schemas, instanceName);
+      block = duplicated.block;
+      schemas = duplicated.fieldSchemas;
+    }
+
+    const applied = applySectionInstanceToBlocks([block], schemas, 0, plan.instances[i]!);
+    schemas = applied.fieldSchemas;
+    instanceBlocks.push(applied.blocks[0]!);
+  }
+
+  return {
+    blocks: [...before, ...instanceBlocks, ...after],
+    fieldSchemas: schemas,
+    materialized: true,
+  };
+}
+
+const SOURCE_CLONE_NAME_RE = /^(.*)__src(\d+)$/;
+
+function resolveSourceInstanceGroup(
+  block: EditorBlock,
+): { sourceName: string; index: number } | null {
+  const data = block.data as Record<string, any> | undefined;
+  const sourceOf = data?.[SOURCE_INSTANCE_OF_KEY];
+  if (typeof sourceOf === 'string' && sourceOf.trim()) {
+    const rawIndex = data?.[SOURCE_INSTANCE_INDEX_KEY];
+    const index =
+      typeof rawIndex === 'number' && Number.isFinite(rawIndex)
+        ? rawIndex
+        : Number(rawIndex);
+    return {
+      sourceName: sourceOf.trim(),
+      index: Number.isFinite(index) ? index : 0,
+    };
+  }
+
+  // Fallback when DocumentSection stripped markers but kept `name__srcN`.
+  const name = resolveSectionName(data);
+  const match = SOURCE_CLONE_NAME_RE.exec(name);
+  if (!match) return null;
+  return {
+    sourceName: match[1]!,
+    index: Number(match[2]),
+  };
+}
+
+/**
+ * Rebuild `_source` instance arrays from fill-mode section clones so export keeps
+ * the same shape preview/PDF expect (`sections.items: [{…}, {…}]`).
+ */
+export function collapseMaterializedSourceSections(
+  blocks: EditorBlock[],
+  fieldSchemas: FieldSchemaMap,
+  sections: Record<string, unknown>,
+): Record<string, unknown> {
+  const groups = new Map<string, Array<{ block: EditorBlock; index: number }>>();
+  const sourceNames = new Set<string>();
+
+  for (const block of blocks) {
+    if (block.type !== 'documentSection') continue;
+    const grouped = resolveSourceInstanceGroup(block);
+    if (grouped) {
+      sourceNames.add(grouped.sourceName);
+      const list = groups.get(grouped.sourceName) ?? [];
+      list.push({ block, index: grouped.index });
+      groups.set(grouped.sourceName, list);
+      continue;
+    }
+  }
+
+  // Include the seed section (`name` without `__srcN`) once clones exist.
+  for (const block of blocks) {
+    if (block.type !== 'documentSection') continue;
+    const name = resolveSectionName(block.data);
+    if (!sourceNames.has(name)) continue;
+    if (SOURCE_CLONE_NAME_RE.test(name)) continue;
+    const list = groups.get(name) ?? [];
+    if (list.some((entry) => entry.block === block)) continue;
+    const rawIndex = (block.data as Record<string, any> | undefined)?.[SOURCE_INSTANCE_INDEX_KEY];
+    const index =
+      typeof rawIndex === 'number' && Number.isFinite(rawIndex)
+        ? rawIndex
+        : Number(rawIndex);
+    list.push({ block, index: Number.isFinite(index) ? index : 0 });
+    groups.set(name, list);
+  }
+
+  if (groups.size === 0) return sections;
+
+  const next: Record<string, unknown> = { ...sections };
+  for (const [sourceName, groupBlocks] of groups) {
+    if (groupBlocks.length <= 1) continue;
+    const ordered = [...groupBlocks].sort((a, b) => a.index - b.index);
+
+    const instances: SectionFieldMap[] = [];
+    for (const entry of ordered) {
+      const name = resolveSectionName(entry.block.data);
+      delete next[name];
+      const flat = collectAllValues([entry.block]);
+      const built = buildSectionedDocumentFromValues(
+        [entry.block],
+        fieldSchemas,
+        flat,
+        { includeAllFields: true },
+      );
+      const map = (built[name] ?? built[sourceName] ?? {}) as SectionFieldMap;
+      const cleaned: SectionFieldMap = { ...map };
+      delete cleaned[SOURCE_INSTANCE_OF_KEY];
+      delete cleaned[SOURCE_INSTANCE_INDEX_KEY];
+      instances.push(cleaned);
+    }
+
+    if (instances.length > 0) {
+      next[sourceName] = instances;
+    }
+  }
+  return next;
+}
+
+export function hasMaterializedSourceSections(
+  blocks: EditorBlock[] | null | undefined,
+): boolean {
+  for (const block of blocks ?? []) {
+    if (block.type !== 'documentSection') continue;
+    if (resolveSourceInstanceGroup(block)) return true;
+  }
+  return false;
 }
 
 export function normalizeImportedDoc(data: Record<string, any> | null | undefined): DocumentState {

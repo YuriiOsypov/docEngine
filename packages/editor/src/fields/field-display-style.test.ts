@@ -335,6 +335,33 @@ describe('resolveTokenDisplayStyle', () => {
     assert.equal(style.fontWeight, undefined);
   });
 
+  it('highlights empty readonly fields in design mode (readonly only affects fill)', () => {
+    const style = resolveTokenDisplayStyle(
+      { type: 'text', label: 'Note', readonly: true, displayStyle: { color: '#333333' } },
+      { color: '#000000', fontWeight: 'bold' },
+      false,
+      { default: { color: '#000000' } },
+      { fillModeFieldHighlight: false },
+      mockToken(['field-token--empty', 'field-token--design', 'field-token--readonly']),
+    );
+    assert.equal(style.color, undefined);
+    assert.equal(style.textDecoration, undefined);
+    assert.equal(style.fontWeight, undefined);
+  });
+
+  it('keeps empty readonly fields inert in fill mode', () => {
+    const style = resolveTokenDisplayStyle(
+      { type: 'text', label: 'Note', readonly: true, displayStyle: { color: '#333333' } },
+      { color: '#000000', fontWeight: 'bold' },
+      false,
+      { default: { color: '#000000' } },
+      { fillModeFieldHighlight: true },
+      mockToken(['field-token--empty', 'field-token--readonly']),
+    );
+    assert.equal(style.color, '#333333');
+    assert.equal(style.fontWeight, 'bold');
+  });
+
   it('omits highlight-controlled styles for empty mapping-mode fields', () => {
     const style = resolveTokenDisplayStyle(
       { type: 'text', label: 'Note', displayStyle: { color: '#333333' } },

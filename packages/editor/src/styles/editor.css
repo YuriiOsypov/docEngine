@@ -1208,10 +1208,25 @@ body.document-columns-col-resize-active .field-token {
   font-style: italic;
 }
 
-/* Fill mode: soft pills driven by Empty field style (--me-field-fill-*) */
+/* Fill mode: soft pills driven by Empty field style (--me-field-fill-*).
+   Readonly stays inert plain text while filling ("Read-only when filling"). */
 .editor-holder--show-fields .document-section__body .field-token:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing),
-.editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--required-missing),
-.document-section--mapping .document-section__body .field-token:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing) {
+.editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design):not(.field-token--computed):not(.field-token--readonly):not(.field-token--required-missing) {
+  text-decoration: none;
+  cursor: pointer;
+  display: inline;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--me-field-fill-bg, #F0FDFA);
+  color: var(--me-field-fill-color, #0000FF);
+  font-weight: var(--me-field-fill-font-weight, 500);
+  font-style: normal;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Mapping mode: include readonly so mapped/source-dropped fields stay visible as fields. */
+.document-section--mapping .document-section__body .field-token:not(.field-token--cell):not(.field-token--computed):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing) {
   text-decoration: none;
   cursor: pointer;
   display: inline;
@@ -1226,8 +1241,7 @@ body.document-columns-col-resize-active .field-token {
 }
 
 .editor-holder--show-fields .document-section__body .field-token:not(.field-token--design).field-token--empty:not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html),
-.editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design).field-token--empty:not(.field-token--readonly):not(.field-token--required-missing),
-.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
+.editor-holder--show-fields .vision-table .field-token--cell:not(.field-token--design).field-token--empty:not(.field-token--readonly):not(.field-token--required-missing) {
   background: var(--me-field-fill-bg, #F0FDFA);
   color: var(--me-field-fill-color, #0000FF);
   font-weight: var(--me-field-fill-font-weight, 500);
@@ -1235,8 +1249,16 @@ body.document-columns-col-resize-active .field-token {
   text-decoration: none;
 }
 
-/* Design-mode filled fields: product teal chrome */
-.document-section__body .field-token--design:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing):not(.field-token--empty) {
+.document-section--mapping .document-section__body .field-token.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
+  background: var(--me-field-fill-bg, #F0FDFA);
+  color: var(--me-field-fill-color, #0000FF);
+  font-weight: var(--me-field-fill-font-weight, 500);
+  font-style: normal;
+  text-decoration: none;
+}
+
+/* Design-mode filled fields: product teal chrome (includes readonly — flag only affects fill). */
+.document-section__body .field-token--design:not(.field-token--cell):not(.field-token--computed):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing):not(.field-token--empty) {
   text-decoration: none;
   cursor: pointer;
   display: inline;
@@ -1251,7 +1273,7 @@ body.document-columns-col-resize-active .field-token {
 }
 
 /* Design-mode empty placeholders: Empty field style vars */
-.document-section__body .field-token--design.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
+.document-section__body .field-token--design.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
   text-decoration: none;
   cursor: pointer;
   display: inline;
@@ -1265,20 +1287,20 @@ body.document-columns-col-resize-active .field-token {
   -webkit-box-decoration-break: clone;
 }
 
-.document-section__body .field-token--design:not(.field-token--cell):hover:not(.field-token--selected):not(.field-token--computed):not(.field-token--readonly) {
+.document-section__body .field-token--design:not(.field-token--cell):hover:not(.field-token--selected):not(.field-token--computed) {
   background: var(--me-accent-hover, #ccfbf1);
 }
 
-.document-section__body .field-token--design.field-token--empty:not(.field-token--cell):hover:not(.field-token--selected):not(.field-token--computed):not(.field-token--readonly) {
+.document-section__body .field-token--design.field-token--empty:not(.field-token--cell):hover:not(.field-token--selected):not(.field-token--computed) {
   background: color-mix(in srgb, var(--me-field-fill-color, #0000FF) 12%, transparent);
 }
 
-.document-section__body .field-token--design.field-token--selected:not(.field-token--cell):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing):not(.field-token--empty) {
+.document-section__body .field-token--design.field-token--selected:not(.field-token--cell):not(.field-token--computed):not(.field-token--repeater):not(.field-token--image):not(.field-token--html):not(.field-token--required-missing):not(.field-token--empty) {
   background: var(--me-accent-hover, #ccfbf1);
   color: var(--me-primary-muted, #115e59);
 }
 
-.document-section__body .field-token--design.field-token--selected.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--readonly):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
+.document-section__body .field-token--design.field-token--selected.field-token--empty:not(.field-token--cell):not(.field-token--required-missing):not(.field-token--computed):not(.field-token--repeater):not(.field-token--image):not(.field-token--html) {
   background: color-mix(in srgb, var(--me-field-fill-color, #0000FF) 18%, transparent);
   color: var(--me-field-fill-color, #0000FF);
 }
@@ -3453,6 +3475,42 @@ body.design-mode--panels .editor-top-chrome {
   margin-bottom: 4px;
 }
 
+.properties-panel__margins {
+  min-width: 0;
+}
+
+.properties-panel__margin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.properties-panel__margin-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+}
+
+.properties-panel__margin-cell span {
+  font-size: 11px;
+  line-height: 1.3;
+  color: #64748b;
+}
+
+.properties-panel__margin-cell input,
+.properties-panel .properties-panel__margin-cell input[type='number'] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 6px 8px;
+}
+
 .properties-panel__style-forms {
   display: flex;
   flex-direction: column;
@@ -4469,7 +4527,10 @@ body.field-mapping-split-active {
   min-height: var(--doc-page-min-height, 326.7mm);
   margin: 0 auto;
   box-sizing: border-box;
-  padding: var(--doc-page-margin, 16.5mm);
+  padding: var(--doc-page-margin-top, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-right, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-bottom, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-left, var(--doc-page-margin, 16.5mm));
   background: #ffffff;
   border: 1px solid rgb(15 23 42 / 0.08);
   border-radius: 4px;
@@ -5370,7 +5431,10 @@ body.field-mapping-split-active {
   margin-left: auto;
   margin-right: auto;
   box-sizing: border-box;
-  padding: var(--doc-page-margin, 16.5mm);
+  padding: var(--doc-page-margin-top, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-right, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-bottom, var(--doc-page-margin, 16.5mm))
+    var(--doc-page-margin-left, var(--doc-page-margin, 16.5mm));
   background: #ffffff;
   border: 1px solid rgb(15 23 42 / 0.08);
   border-radius: 4px;

@@ -164,16 +164,18 @@ function isFillModeHighlightActive(token: any, context: any) {
 function shouldHighlightEmptyField(token: any, context: any) {
   if (!token?.classList) return false;
   if (token.classList.contains('field-token--computed')) return false;
-  if (token.classList.contains('field-token--readonly')) return false;
   if (token.classList.contains('field-token--repeater')) return false;
   if (token.classList.contains('field-token--image')) return false;
   if (token.classList.contains('field-token--required-missing')) return false;
   if (!token.classList.contains('field-token--empty')) return false;
-  // Design-mode empties always use the same highlight look as fill mode.
+  // Design-mode empties always use the same highlight look as fill mode
+  // (including readonly — "Read-only when filling" only affects fill chrome).
   if (token.classList.contains('field-token--design')) return true;
   // Mapping-mode empties match designer placeholders (not fill-mode grey).
   if (context?.mappingMode === true) return true;
   if (token?.closest?.('.document-section--mapping')) return true;
+  // Fill mode: readonly stays inert plain text.
+  if (token.classList.contains('field-token--readonly')) return false;
   return isFillModeHighlightActive(token, context);
 }
 

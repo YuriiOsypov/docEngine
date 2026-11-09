@@ -479,6 +479,12 @@ export interface DocumentSectionData {
    * each row starts on a new PDF/print page.
    */
   eachRowOnNewPage?: boolean;
+  /**
+   * When true, PDF keeps this section's content (title, fields, tables) on one page
+   * via pdfmake `unbreakable` — avoids orphaning headers from following rows.
+   * Does not affect HTML preview.
+   */
+  keepOnOnePage?: boolean;
   /** Optional rule that controls whether the section is visible for current field values. */
   visibility?: SectionVisibilityRule | null;
   segments: Segment[];

@@ -6,6 +6,11 @@ import {
 } from '@docengine/editor/node';
 import type { EditorDocument, PdfRenderOptions } from './types.js';
 import { isHideTitleInPreview, renderSinglePagePdfContent } from './segment-renderer.js';
+import {
+  HEADER_HEIGHT_BUFFER_PT,
+  HEADER_LINE_SLACK_PT,
+  usesRepeatablePageHeader,
+} from './repeatable-section-header.js';
 
 export function resolveDocPagePlan(doc: EditorDocument): any | null {
   if ((doc as any).repeatablePagePlan?.instances?.length > 1) {
@@ -147,7 +152,32 @@ export function renderMultipagePdfContent(
     content.push({ text: 'No filled content to export.', style: 'empty' });
   }
 
+  // Separate Show-on-each-page header (Price group) + body instances (Item group):
+  // pull the first body node up by the header anti-clip pad so the top of the
+  // first Item group does not sit a blank line below Price group.
+  const pageSetup = { ...((doc as any).pageSetup ?? {}), ...(pageOptions.pageSetup ?? {}) };
+  if (
+    !pageOptions.skipRepeatablePageHeader &&
+    usesRepeatablePageHeader(pageSetup) &&
+    content.length
+  ) {
+    return pullFirstNodeUp(content, HEADER_LINE_SLACK_PT + HEADER_HEIGHT_BUFFER_PT);
+  }
+
   return content;
+}
+
+function pullFirstNodeUp(
+  nodes: Array<Record<string, unknown>>,
+  pullPt: number,
+): Array<Record<string, unknown>> {
+  if (!nodes.length || pullPt <= 0) return nodes;
+  const first = nodes[0];
+  if (!first || typeof first !== 'object') return nodes;
+  const margin = Array.isArray(first.margin) ? [...(first.margin as number[])] : [0, 0, 0, 0];
+  while (margin.length < 4) margin.push(0);
+  margin[1] = Number(margin[1] ?? 0) - pullPt;
+  return [{ ...first, margin }, ...nodes.slice(1)];
 }
 
 export function renderDocumentToPdfContent(
