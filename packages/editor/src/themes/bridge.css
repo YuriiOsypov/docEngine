@@ -78,12 +78,12 @@
   --me-field-missing-color: #b45309;
   --me-field-missing-bg: #fffbeb;
   --me-field-missing-outline: #f59e0b;
-  --me-field-filled-color: #0d9488;
-  --me-field-filled-bg: #f0fdfa;
+  --me-field-filled-color: #0f766e;
+  --me-field-filled-bg: #ccfbf1;
   --me-field-inert-color: #64748b;
-  --me-field-active-outline: #0000FF;
-  --me-field-fill-color: #0000FF;
-  --me-field-fill-bg: #F0FDFA;
+  --me-field-active-outline: #0d9488;
+  --me-field-fill-color: #0f766e;
+  --me-field-fill-bg: #ccfbf1;
   --me-field-fill-font-weight: 500;
   --me-field-fill-border-width: 1px;
 
@@ -636,8 +636,48 @@
   color: var(--me-text);
 }
 
+.field-palette__database,
 .field-palette__body {
   background: var(--me-surface-0);
+  color: var(--me-text);
+}
+
+.field-palette__database-header,
+.field-palette__database-toolbar {
+  border-color: var(--me-border);
+  color: var(--me-text);
+}
+
+.field-mapping-schema {
+  background: var(--me-surface-0);
+  border-color: var(--me-border);
+  color: var(--me-text);
+}
+
+.field-mapping-schema__drag {
+  background: var(--me-surface-muted);
+  color: var(--me-text);
+}
+
+.field-mapping-schema__drag:hover,
+.field-mapping-schema__drag--active {
+  border-color: var(--me-accent-border, var(--me-primary));
+  background: var(--me-accent-surface);
+}
+
+.field-mapping-schema__key {
+  color: var(--me-text);
+}
+
+.field-mapping-schema__type,
+.field-mapping-schema__toggle {
+  color: var(--me-text-muted);
+}
+
+.field-mapping-editor-mount {
+  background: var(--me-surface-0);
+  border-color: var(--me-border);
+  color: var(--me-text);
 }
 
 .design-panel--left .field-palette--vertical {
@@ -697,25 +737,35 @@ body:has(.page > .design-shell:not(.design-shell--active)) {
 }
 
 .design-panel--center {
-  background: #f1f5f9;
+  background: var(--me-surface-100, #f1f5f9);
   padding: var(--me-space-4);
 }
 
 .design-panel {
-  background: #f1f5f9;
+  background: var(--me-surface-100, #f1f5f9);
 }
 
 .design-panel__editor-scroll {
   border: none;
   border-radius: var(--me-radius-md);
   box-shadow: none;
-  background: #f1f5f9;
+  background: var(--me-surface-100, #f1f5f9);
 }
 
 .design-panel__editor-scroll--fill-page,
 .design-panel__editor-scroll:has(.editor-holder--fill-page) {
-  background: #f1f5f9;
+  background: var(--me-surface-100, #f1f5f9);
   box-shadow: none;
+}
+
+/* Print sheet: always light, even when chrome tokens follow a dark host. */
+.editor-holder--fill-page .codex-editor,
+.design-panel__editor-scroll .codex-editor {
+  background: #fff;
+  color: #1a1a1a;
+  --me-surface-0: #fff;
+  --me-field-fill-bg: #f0fdfa;
+  --me-field-fill-color: #0000ff;
 }
 
 .design-panel__editor-scroll .editor-holder,
@@ -839,9 +889,9 @@ body:has(.page > .design-shell:not(.design-shell--active)) {
 }
 
 .form-callout {
-  background: #f8fafc;
+  background: var(--me-accent-hover, #f8fafc);
   color: #64748b;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--me-border, #e2e8f0);
   border-radius: 8px;
   line-height: 1.55;
 }
@@ -1016,6 +1066,75 @@ body:has(.page > .design-shell:not(.design-shell--active)) {
 
 .modal-overlay {
   z-index: var(--me-overlay-z-index);
+}
+
+/* Field mapping mounts on document.body — must sit above OpenVue Dialog. */
+.modal-overlay--field-mapping {
+  z-index: 50000;
+}
+
+.modal-overlay--field-mapping .modal--field-mapping,
+.modal-overlay--field-mapping .field-mapping-panel,
+.modal-overlay--field-mapping .field-mapping-panel__preview,
+.modal-overlay--field-mapping .field-mapping-tree,
+.modal-overlay--field-mapping .field-mapping-schema,
+.modal-overlay--field-mapping .field-mapping-result-highlight,
+.modal-overlay--field-mapping .field-mapping-path-helper {
+  background: var(--me-surface-0);
+  border-color: var(--me-border);
+  color: var(--me-text);
+}
+
+.modal-overlay--field-mapping .field-mapping-panel {
+  background: var(--me-surface-muted);
+}
+
+/* Template fields sheet — keep print-light tokens (do not inherit chrome dark). */
+.modal-overlay--field-mapping .field-mapping-editor-mount,
+.modal-overlay--field-mapping .field-mapping-editor-holder,
+.modal-overlay--field-mapping .field-mapping-editor-holder .codex-editor {
+  background: #fff;
+  color: #1a1a1a;
+  --me-surface-0: #fff;
+  --me-surface-muted: #f5f5f5;
+  --me-text: #1a1a1a;
+  --me-text-body: #1a1a1a;
+  --me-text-muted: #64748b;
+  --me-field-fill-bg: #ccfbf1;
+  --me-field-fill-color: #0f766e;
+  --me-accent-color: #2563eb;
+}
+
+.modal-overlay--field-mapping .field-mapping-panel__textarea,
+.modal-overlay--field-mapping .modal__search,
+.modal-overlay--field-mapping textarea,
+.modal-overlay--field-mapping input[type='search'] {
+  background: var(--me-surface-0);
+  border-color: var(--me-border-input);
+  color: var(--me-text);
+}
+
+.modal-overlay--field-mapping .field-mapping-schema__drag {
+  background: var(--me-surface-100);
+  color: var(--me-text);
+}
+
+.modal-overlay--field-mapping .field-mapping-schema__drag:hover,
+.modal-overlay--field-mapping .field-mapping-schema__drag--active {
+  background: var(--me-accent-surface);
+  border-color: var(--me-accent-border);
+}
+
+.modal-overlay--field-mapping .field-mapping-path-helper__item:hover,
+.modal-overlay--field-mapping .field-mapping-path-helper__item--active {
+  background: var(--me-accent-surface);
+}
+
+.modal-overlay--field-mapping .modal__header,
+.modal-overlay--field-mapping .modal__footer {
+  background: var(--me-surface-100);
+  border-color: var(--me-border);
+  color: var(--me-text);
 }
 
 /* Inside LightningModal / .doc-shell — cover the host, stay in focus trap */
@@ -1589,12 +1708,12 @@ body.design-mode .ce-block--selected .ce-block__content {
 
 .vision-table th,
 .vision-table td {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--me-border, #e2e8f0);
   padding: var(--me-space-2) var(--me-space-3);
 }
 
 .vision-table th {
-  background: #f8fafc;
+  background: var(--me-accent-hover, #f8fafc);
   font-family: inherit;
   font-size: inherit;
   font-weight: inherit;
@@ -1603,7 +1722,7 @@ body.design-mode .ce-block--selected .ce-block__content {
   text-transform: none;
   letter-spacing: normal;
   text-align: inherit;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--me-border, #e2e8f0);
 }
 
 .vision-table tbody tr:nth-child(even) td {
@@ -1611,7 +1730,7 @@ body.design-mode .ce-block--selected .ce-block__content {
 }
 
 .vision-table tbody tr:hover td {
-  background: #f8fafc;
+  background: var(--me-accent-hover, #f8fafc);
 }
 
 .vision-table__col-resizer:hover::after,

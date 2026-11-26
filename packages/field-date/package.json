@@ -1,6 +1,6 @@
 {
   "name": "@docengine/field-date",
-  "version": "0.0.105",
+  "version": "0.0.106",
   "description": "Reference DocEngine field plugin for the date field type",
   "type": "module",
   "main": "./dist/index.js",

@@ -19,7 +19,7 @@ Unscoped [`docengine`](https://www.npmjs.com/package/docengine) on npmjs is an *
 
 ## Version
 
-Keep package versions in sync (currently `0.0.105` on npmjs across workspaces). Bump all four together before publish.
+Keep package versions in sync (currently `0.0.106` on npmjs across workspaces). Bump all four together before publish.
 
 ## Build
 
@@ -55,7 +55,7 @@ npm view @docengine/field-date version
 
 ## After publish
 
-In CoreEngine (default is already npm `0.0.105`):
+In CoreEngine (default is already npm `0.0.106`):
 
 ```bash
 npm run docengine:use-npm
@@ -77,4 +77,4 @@ npm run docengine:use-npm   # before committing CoreEngine package.json
 
 - Root `doc-engine` package is `"private": true` — only publish workspace packages under `packages/`.
 - `prepare` scripts build on install from git; registry consumers get `files`/`dist`/`lib` from the tarball.
-- Tag the DocEngine repo (`v0.0.105`) when you publish so hosts can pin source history.
+- Tag the DocEngine repo (`v0.0.106`) when you publish so hosts can pin source history.

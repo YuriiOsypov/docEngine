@@ -20,10 +20,14 @@ import '@docengine/editor/styles.css';
 `styles.css` bundles **Inter** (weights 400, 500, 600) via `@fontsource/inter`. If your host app loads Inter another way, you can omit the bundled faces and rely on the same stack from `EDITOR_FONT_FAMILY` / Page setup.
 
 ```js
-// Optional: theme bridge for PrimeVue 4 or Salesforce Lightning
+// Optional: theme bridge for PrimeVue 4 / OpenVue or Salesforce Lightning
 // import '@docengine/editor/themes/bridge.css';
 // import '@docengine/editor/themes/prime.css';
+```
 
+`themes/prime.css` maps Template design chrome (`--me-surface-*`, accents, formula picker, design panels) to PrimeVue/OpenVue semantic tokens so light and dark hosts (e.g. `darkModeSelector: '.app-dark'`) stay readable. Prefer this over host-app CSS overrides for dark mode.
+
+```js
 const docEngine = createEditor({
   holder: '#editor',
   data: {

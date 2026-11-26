@@ -229,18 +229,70 @@ function resolvePathProperty(current: any, key: string): { ok: true; value: unkn
 }
 
 /**
+ * Strip optional legacy `$payload` / `$payload.` prefix from an absolute path.
+ * Relative `$field` paths are returned unchanged.
+ * @param {string} path
+ */
+export function stripPayloadRootPrefix(path: any): string {
+  const trimmed = String(path ?? '').trim();
+  if (!trimmed) return '';
+  if (trimmed === '$payload') return '';
+  if (trimmed.startsWith('$payload.')) return trimmed.slice('$payload.'.length);
+  return trimmed;
+}
+
+/**
+ * Join a parent mapping path with a property key (no leading `$payload`).
+ * @param {string} basePath
+ * @param {string} key
+ */
+export function joinMappingPath(basePath: any, key: any): string {
+  const base = String(basePath ?? '').trim();
+  const segment = String(key ?? '');
+  if (/^[a-zA-Z_$][\w$]*$/.test(segment)) {
+    return base ? `${base}.${segment}` : segment;
+  }
+  const bracket = `[${JSON.stringify(segment)}]`;
+  return base ? `${base}${bracket}` : bracket;
+}
+
+/**
+ * Canonical absolute path for storage / UI: bare `close_date`, never `$payload.close_date`.
+ * Relative `$qty` / `$item.foo` paths (and their `#format` suffixes) are left alone.
+ * Legacy `$payload…` inputs are rewritten to bare absolute form.
+ * @param {string} sourcePath
+ */
+export function normalizeAbsoluteMappingPath(sourcePath: any): string {
+  const full = String(sourcePath ?? '').trim();
+  if (!full) return '';
+  const { path, dateFormat } = parseMappingSourcePath(full);
+  const clean = String(path || full).trim();
+  if (!clean) return dateFormat ? `#${dateFormat}` : '';
+
+  // Relative item paths keep the `$` marker.
+  if (clean.startsWith('$') && !clean.startsWith('$payload')) {
+    return full;
+  }
+
+  const bare = stripPayloadRootPrefix(clean);
+  if (!bare) return dateFormat ? `#${dateFormat}` : '';
+  return dateFormat ? `${bare}#${dateFormat}` : bare;
+}
+
+/**
  * @param {string} sourcePath
  * @param {unknown} payload
  */
 export function sourcePathExists(sourcePath: any, payload: any) {
   const { path } = parseMappingSourcePath(sourcePath);
   if (!path) return false;
-  if (path.startsWith('$payload')) {
-    const stripped = path.replace(/^\$payload\.?/, '');
-    if (!stripped) return payload !== undefined;
-    return payloadPathExists(stripped, payload);
+  if (path.startsWith('$') && !path.startsWith('$payload')) {
+    // Relative `$field` — existence is checked against a row, not the root sample.
+    return false;
   }
-  return payloadPathExists(path, payload);
+  const stripped = stripPayloadRootPrefix(path);
+  if (!stripped) return payload !== undefined;
+  return payloadPathExists(stripped, payload);
 }
 
 /**
@@ -254,11 +306,12 @@ export function resolveSourcePath( sourcePath: any, payload: any) {
   // Always walk with getPayloadByPath / resolvePathProperty. Evaluating the path
   // via `new Function` returns Array.prototype methods for keys like `values`
   // (`arr.values` is the iterator), which breaks nested `$values.amount` drops.
-  if (path.startsWith('$payload')) {
-    const stripped = path.replace(/^\$payload\.?/, '');
-    return stripped ? getPayloadByPath(stripped, payload) : payload;
+  if (path.startsWith('$') && !path.startsWith('$payload')) {
+    // Relative `$field` against root is undefined (needs a section item).
+    return undefined;
   }
-  return getPayloadByPath(path, payload);
+  const stripped = stripPayloadRootPrefix(path);
+  return stripped ? getPayloadByPath(stripped, payload) : payload;
 }
 
 /**
@@ -285,20 +338,22 @@ function describePayloadType( value: any) {
 
 /**
  * @param {unknown} payload
- * @param {string} [basePath]
+ * @param {string} [basePath] Absolute path prefix (bare, no `$payload`). Default: root.
  * @returns {Array<{ key: string; path: string; type: string; children?: ReturnType<typeof buildSourcePayloadTree> }>}
  */
-export function buildSourcePayloadTree( payload: any, basePath: any = '$payload'): SourceTreeNode[] {
+export function buildSourcePayloadTree( payload: any, basePath: any = ''): SourceTreeNode[] {
+  const root = String(basePath ?? '').trim();
+
   if (payload == null || typeof payload !== 'object') {
     return [{
       key: String(payload),
-      path: basePath,
+      path: root,
       type: describePayloadType(payload),
     }];
   }
 
   if (Array.isArray(payload)) {
-    const columnFields = buildArrayColumnFields(basePath, payload);
+    const columnFields = buildArrayColumnFields(root, payload);
     if (columnFields?.length) {
       return columnFields.map((field: SourceTreeNode) => ({
         key: field.key,
@@ -308,21 +363,22 @@ export function buildSourcePayloadTree( payload: any, basePath: any = '$payload'
       }));
     }
 
-    return payload.slice(0, 5).map((item: any, index: number) => ({
-      key: `[${index}]`,
-      path: `${basePath}[${index}]`,
-      type: describePayloadType(item),
-      children:
-        item != null && typeof item === 'object' && !Array.isArray(item)
-          ? buildSourcePayloadTree(item, `${basePath}[${index}]`)
-          : undefined,
-    }));
+    return payload.slice(0, 5).map((item: any, index: number) => {
+      const path = root ? `${root}[${index}]` : `[${index}]`;
+      return {
+        key: `[${index}]`,
+        path,
+        type: describePayloadType(item),
+        children:
+          item != null && typeof item === 'object' && !Array.isArray(item)
+            ? buildSourcePayloadTree(item, path)
+            : undefined,
+      };
+    });
   }
 
   return Object.entries(payload).map(([key, value]) => {
-    const path = /^[a-zA-Z_$][\w$]*$/.test(key)
-      ? `${basePath}.${key}`
-      : `${basePath}[${JSON.stringify(key)}]`;
+    const path = joinMappingPath(root, key);
     const type = describePayloadType(value);
     return {
       key,
@@ -811,10 +867,14 @@ export function validateMappingSourcePaths(rules: any, payload: any) {
       continue;
     }
 
-    if (sourcePath.startsWith('$') && (sectionSource || isAbsoluteMappingPath(sourcePath) || !sectionIsSourced)) {
+    if (
+      sourcePath &&
+      looksLikeMappingPathString(sourcePath) &&
+      (sectionSource || isAbsoluteMappingPath(sourcePath) || !sectionIsSourced)
+    ) {
       paths.push(sourcePath);
     }
-    if (sourceArrayPath.startsWith('$')) {
+    if (sourceArrayPath && looksLikeMappingPathString(sourceArrayPath)) {
       const coerced = coerceToExistingArrayPath(sourceArrayPath, payload);
       // Validate the real child array when nested lookup paths mis-infer Item__r as array
       const checkPath = coerced && coerced !== sourceArrayPath ? coerced : sourceArrayPath;
@@ -1232,7 +1292,7 @@ function resolveChildPathNamesFromIds( parentFieldId: any, childFieldIds: any, f
  */
 export function normalizeTableColumnSourcePath( sourcePath: any) {
   const { path, dateFormat } = parseMappingSourcePath(sourcePath);
-  const raw = path || String(sourcePath ?? '').trim();
+  const raw = canonicalizeStoredMappingPath(path || String(sourcePath ?? '').trim());
   const indexMatch = raw.match(/^(.*)\[\d+\](.*)$/);
   let normalizedPath: string;
   let sourceArrayPath: string;
@@ -1246,7 +1306,7 @@ export function normalizeTableColumnSourcePath( sourcePath: any) {
   }
   return {
     sourcePath: dateFormat ? `${normalizedPath}#${dateFormat}` : normalizedPath,
-    sourceArrayPath,
+    sourceArrayPath: canonicalizeStoredMappingPath(sourceArrayPath),
   };
 }
 
@@ -1273,16 +1333,17 @@ function getColumnPropertyFromPaths( sourcePath: any, sourceArrayPath: any) {
 /**
  * Array path on an unresolved table mapping object.
  * Prefers `_source` (same key as section maps); accepts legacy `source`.
+ * Absolute sources are bare (`records`) or legacy `$payload.records`; relative `$children` ok.
  * @param {unknown} value
  */
 export function getTableMappingSourcePath(value: any): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
   const fromPreferred = value[SECTION_SOURCE_KEY];
-  if (typeof fromPreferred === 'string' && fromPreferred.trim().startsWith('$')) {
+  if (typeof fromPreferred === 'string' && looksLikeMappingPathString(fromPreferred)) {
     return fromPreferred.trim();
   }
   const legacy = /** @type {{ source?: unknown }} */ (value).source;
-  if (typeof legacy === 'string' && legacy.trim().startsWith('$')) {
+  if (typeof legacy === 'string' && looksLikeMappingPathString(legacy)) {
     return legacy.trim();
   }
   return '';
@@ -1314,18 +1375,23 @@ export function isSectionSourceRule(rule: any): boolean {
 }
 
 /**
- * Absolute mapping paths resolve against the root payload (`$payload…`).
+ * Absolute mapping paths resolve against the root payload.
+ * Prefer bare paths (`close_date`, `account_id.name`); legacy `$payload…` still counts.
+ * Relative item paths always start with `$` but not `$payload` (`$qty`, `$item.name`).
  * @param {string} sourcePath
  */
 export function isAbsoluteMappingPath(sourcePath: any): boolean {
   const full = String(sourcePath ?? '').trim();
   if (!full) return false;
   const { path } = parseMappingSourcePath(full);
-  return String(path || full).startsWith('$payload');
+  const clean = String(path || full).trim();
+  if (clean.startsWith('$payload')) return true;
+  if (clean.startsWith('$')) return false;
+  return true;
 }
 
 /**
- * Relative paths resolve against the current section-source array item.
+ * Relative paths resolve against the current section-source array item (`$qty`, `$item`).
  * @param {string} sourcePath
  */
 export function isRelativeMappingPath(sourcePath: any): boolean {
@@ -1335,13 +1401,26 @@ export function isRelativeMappingPath(sourcePath: any): boolean {
 }
 
 /**
+ * Canonicalize a path for Mapping result storage (strip legacy `$payload.`).
+ * @param {string} sourcePath
+ */
+function canonicalizeStoredMappingPath(sourcePath: any): string {
+  const trimmed = String(sourcePath ?? '').trim();
+  if (!trimmed) return '';
+  if (isAbsoluteMappingPath(trimmed)) {
+    return normalizeAbsoluteMappingPath(trimmed) || trimmed;
+  }
+  return trimmed;
+}
+
+/**
  * Build the reserved `_source` rule for a section.
  * @param {string} sectionName
  * @param {string} sourceArrayPath
  * @returns {import('../types.d.ts').FieldMappingRule}
  */
 export function createSectionSourceRule(sectionName: any, sourceArrayPath: any) {
-  const path = String(sourceArrayPath ?? '').trim();
+  const path = canonicalizeStoredMappingPath(sourceArrayPath);
   return {
     section: String(sectionName ?? ''),
     field: SECTION_SOURCE_KEY,
@@ -1352,7 +1431,8 @@ export function createSectionSourceRule(sectionName: any, sourceArrayPath: any) 
 
 /**
  * Resolve a mapping path for one section-source array item.
- * Absolute (`$payload…`) → root payload; relative (`$Name`, `Name`, `$item.Foo`) → item.
+ * Absolute (`close_date`, legacy `$payload…`) → root payload;
+ * relative (`$Name`, `$item.Foo`) → item.
  * @param {string} sourcePath
  * @param {unknown} payload
  * @param {unknown} item
@@ -1450,14 +1530,21 @@ function resolveArrayPathRows(sourceArrayPath: any, payload: any) {
 }
 
 /**
- * True when a string looks like a mapping path (absolute `$payload…`, relative `$Name`, or bare `Name`).
+ * True when a string looks like a mapping path
+ * (absolute bare / legacy `$payload…`, relative `$Name`, optional `#format`).
  * @param {string} value
  */
 function looksLikeMappingPathString(value: any): boolean {
   const s = String(value ?? '').trim();
   if (!s) return false;
-  if (s.startsWith('$')) return true;
-  return /^[A-Za-z_][\w.[\]'"]*$/.test(s);
+  const { path } = parseMappingSourcePath(s);
+  const clean = String(path || s).trim();
+  if (!clean) return false;
+  if (clean.startsWith('$')) return true;
+  // Absolute: close_date, account_id.name, sections.Anamnesis["Life history"]
+  return /^[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*|\["[^"]*"\]|\['[^']*'\]|\[\d+\])*$/.test(
+    clean,
+  );
 }
 
 /**
@@ -1670,8 +1757,8 @@ export function toRelativeItemPath(sourcePath: any, sourceArrayPath: any) {
 }
 
 /**
- * Join table `source` with a relative (`$name`) or absolute (`$payload…`) item path.
- * Preserves `#format` suffixes.
+ * Join table `source` with a relative (`$name`) or absolute (`close_date` / `$payload…`) item path.
+ * Preserves `#format` suffixes. Absolute results are bare (no `$payload` prefix).
  * @param {string} source
  * @param {string} itemPath
  */
@@ -1679,10 +1766,13 @@ export function toAbsoluteColumnPath(source: any, itemPath: any) {
   const full = String(itemPath ?? '').trim();
   const { path, dateFormat } = parseMappingSourcePath(full);
   const cleanItem = path || full;
-  const arrayPath = String(source ?? '').trim();
+  const arrayPath = normalizeAbsoluteMappingPath(String(source ?? '').trim());
 
-  if (cleanItem.startsWith('$payload')) {
-    return dateFormat ? `${cleanItem}#${dateFormat}` : cleanItem;
+  if (isAbsoluteMappingPath(cleanItem)) {
+    const abs = normalizeAbsoluteMappingPath(
+      dateFormat ? `${cleanItem}#${dateFormat}` : cleanItem,
+    );
+    return abs;
   }
 
   const relative = cleanItem.startsWith('$') ? cleanItem.slice(1) : cleanItem;
@@ -1852,6 +1942,9 @@ function buildSectionsFromRules(
         storedPath = toRelativeItemPath(storedPath, sectionSourcePath);
       }
     }
+    if (!resolved || sectionIsSourced) {
+      storedPath = canonicalizeStoredMappingPath(storedPath) || storedPath;
+    }
     let value =
       resolved && !sectionIsSourced
         ? resolveMappedSourceValue(rule.sourcePath, payload)
@@ -1947,7 +2040,7 @@ function buildSectionsFromRules(
       items[rule.columnKey] = itemPath;
     }
     sections[section][field] = {
-      [SECTION_SOURCE_KEY]: sourceArrayPath,
+      [SECTION_SOURCE_KEY]: canonicalizeStoredMappingPath(sourceArrayPath) || sourceArrayPath,
       items,
     };
   }
@@ -1974,9 +2067,20 @@ function buildSectionsFromRules(
   }
 
   for (const [sectionName, sourcePath] of sectionSources) {
-    if (!sections[sectionName]) sections[sectionName] = {};
     if (!resolved) {
-      sections[sectionName][SECTION_SOURCE_KEY] = sourcePath;
+      const existing = sections[sectionName] ?? {};
+      const rest: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(existing)) {
+        if (key === SECTION_SOURCE_KEY) continue;
+        rest[key] = nested;
+      }
+      // Keep `_source` first in Mapping result JSON for sourced sections.
+      sections[sectionName] = {
+        [SECTION_SOURCE_KEY]: canonicalizeStoredMappingPath(sourcePath) || sourcePath,
+        ...rest,
+      };
+    } else if (!sections[sectionName]) {
+      sections[sectionName] = {};
     }
   }
 
@@ -1996,7 +2100,29 @@ function buildSectionsFromRules(
     return /** @type {Record<string, Record<string, unknown>>} */ (expanded);
   }
 
-  return sections;
+  return putSourceKeyFirstDeep(sections) as Record<string, Record<string, unknown>>;
+}
+
+/**
+ * Ensure `_source` (and nested table `_source`) appears first for stable Mapping result JSON.
+ * @param {unknown} value
+ */
+function putSourceKeyFirstDeep(value: any): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => putSourceKeyFirstDeep(entry));
+  }
+  if (!value || typeof value !== 'object') return value;
+
+  const record = /** @type {Record<string, unknown>} */ (value);
+  const out: Record<string, unknown> = {};
+  if (typeof record[SECTION_SOURCE_KEY] === 'string') {
+    out[SECTION_SOURCE_KEY] = record[SECTION_SOURCE_KEY];
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (key === SECTION_SOURCE_KEY) continue;
+    out[key] = putSourceKeyFirstDeep(nested);
+  }
+  return out;
 }
 
 /**
@@ -2014,10 +2140,11 @@ export function buildMappingResultFromRules(rules: any, template: any = {}) {
 }
 
 /**
- * @param {string} value
+ * True when a mapping-result string is a source path (absolute bare / `$payload…`, or relative `$field`).
+ * @param {unknown} value
  */
 function isMappingExpressionValue( value: any) {
-  return typeof value === 'string' && value.startsWith('$');
+  return typeof value === 'string' && looksLikeMappingPathString(value);
 }
 
 /**
@@ -2111,28 +2238,52 @@ export function flattenSourcePayloadPaths( payload: any) {
 }
 
 /**
- * @param {string} token
+ * @param {string} token Absolute bare path, legacy `$payload…`, or relative `$field…`
  * @returns {{ basePath: string; segmentPrefix: string; segmentStartInToken: number } | null}
  */
 export function parsePathTokenContext( token: any) {
   const text = String(token ?? '').trim();
-  if (!text.startsWith('$')) return null;
+  if (!text) return null;
 
-  if (text === '$payload') {
-    return { basePath: '$payload', segmentPrefix: '', segmentStartInToken: text.length };
+  // Legacy `$payload` root alias → treat as document root (empty base path).
+  if (text === '$payload' || text === '$payload.') {
+    return { basePath: '', segmentPrefix: '', segmentStartInToken: text.length };
   }
 
-  const lastDot = text.lastIndexOf('.');
+  const bare = text.startsWith('$payload.')
+    ? text.slice('$payload.'.length)
+    : text.startsWith('$') && !text.startsWith('$payload')
+      ? text
+      : stripPayloadRootPrefix(text);
+
+  if (text.startsWith('$') && !text.startsWith('$payload')) {
+    // Relative `$qty` / `$item.foo` — autocomplete against relative token.
+    const lastDot = text.lastIndexOf('.');
+    if (lastDot < 0) {
+      return { basePath: text, segmentPrefix: '', segmentStartInToken: text.length };
+    }
+    return {
+      basePath: text.slice(0, lastDot),
+      segmentPrefix: text.slice(lastDot + 1),
+      segmentStartInToken: lastDot + 1,
+    };
+  }
+
+  const path = bare;
+  if (!path) {
+    return { basePath: '', segmentPrefix: '', segmentStartInToken: text.length };
+  }
+
+  const lastDot = path.lastIndexOf('.');
   if (lastDot < 0) {
-    const root = '$payload';
-    if (!text.startsWith(root)) return null;
-    const segmentPrefix = text.slice(root.length);
-    return { basePath: root, segmentPrefix, segmentStartInToken: root.length };
+    return { basePath: '', segmentPrefix: path, segmentStartInToken: text.length - path.length };
   }
 
-  const basePath = text.slice(0, lastDot);
-  const segmentPrefix = text.slice(lastDot + 1);
-  return { basePath, segmentPrefix, segmentStartInToken: lastDot + 1 };
+  return {
+    basePath: path.slice(0, lastDot),
+    segmentPrefix: path.slice(lastDot + 1),
+    segmentStartInToken: text.length - path.length + lastDot + 1,
+  };
 }
 
 /**
@@ -2165,9 +2316,7 @@ function buildArrayColumnFields( lookupPath: any, rows: any): SourceTreeNode[] |
 
   const first = rows[0];
   return Object.entries(first).map(([key, value]) => {
-    const path = /^[a-zA-Z_$][\w$]*$/.test(key)
-      ? `${lookupPath}.${key}`
-      : `${lookupPath}[${JSON.stringify(key)}]`;
+    const path = joinMappingPath(lookupPath, key);
     const type = describePayloadType(value);
     return {
       key,
@@ -2199,20 +2348,46 @@ function isArrayIndexChildren( children: any) {
  * @returns {Array<{ key: string; path: string; type: string }>}
  */
 export function getSourceFieldsAtPath( payload: any, pathToken: any) {
+  const rawToken = String(pathToken ?? '').trim();
+  // Root listing: empty / `.` / legacy `$payload.`
+  if (!rawToken || rawToken === '.' || rawToken === '$payload' || rawToken === '$payload.') {
+    return (buildSourcePayloadTree(payload) ?? []).map((node: any) => ({
+      key: node.key,
+      path: node.path,
+      type: node.type,
+    }));
+  }
+
   const context = parsePathTokenContext(pathToken);
   if (!context) return [];
 
   const tree = buildSourcePayloadTree(payload);
-  const lookupPath = context.basePath === '$payload' && !context.segmentPrefix
-    ? '$payload'
-    : context.basePath;
+  // `$account_id.` typed in Mapping result → look up bare `account_id` on the root sample.
+  let lookupPath = context.basePath;
+  if (
+    lookupPath.startsWith('$') &&
+    !lookupPath.startsWith('$payload') &&
+    !context.segmentPrefix
+  ) {
+    lookupPath = lookupPath.slice(1);
+  } else if (lookupPath.startsWith('$') && !lookupPath.startsWith('$payload')) {
+    // Nested `$item.foo` stays relative; absolute mistaken `$account_id` with partial segment
+    // still prefers bare root lookup when the object exists on the sample.
+    const bare = lookupPath.slice(1);
+    if (bare && resolveSourcePath(bare, payload) != null) {
+      lookupPath = bare;
+    }
+  }
 
-  const resolved = resolveSourcePath(lookupPath, payload);
+  const resolved =
+    !lookupPath
+      ? payload
+      : resolveSourcePath(lookupPath, payload);
   const columnFields = Array.isArray(resolved)
     ? buildArrayColumnFields(lookupPath, resolved)
     : null;
 
-  let children = findSourceTreeNode(tree, lookupPath);
+  let children = !lookupPath ? tree : findSourceTreeNode(tree, lookupPath);
 
   if (columnFields?.length && (!children?.length || isArrayIndexChildren(children))) {
     return columnFields;
@@ -2227,12 +2402,13 @@ export function getSourceFieldsAtPath( payload: any, pathToken: any) {
     } else if (Array.isArray(resolved) && resolved.length > 0) {
       const first = resolved[0];
       if (isPlainObject(first)) {
-        children = buildSourcePayloadTree(first, `${lookupPath}[0]`);
+        const childBase = lookupPath ? `${lookupPath}[0]` : '[0]';
+        children = buildSourcePayloadTree(first, childBase);
       }
     }
   }
 
-  if (!children?.length && lookupPath === '$payload') {
+  if (!children?.length && !lookupPath) {
     children = tree;
   }
 
@@ -2272,8 +2448,13 @@ export function parseMappingResultToRules( mappingResult: any, blocks: any, fiel
 
     for (const [fieldName, value] of Object.entries(fields)) {
       if (fieldName === SECTION_SOURCE_KEY) {
-        if (typeof value === 'string' && value.trim().startsWith('$')) {
-          rules.push(createSectionSourceRule(sectionName, value.trim()));
+        if (typeof value === 'string' && looksLikeMappingPathString(value)) {
+          rules.push(
+            createSectionSourceRule(
+              sectionName,
+              normalizeAbsoluteMappingPath(value.trim()) || value.trim(),
+            ),
+          );
         }
         continue;
       }
@@ -2403,6 +2584,7 @@ export function createMappingRuleFromDrop( fieldId: any, sourcePath: any, blocks
 export function createMappingRulesFromDrop( fieldId: any, sourcePath: any, blocks: any, fieldSchemas: any, options: any = {}) {
   const { childFieldIds = [], bulkChild = false, sourceType = '' } = options;
   const dropType = String(sourceType ?? '').trim().toLowerCase();
+  sourcePath = canonicalizeStoredMappingPath(sourcePath) || String(sourcePath ?? '').trim();
 
   const cellRef = parseCellFieldId(fieldId, fieldSchemas);
   if (cellRef) {

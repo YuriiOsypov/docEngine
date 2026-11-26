@@ -45,8 +45,8 @@ const SAMPLE = {
 
 describe('source-path-canvas-drop helpers', () => {
   it('sourcePathLeafKey extracts the last segment', () => {
-    assert.equal(sourcePathLeafKey('$payload.records.name'), 'name');
-    assert.equal(sourcePathLeafKey('$payload.records'), 'records');
+    assert.equal(sourcePathLeafKey('records.name'), 'name');
+    assert.equal(sourcePathLeafKey('records'), 'records');
     assert.equal(sourcePathLeafKey('$payload["Odd Key"]'), 'Odd Key');
   });
 
@@ -68,10 +68,10 @@ describe('source-path-canvas-drop helpers', () => {
   });
 
   it('detects array-member paths vs object/scalar paths', () => {
-    assert.equal(isArrayMemberSourcePath('$payload.records.name', SAMPLE), true);
-    assert.equal(isArrayMemberSourcePath('$payload.status', SAMPLE), false);
-    assert.equal(isArrayMemberSourcePath('$payload.project.name', SAMPLE), false);
-    assert.equal(isArrayMemberSourcePath('$payload.records', SAMPLE), false);
+    assert.equal(isArrayMemberSourcePath('records.name', SAMPLE), true);
+    assert.equal(isArrayMemberSourcePath('status', SAMPLE), false);
+    assert.equal(isArrayMemberSourcePath('project.name', SAMPLE), false);
+    assert.equal(isArrayMemberSourcePath('records', SAMPLE), false);
   });
 
   it('classifies nested values.amount as a table column (not a scalar field)', () => {
@@ -92,11 +92,11 @@ describe('source-path-canvas-drop helpers', () => {
       },
     };
     assert.equal(
-      isArrayMemberSourcePath('$payload.sections.items.Table.values.amount', sample),
+      isArrayMemberSourcePath('sections.items.Table.values.amount', sample),
       true,
     );
     const plan = classifySourcePathDrop({
-      path: '$payload.sections.items.Table.values.amount',
+      path: 'sections.items.Table.values.amount',
       type: 'string',
       sample,
     });
@@ -104,32 +104,32 @@ describe('source-path-canvas-drop helpers', () => {
     if (plan.kind !== 'table-column') return;
     assert.equal(plan.column.key, 'amount');
     assert.equal(plan.column.label, 'Amount');
-    assert.equal(plan.sourceArrayPath, '$payload.sections.items.Table.values');
-    assert.equal(plan.sourcePath, '$payload.sections.items.Table.values.amount');
+    assert.equal(plan.sourceArrayPath, 'sections.items.Table.values');
+    assert.equal(plan.sourcePath, 'sections.items.Table.values.amount');
   });
 
   it('classifies scalars as typed fields', () => {
     assert.deepEqual(
-      classifySourcePathDrop({ path: '$payload.status', type: 'string', sample: SAMPLE }),
-      { kind: 'field', label: 'Status', fieldType: 'text', sourcePath: '$payload.status' },
+      classifySourcePathDrop({ path: 'status', type: 'string', sample: SAMPLE }),
+      { kind: 'field', label: 'Status', fieldType: 'text', sourcePath: 'status' },
     );
     assert.deepEqual(
-      classifySourcePathDrop({ path: '$payload.sort', type: 'number', sample: SAMPLE }),
-      { kind: 'field', label: 'Sort', fieldType: 'number', sourcePath: '$payload.sort' },
+      classifySourcePathDrop({ path: 'sort', type: 'number', sample: SAMPLE }),
+      { kind: 'field', label: 'Sort', fieldType: 'number', sourcePath: 'sort' },
     );
     assert.deepEqual(
-      classifySourcePathDrop({ path: '$payload.inactive', type: 'boolean', sample: SAMPLE }),
-      { kind: 'field', label: 'Inactive', fieldType: 'logical', sourcePath: '$payload.inactive' },
+      classifySourcePathDrop({ path: 'inactive', type: 'boolean', sample: SAMPLE }),
+      { kind: 'field', label: 'Inactive', fieldType: 'logical', sourcePath: 'inactive' },
     );
     assert.deepEqual(
-      classifySourcePathDrop({ path: '$payload.project.name', type: 'string', sample: SAMPLE }),
-      { kind: 'field', label: 'Name', fieldType: 'text', sourcePath: '$payload.project.name' },
+      classifySourcePathDrop({ path: 'project.name', type: 'string', sample: SAMPLE }),
+      { kind: 'field', label: 'Name', fieldType: 'text', sourcePath: 'project.name' },
     );
   });
 
   it('classifies array members as table columns', () => {
     const plan = classifySourcePathDrop({
-      path: '$payload.records.name',
+      path: 'records.name',
       type: 'string',
       sample: SAMPLE,
     });
@@ -137,13 +137,13 @@ describe('source-path-canvas-drop helpers', () => {
     if (plan.kind !== 'table-column') return;
     assert.equal(plan.column.key, 'name');
     assert.equal(plan.column.label, 'Name');
-    assert.equal(plan.sourcePath, '$payload.records.name');
-    assert.equal(plan.sourceArrayPath, '$payload.records');
+    assert.equal(plan.sourcePath, 'records.name');
+    assert.equal(plan.sourceArrayPath, 'records');
   });
 
   it('uses humanized field labels for table columns', () => {
     const plan = classifySourcePathDrop({
-      path: '$payload.records.date_visit_start',
+      path: 'records.date_visit_start',
       type: 'string',
       sample: {
         records: [{ date_visit_start: '2026-10-05T09:00:00+02:00' }],
@@ -158,7 +158,7 @@ describe('source-path-canvas-drop helpers', () => {
 
   it('prefers explicit drag label for table columns', () => {
     const plan = classifySourcePathDrop({
-      path: '$payload.records.date_visit_start',
+      path: 'records.date_visit_start',
       type: 'string',
       label: 'Date Visit Start',
       sample: {
@@ -172,7 +172,7 @@ describe('source-path-canvas-drop helpers', () => {
 
   it('classifies array-of-objects as multi-column table', () => {
     const plan = classifySourcePathDrop({
-      path: '$payload.records',
+      path: 'records',
       type: 'array',
       sample: SAMPLE,
     });
@@ -185,7 +185,7 @@ describe('source-path-canvas-drop helpers', () => {
 
   it('builds mapping rules with sourceArrayPath for table columns', () => {
     const plan = classifySourcePathDrop({
-      path: '$payload.records.name',
+      path: 'records.name',
       type: 'string',
       sample: SAMPLE,
     });
@@ -218,8 +218,8 @@ describe('source-path-canvas-drop helpers', () => {
     });
     assert.equal(rules.length, 1);
     assert.equal(rules[0].columnKey, 'name');
-    assert.equal(rules[0].sourcePath, '$payload.records.name');
-    assert.equal(rules[0].sourceArrayPath, '$payload.records');
+    assert.equal(rules[0].sourcePath, 'records.name');
+    assert.equal(rules[0].sourceArrayPath, 'records');
   });
 
   it('findTableIdForSourceArrayPath locates an existing mapped table', () => {
@@ -228,14 +228,14 @@ describe('source-path-canvas-drop helpers', () => {
         {
           fieldId: 'tbl1',
           columnKey: 'name',
-          sourceArrayPath: '$payload.records',
-          sourcePath: '$payload.records.name',
+          sourceArrayPath: 'records',
+          sourcePath: 'records.name',
         },
       ],
-      '$payload.records',
+      'records',
     );
     assert.equal(id, 'tbl1');
-    assert.equal(findTableIdForSourceArrayPath([], '$payload.records'), null);
+    assert.equal(findTableIdForSourceArrayPath([], 'records'), null);
   });
 
   it('mergeMappingRulesIntoSpec upserts rules and preserves sourceSample', () => {
@@ -246,7 +246,7 @@ describe('source-path-canvas-drop helpers', () => {
           section: 'main',
           field: 'status',
           fieldId: 'main_status',
-          sourcePath: '$payload.status',
+          sourcePath: 'status',
         },
       ],
     );

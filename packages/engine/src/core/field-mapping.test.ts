@@ -183,11 +183,11 @@ describe('field-mapping', () => {
       },
     };
     assert.equal(
-      sourcePathExists('$payload.sections.Untitled.Table_2.column_1', tablePayload),
+      sourcePathExists('sections.Untitled.Table_2.column_1', tablePayload),
       true,
     );
     assert.equal(
-      sourcePathExists('$payload.sections.Untitled.Table_2.missing', tablePayload),
+      sourcePathExists('sections.Untitled.Table_2.missing', tablePayload),
       false,
     );
   });
@@ -234,15 +234,15 @@ describe('field-mapping', () => {
             section: 'Products',
             field: 'Line Items',
             columnKey: 'model',
-            sourcePath: '$payload.GFERP__Sales_Lines__r.GFERP__Item__r.Name',
-            sourceArrayPath: '$payload.GFERP__Sales_Lines__r.GFERP__Item__r',
+            sourcePath: 'GFERP__Sales_Lines__r.GFERP__Item__r.Name',
+            sourceArrayPath: 'GFERP__Sales_Lines__r.GFERP__Item__r',
           },
           {
             section: 'Products',
             field: 'Line Items',
             columnKey: 'quantity',
-            sourcePath: '$payload.GFERP__Sales_Lines__r.GFERP__EDI_Quantity__c',
-            sourceArrayPath: '$payload.GFERP__Sales_Lines__r',
+            sourcePath: 'GFERP__Sales_Lines__r.GFERP__EDI_Quantity__c',
+            sourceArrayPath: 'GFERP__Sales_Lines__r',
           },
         ],
       },
@@ -268,15 +268,15 @@ describe('field-mapping', () => {
             section: 'Products',
             field: 'Line Items',
             columnKey: 'model',
-            sourcePath: '$payload.GFERP__Sales_Lines__r.GFERP__Item__r.Name',
-            sourceArrayPath: '$payload.GFERP__Sales_Lines__r.GFERP__Item__r',
+            sourcePath: 'GFERP__Sales_Lines__r.GFERP__Item__r.Name',
+            sourceArrayPath: 'GFERP__Sales_Lines__r.GFERP__Item__r',
           },
           {
             section: 'Products',
             field: 'Line Items',
             columnKey: 'quantity',
-            sourcePath: '$payload.GFERP__Sales_Lines__r.GFERP__EDI_Quantity__c',
-            sourceArrayPath: '$payload.GFERP__Sales_Lines__r',
+            sourcePath: 'GFERP__Sales_Lines__r.GFERP__EDI_Quantity__c',
+            sourceArrayPath: 'GFERP__Sales_Lines__r',
           },
         ],
       },
@@ -301,7 +301,7 @@ describe('field-mapping', () => {
           {
             section: 'Anamnesis',
             field: 'Complaints',
-            sourcePath: '$payload.sections.Untitled.TT',
+            sourcePath: 'sections.Untitled.TT',
           },
         ],
       },
@@ -309,12 +309,12 @@ describe('field-mapping', () => {
     );
     assert.ok(
       preview.validation.warnings.some((item) =>
-        /Source path "\$payload\.sections\.Untitled\.TT" does not exist/.test(item.message),
+        /Source path "sections\.Untitled\.TT" does not exist/.test(item.message),
       ),
     );
     assert.equal(
       preview.validation.warnings.find((item) => item.sourcePath)?.sourcePath,
-      '$payload.sections.Untitled.TT',
+      'sections.Untitled.TT',
     );
   });
 
@@ -349,14 +349,14 @@ describe('field-mapping', () => {
       {
         section: 'Anamnesis',
         field: 'Complaints',
-        sourcePath: '$payload.sections.Anamnesis.Complaints',
+        sourcePath: 'sections.Anamnesis.Complaints',
         fieldId: 'anamnesis_complaints',
       },
       {
         section: 'Anamnesis',
         field: 'Life anamnesis',
         childField: 'Life history',
-        sourcePath: '$payload.sections.Anamnesis["Life history"]',
+        sourcePath: 'sections.Anamnesis["Life history"]',
         fieldId: 'anamnesis_life',
         childFieldId: 'life_history',
       },
@@ -369,10 +369,10 @@ describe('field-mapping', () => {
     const mappingResult = buildMappingResultFromRules(rules);
     assert.strictEqual(
       mappingResult.sections.Anamnesis.Complaints,
-      '$payload.sections.Anamnesis.Complaints',
+      'sections.Anamnesis.Complaints',
     );
     assert.deepEqual(mappingResult.sections.Anamnesis['Life anamnesis'], {
-      'Life history': '$payload.sections.Anamnesis["Life history"]',
+      'Life history': 'sections.Anamnesis["Life history"]',
     });
   });
 
@@ -403,8 +403,8 @@ describe('field-mapping', () => {
 
     assert.ok(tableNode);
     assert.strictEqual(tableNode.type, 'array');
-    assert.ok(tableNode.children?.some((node) => node.key === 'name' && node.path === '$payload.sections.items.Table.name'));
-    assert.ok(tableNode.children?.some((node) => node.key === 'amount' && node.path === '$payload.sections.items.Table.amount'));
+    assert.ok(tableNode.children?.some((node) => node.key === 'name' && node.path === 'sections.items.Table.name'));
+    assert.ok(tableNode.children?.some((node) => node.key === 'amount' && node.path === 'sections.items.Table.amount'));
     assert.ok(!tableNode.children?.some((node) => /^\[\d+\]$/.test(node.key)));
   });
 
@@ -427,7 +427,7 @@ describe('field-mapping', () => {
     const itemNode = rowsNode?.children?.find((node) => node.key === 'item');
 
     assert.ok(itemNode);
-    assert.strictEqual(itemNode.path, '$payload.document_item_rows.item');
+    assert.strictEqual(itemNode.path, 'document_item_rows.item');
     assert.strictEqual(itemNode.type, 'object');
     assert.ok(itemNode.children?.some((node) => node.key === 'name'));
     assert.ok(itemNode.children?.some((node) => node.key === 'price'));
@@ -465,12 +465,12 @@ describe('field-mapping', () => {
     assert.strictEqual(valuesNode.type, 'array');
     assert.ok(
       valuesNode.children?.some(
-        (node) => node.key === 'name' && node.path === '$payload.sections.items.Table.values.name',
+        (node) => node.key === 'name' && node.path === 'sections.items.Table.values.name',
       ),
     );
     assert.ok(
       valuesNode.children?.some(
-        (node) => node.key === 'amount' && node.path === '$payload.sections.items.Table.values.amount',
+        (node) => node.key === 'amount' && node.path === 'sections.items.Table.values.amount',
       ),
     );
     assert.ok(!valuesNode.children?.some((node) => /^\[\d+\]$/.test(node.key)));
@@ -494,15 +494,15 @@ describe('field-mapping', () => {
       },
     };
 
-    const nested = resolveSourcePath('$payload.sections.items.Table.values', tablePayload);
+    const nested = resolveSourcePath('sections.items.Table.values', tablePayload);
     assert.ok(Array.isArray(nested), 'must not return Array.prototype.values');
     assert.equal(nested.length, 2);
     assert.equal(
-      resolveSourcePath('$payload.sections.items.Table.values.amount', tablePayload),
+      resolveSourcePath('sections.items.Table.values.amount', tablePayload),
       '1',
     );
     assert.equal(
-      resolveSourcePath('$payload.sections.items.Table.values.name', tablePayload),
+      resolveSourcePath('sections.items.Table.values.name', tablePayload),
       'value1',
     );
   });
@@ -512,14 +512,14 @@ describe('field-mapping', () => {
       {
         section: 'Anamnesis',
         field: 'Complaints',
-        sourcePath: '$payload.sections.Anamnesis.Complaints',
+        sourcePath: 'sections.Anamnesis.Complaints',
         fieldId: 'anamnesis_complaints',
       },
       {
         section: 'Anamnesis',
         field: 'Life anamnesis',
         childField: 'Life history',
-        sourcePath: '$payload.sections.Anamnesis["Life history"]',
+        sourcePath: 'sections.Anamnesis["Life history"]',
         fieldId: 'anamnesis_life',
         childFieldId: 'life_history',
       },
@@ -577,22 +577,22 @@ describe('field-mapping', () => {
         field: 'Table',
         fieldId: 'items_table',
         columnKey: 'name',
-        sourcePath: '$payload.sections.items.Table.name',
-        sourceArrayPath: '$payload.sections.items.Table',
+        sourcePath: 'sections.items.Table.name',
+        sourceArrayPath: 'sections.items.Table',
       },
       {
         section: 'items',
         field: 'Table',
         fieldId: 'items_table',
         columnKey: 'amount',
-        sourcePath: '$payload.sections.items.Table.amount',
-        sourceArrayPath: '$payload.sections.items.Table',
+        sourcePath: 'sections.items.Table.amount',
+        sourceArrayPath: 'sections.items.Table',
       },
     ];
 
     const mappingResult = buildMappingResultFromRules(tableRules);
     assert.deepEqual(mappingResult.sections.items.Table, {
-      [SECTION_SOURCE_KEY]: '$payload.sections.items.Table',
+      [SECTION_SOURCE_KEY]: 'sections.items.Table',
       items: {
         name: '$name',
         amount: '$amount',
@@ -618,7 +618,7 @@ describe('field-mapping', () => {
 
     const fromDrop = createMappingRuleFromDrop(
       'items_table_row1_amount',
-      '$payload.sections.items.Table[0].amount',
+      'sections.items.Table[0].amount',
       tableBlocks,
       tableFieldSchemas,
     );
@@ -626,17 +626,17 @@ describe('field-mapping', () => {
     assert.strictEqual(fromDrop.columnKey, 'amount');
     assert.strictEqual(fromDrop.fieldId, 'items_table');
     assert.strictEqual(fromDrop.section, 'items');
-    assert.strictEqual(fromDrop.sourcePath, '$payload.sections.items.Table.amount');
-    assert.strictEqual(fromDrop.sourceArrayPath, '$payload.sections.items.Table');
+    assert.strictEqual(fromDrop.sourcePath, 'sections.items.Table.amount');
+    assert.strictEqual(fromDrop.sourceArrayPath, 'sections.items.Table');
 
     const parsed = parseMappingResultToRules(mappingResult, tableBlocks, tableFieldSchemas);
     assert.strictEqual(parsed.length, 2);
     assert.strictEqual(parsed[0].columnKey, 'name');
-    assert.strictEqual(parsed[0].sourcePath, '$payload.sections.items.Table.name');
-    assert.strictEqual(parsed[0].sourceArrayPath, '$payload.sections.items.Table');
+    assert.strictEqual(parsed[0].sourcePath, 'sections.items.Table.name');
+    assert.strictEqual(parsed[0].sourceArrayPath, 'sections.items.Table');
     assert.strictEqual(parsed[1].columnKey, 'amount');
-    assert.strictEqual(parsed[1].sourcePath, '$payload.sections.items.Table.amount');
-    assert.strictEqual(parsed[1].sourceArrayPath, '$payload.sections.items.Table');
+    assert.strictEqual(parsed[1].sourcePath, 'sections.items.Table.amount');
+    assert.strictEqual(parsed[1].sourceArrayPath, 'sections.items.Table');
 
     const applied = applyFieldMapping(
       tablePayload,
@@ -680,8 +680,8 @@ describe('field-mapping', () => {
         items: {
           Table: [
             {
-              name: '$payload.sections.items.Table.name',
-              amount: '$payload.sections.items.Table.amount',
+              name: 'sections.items.Table.name',
+              amount: 'sections.items.Table.amount',
             },
           ],
         },
@@ -691,7 +691,7 @@ describe('field-mapping', () => {
     const parsed = parseMappingResultToRules(legacyResult, tableBlocks, tableFieldSchemas);
     assert.strictEqual(parsed.length, 2);
     assert.strictEqual(parsed[0].columnKey, 'name');
-    assert.strictEqual(parsed[0].sourceArrayPath, '$payload.sections.items.Table');
+    assert.strictEqual(parsed[0].sourceArrayPath, 'sections.items.Table');
     assert.strictEqual(parsed[1].columnKey, 'amount');
   });
 
@@ -726,7 +726,7 @@ describe('field-mapping', () => {
       sections: {
         list: {
           Table: {
-            source: '$payload.records',
+            source: 'records',
             items: {
               name: '$name',
               start: '$date_visit_start#DD-MM-YY',
@@ -747,20 +747,20 @@ describe('field-mapping', () => {
       [
         {
           columnKey: 'name',
-          sourcePath: '$payload.records.name',
-          sourceArrayPath: '$payload.records',
+          sourcePath: 'records.name',
+          sourceArrayPath: 'records',
         },
         {
           columnKey: 'start',
-          sourcePath: '$payload.records.date_visit_start#DD-MM-YY',
-          sourceArrayPath: '$payload.records',
+          sourcePath: 'records.date_visit_start#DD-MM-YY',
+          sourceArrayPath: 'records',
         },
       ],
     );
 
     const rebuilt = buildMappingResultFromRules(parsed);
     assert.deepEqual(rebuilt.sections.list.Table, {
-      [SECTION_SOURCE_KEY]: '$payload.records',
+      [SECTION_SOURCE_KEY]: 'records',
       items: {
         name: '$name',
         start: '$date_visit_start#DD-MM-YY',
@@ -813,9 +813,9 @@ describe('field-mapping', () => {
         Products: {
           'Line Items': [
             {
-              quantity: '$payload.GFERP__Sales_Lines__r.GFERP__EDI_Quantity__c',
-              model: '$payload.GFERP__Sales_Lines__r.GFERP__Item__r.Name',
-              product: '$payload.GFERP__Sales_Lines__r.GFERP__Item__r.GFERP__Description__c',
+              quantity: 'GFERP__Sales_Lines__r.GFERP__EDI_Quantity__c',
+              model: 'GFERP__Sales_Lines__r.GFERP__Item__r.Name',
+              product: 'GFERP__Sales_Lines__r.GFERP__Item__r.GFERP__Description__c',
             },
           ],
         },
@@ -878,8 +878,8 @@ describe('field-mapping', () => {
       sections: {
         items: {
           Child: {
-            Note: '$payload.header.note',
-            City: '$payload.header.city',
+            Note: 'header.note',
+            City: 'header.city',
           },
         },
       },
@@ -889,7 +889,7 @@ describe('field-mapping', () => {
     assert.strictEqual(rules.length, 2);
     assert.ok(rules.every((rule) => !rule.columnKey && !rule.sourceArrayPath));
     assert.strictEqual(rules[0].childFieldPath, 'Note');
-    assert.strictEqual(rules[0].sourcePath, '$payload.header.note');
+    assert.strictEqual(rules[0].sourcePath, 'header.note');
     assert.strictEqual(rules[1].childFieldPath, 'City');
   });
 
@@ -925,7 +925,7 @@ describe('field-mapping', () => {
     ];
 
     const template = { blocks, fieldSchemas };
-    const sourcePath = '$payload.sections.header.Text';
+    const sourcePath = 'sections.header.Text';
 
     const bulkRules = createMappingRulesFromDrop(
       'items_child',
@@ -966,44 +966,50 @@ describe('field-mapping', () => {
       ['sections'],
     );
 
-    const sectionFields = getSourceFieldsAtPath(payload, '$payload.sections.');
+    const sectionFields = getSourceFieldsAtPath(payload, 'sections.');
     assert.ok(sectionFields.some((field) => field.key === 'header' && field.type === 'object'));
     assert.ok(sectionFields.some((field) => field.key === 'items' && field.type === 'object'));
 
-    const itemsFields = getSourceFieldsAtPath(payload, '$payload.sections.items.');
+    const itemsFields = getSourceFieldsAtPath(payload, 'sections.items.');
     assert.ok(itemsFields.some((field) => field.key === 'Table' && field.type === 'array'));
 
-    const tableFields = getSourceFieldsAtPath(payload, '$payload.sections.items.Table.');
+    const tableFields = getSourceFieldsAtPath(payload, 'sections.items.Table.');
     assert.ok(tableFields.some((field) => field.key === 'name' && field.type === 'string'));
     assert.ok(tableFields.some((field) => field.key === 'amount' && field.type === 'string'));
     assert.ok(tableFields.every((field) => !/^\[\d+\]$/.test(field.key)));
-    assert.ok(tableFields.some((field) => field.path === '$payload.sections.items.Table.name'));
+    assert.ok(tableFields.some((field) => field.path === 'sections.items.Table.name'));
 
-    const rowFields = getSourceFieldsAtPath(payload, '$payload.sections.items.Table[0].');
+    const rowFields = getSourceFieldsAtPath(payload, 'sections.items.Table[0].');
     assert.ok(rowFields.some((field) => field.key === 'name'));
     assert.ok(rowFields.some((field) => field.key === 'amount'));
   });
 
   it('parsePathTokenContext splits base path and segment', () => {
-    assert.deepEqual(parsePathTokenContext('$payload.sections.he'), {
-      basePath: '$payload.sections',
+    assert.deepEqual(parsePathTokenContext('sections.he'), {
+      basePath: 'sections',
       segmentPrefix: 'he',
-      segmentStartInToken: 18,
+      segmentStartInToken: 9,
     });
-    assert.deepEqual(parsePathTokenContext('$payload.sections.'), {
-      basePath: '$payload.sections',
+    assert.deepEqual(parsePathTokenContext('sections.'), {
+      basePath: 'sections',
       segmentPrefix: '',
+      segmentStartInToken: 9,
+    });
+    // Legacy `$payload.` prefix still parses to the same bare base path.
+    assert.deepEqual(parsePathTokenContext('$payload.sections.he'), {
+      basePath: 'sections',
+      segmentPrefix: 'he',
       segmentStartInToken: 18,
     });
   });
 
   it('supports #dateFormat suffix on mapping source paths', () => {
-    assert.deepEqual(parseMappingSourcePath('$payload.CreatedDate#dd/mm/yyyy'), {
-      path: '$payload.CreatedDate',
+    assert.deepEqual(parseMappingSourcePath('CreatedDate#dd/mm/yyyy'), {
+      path: 'CreatedDate',
       dateFormat: 'dd/mm/yyyy',
     });
-    assert.deepEqual(parseMappingSourcePath('$payload.CreatedDate#DD.MM.YYYY'), {
-      path: '$payload.CreatedDate',
+    assert.deepEqual(parseMappingSourcePath('CreatedDate#DD.MM.YYYY'), {
+      path: 'CreatedDate',
       dateFormat: 'DD.MM.YYYY',
     });
 
@@ -1014,31 +1020,31 @@ describe('field-mapping', () => {
     };
 
     assert.equal(
-      resolveMappedSourceValue('$payload.CreatedDate#dd/mm/yyyy', payload),
+      resolveMappedSourceValue('CreatedDate#dd/mm/yyyy', payload),
       '22/07/2026',
     );
     assert.equal(
-      resolveMappedSourceValue('$payload.CreatedDate#DD.MM.YYYY', payload),
+      resolveMappedSourceValue('CreatedDate#DD.MM.YYYY', payload),
       '22.07.2026',
     );
     assert.equal(
-      resolveMappedSourceValue('$payload.CreatedDate#iso', payload),
+      resolveMappedSourceValue('CreatedDate#iso', payload),
       '2026-07-22',
     );
-    assert.equal(resolveMappedSourceValue('$payload.CreatedDate', payload), payload.CreatedDate);
+    assert.equal(resolveMappedSourceValue('CreatedDate', payload), payload.CreatedDate);
     assert.equal(formatDateValue('2026-07-22', 'mm/dd/yyyy'), '07/22/2026');
 
     assert.equal(
-      resolveMappedSourceValue('$payload.Amount#EUR:2', payload),
+      resolveMappedSourceValue('Amount#EUR:2', payload),
       formatCurrencyValue(1234.5, 'EUR:2'),
     );
     assert.equal(
-      resolveMappedSourceValue('$payload.Amount#number:2', payload),
+      resolveMappedSourceValue('Amount#number:2', payload),
       formatCurrencyValue(1234.5, 'number:2'),
     );
 
-    assert.equal(sourcePathExists('$payload.CreatedDate#dd/mm/yyyy', payload), true);
-    assert.equal(sourcePathExists('$payload.Missing#dd/mm/yyyy', payload), false);
+    assert.equal(sourcePathExists('CreatedDate#dd/mm/yyyy', payload), true);
+    assert.equal(sourcePathExists('Missing#dd/mm/yyyy', payload), false);
 
     const mappingSpec = {
       kind: 'fieldMapping',
@@ -1048,7 +1054,7 @@ describe('field-mapping', () => {
           section: 'Order Details',
           field: 'Date Added',
           fieldId: 'date_added',
-          sourcePath: '$payload.CreatedDate#dd/mm/yyyy',
+          sourcePath: 'CreatedDate#dd/mm/yyyy',
         },
       ],
     };
@@ -1210,19 +1216,19 @@ describe('omitMappedFields', () => {
         section: 'Untitled',
         field: 'Date Visit Start',
         fieldId: 'main_start',
-        sourcePath: '$payload.meta.parent.date_visit_start',
+        sourcePath: 'meta.parent.date_visit_start',
       },
       {
         section: 'Main',
         field: 'Name_2',
         fieldId: 'main_name',
-        sourcePath: '$payload.meta.parent.name',
+        sourcePath: 'meta.parent.name',
       },
       {
         section: 'Untitled',
         field: 'Name',
         fieldId: 'main_patient',
-        sourcePath: '$payload.meta.parent.patient.name',
+        sourcePath: 'meta.parent.patient.name',
       },
     ];
 
@@ -1239,9 +1245,9 @@ describe('omitMappedFields', () => {
     const mappingResult = buildMappingResultFromRules(synced);
     assert.deepEqual(mappingResult.sections, {
       Main: {
-        Start: '$payload.meta.parent.date_visit_start',
-        Name: '$payload.meta.parent.name',
-        Patient: '$payload.meta.parent.patient.name',
+        Start: 'meta.parent.date_visit_start',
+        Name: 'meta.parent.name',
+        Patient: 'meta.parent.patient.name',
       },
     });
   });
@@ -1276,7 +1282,7 @@ describe('omitMappedFields', () => {
         childFieldPath: 'Town',
         fieldId: 'old_child',
         childFieldId: 'city_f',
-        sourcePath: '$payload.city',
+        sourcePath: 'city',
       },
     ];
 
@@ -1333,34 +1339,39 @@ describe('section _source mapping', () => {
 
   it('round-trips _source through build/parse', () => {
     const rules = [
-      createSectionSourceRule('main', '$payload.Contacts'),
+      createSectionSourceRule('main', 'Contacts'),
       {
         section: 'main',
         field: 'Name',
         fieldId: 'contact_name',
-        sourcePath: '$payload.Contacts.Name',
-        sourceArrayPath: '$payload.Contacts',
+        sourcePath: 'Contacts.Name',
+        sourceArrayPath: 'Contacts',
       },
       {
         section: 'main',
         field: 'Phone',
         fieldId: 'contact_phone',
-        sourcePath: '$payload.AccountPhone',
+        sourcePath: 'AccountPhone',
       },
     ];
     const result = buildMappingResultFromRules(rules);
-    assert.equal(result.sections.main[SECTION_SOURCE_KEY], '$payload.Contacts');
+    assert.equal(result.sections.main[SECTION_SOURCE_KEY], 'Contacts');
     assert.equal(result.sections.main.Name, '$Name');
-    assert.equal(result.sections.main.Phone, '$payload.AccountPhone');
+    assert.equal(result.sections.main.Phone, 'AccountPhone');
+    assert.equal(
+      Object.keys(result.sections.main)[0],
+      SECTION_SOURCE_KEY,
+      '_source should be the first key in a sourced section',
+    );
 
     const parsed = parseMappingResultToRules(result, blocks, fieldSchemas);
     assert.ok(parsed.some(isSectionSourceRule));
     assert.equal(
       parsed.find(isSectionSourceRule)?.sourceArrayPath,
-      '$payload.Contacts',
+      'Contacts',
     );
     assert.equal(parsed.find((r) => r.field === 'Name')?.sourcePath, '$Name');
-    assert.equal(parsed.find((r) => r.field === 'Phone')?.sourcePath, '$payload.AccountPhone');
+    assert.equal(parsed.find((r) => r.field === 'Phone')?.sourcePath, 'AccountPhone');
   });
 
   it('resolves relative and absolute paths into N instances', () => {
@@ -1376,7 +1387,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('main', '$payload.Contacts'),
+          createSectionSourceRule('main', 'Contacts'),
           {
             section: 'main',
             field: 'Name',
@@ -1387,7 +1398,7 @@ describe('section _source mapping', () => {
             section: 'main',
             field: 'Phone',
             fieldId: 'contact_phone',
-            sourcePath: '$payload.AccountPhone',
+            sourcePath: 'AccountPhone',
           },
         ],
       },
@@ -1407,7 +1418,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('main', '$payload.Contacts'),
+          createSectionSourceRule('main', 'Contacts'),
           {
             section: 'main',
             field: 'Name',
@@ -1438,7 +1449,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('main', '$payload.Contacts'),
+          createSectionSourceRule('main', 'Contacts'),
           {
             section: 'main',
             field: 'Name',
@@ -1450,16 +1461,16 @@ describe('section _source mapping', () => {
             field: 'Lines',
             fieldId: 'line_items',
             columnKey: 'sku',
-            sourcePath: '$payload.Contacts.Lines.Sku',
-            sourceArrayPath: '$payload.Contacts.Lines',
+            sourcePath: 'Contacts.Lines.Sku',
+            sourceArrayPath: 'Contacts.Lines',
           },
           {
             section: 'main',
             field: 'Lines',
             fieldId: 'line_items',
             columnKey: 'qty',
-            sourcePath: '$payload.Contacts.Lines.Qty',
-            sourceArrayPath: '$payload.Contacts.Lines',
+            sourcePath: 'Contacts.Lines.Qty',
+            sourceArrayPath: 'Contacts.Lines',
           },
         ],
       },
@@ -1521,7 +1532,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('letter', '$payload.sections.items.Table'),
+          createSectionSourceRule('letter', 'sections.items.Table'),
           {
             section: 'letter',
             field: 'amount',
@@ -1599,7 +1610,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('letter', '$payload.sections.items.Table'),
+          createSectionSourceRule('letter', 'sections.items.Table'),
           {
             section: 'letter',
             field: 'amount',
@@ -1680,7 +1691,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('Letter', '$payload.tests'),
+          createSectionSourceRule('Letter', 'tests'),
           {
             section: 'Letter',
             field: 'amount',
@@ -1743,7 +1754,7 @@ describe('section _source mapping', () => {
     ];
     const mappingResult = buildMappingResultFromRules(
       [
-        createSectionSourceRule('Letter', '$payload.sections.items.Table'),
+        createSectionSourceRule('Letter', 'sections.items.Table'),
         {
           section: 'Letter',
           field: 'Table',
@@ -1757,8 +1768,8 @@ describe('section _source mapping', () => {
           field: 'Table',
           fieldId: 'table_1',
           columnKey: 'amount',
-          sourcePath: '$payload.sections.items.Table.values.amount',
-          sourceArrayPath: '$payload.sections.items.Table.values',
+          sourcePath: 'sections.items.Table.values.amount',
+          sourceArrayPath: 'sections.items.Table.values',
         },
       ],
       { blocks: detailBlocks, fieldSchemas: detailSchemas },
@@ -1816,7 +1827,7 @@ describe('section _source mapping', () => {
         kind: 'fieldMapping',
         version: 1,
         rules: [
-          createSectionSourceRule('Letter', '$payload.sections.items.Table'),
+          createSectionSourceRule('Letter', 'sections.items.Table'),
           {
             section: 'Letter',
             field: 'amount',
@@ -1880,15 +1891,20 @@ describe('section _source mapping', () => {
     const payload = { AccountPhone: '111', Contacts: [{ Name: 'Ada' }] };
     const item = payload.Contacts[0];
     assert.equal(resolvePathForSectionItem('$Name', payload, item), 'Ada');
-    assert.equal(resolvePathForSectionItem('Name', payload, item), 'Ada');
-    assert.equal(resolvePathForSectionItem('$payload.AccountPhone', payload, item), '111');
+    // Bare paths are absolute (root payload); use `$Name` for row-relative.
+    assert.equal(resolvePathForSectionItem('Name', payload, item), undefined);
+    assert.equal(resolvePathForSectionItem('AccountPhone', payload, item), '111');
+    assert.equal(
+      resolvePathForSectionItem('$payload.AccountPhone', payload, item),
+      '111',
+    );
   });
 
   it('applySectionSourceRepeatable does not flip repeatable from _source', () => {
     const localBlocks = JSON.parse(JSON.stringify(blocks));
     assert.equal(localBlocks[0].data.repeatable, false);
     applySectionSourceRepeatable(localBlocks, [
-      createSectionSourceRule('main', '$payload.Contacts'),
+      createSectionSourceRule('main', 'Contacts'),
     ]);
     assert.equal(localBlocks[0].data.repeatable, false);
   });
@@ -1899,7 +1915,7 @@ describe('section _source mapping', () => {
       {
         kind: 'fieldMapping',
         version: 1,
-        rules: [createSectionSourceRule('main', '$payload.Contacts')],
+        rules: [createSectionSourceRule('main', 'Contacts')],
       },
       template,
     );
@@ -1953,7 +1969,7 @@ describe('pivotTable mapping', () => {
             section: 'Main',
             field: 'Sales Pivot',
             fieldId: 'sales_pivot',
-            sourceArrayPath: '$payload.OrderItems',
+            sourceArrayPath: 'OrderItems',
           },
         ],
       },

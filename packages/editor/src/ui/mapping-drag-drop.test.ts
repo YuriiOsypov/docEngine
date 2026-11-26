@@ -12,13 +12,13 @@ describe('mapping-drag-drop section source helpers', () => {
         {
           section: 'main',
           field: '_source',
-          sourcePath: '$payload.Contacts',
-          sourceArrayPath: '$payload.Contacts',
+          sourcePath: 'Contacts',
+          sourceArrayPath: 'Contacts',
         },
       ]),
-      '$payload.Contacts',
+      'Contacts',
     );
-    assert.equal(getSectionSourcePath('other', [{ section: 'main', field: '_source', sourcePath: '$payload.X' }]), null);
+    assert.equal(getSectionSourcePath('other', [{ section: 'main', field: '_source', sourcePath: 'X' }]), null);
   });
 
   it('rewrites absolute field paths under section source to relative', () => {
@@ -27,18 +27,18 @@ describe('mapping-drag-drop section source helpers', () => {
         {
           section: 'main',
           field: 'Name',
-          sourcePath: '$payload.Contacts.Name',
+          sourcePath: 'Contacts.Name',
         },
         {
           section: 'main',
           field: 'Phone',
-          sourcePath: '$payload.AccountPhone',
+          sourcePath: 'AccountPhone',
         },
       ],
-      '$payload.Contacts',
+      'Contacts',
     );
     assert.equal(next[0].sourcePath, '$Name');
-    assert.equal(next[1].sourcePath, '$payload.AccountPhone');
+    assert.equal(next[1].sourcePath, 'AccountPhone');
   });
 
   it('shortens nested values.amount column drops to $amount under $values', () => {
@@ -49,11 +49,11 @@ describe('mapping-drag-drop section source helpers', () => {
           field: 'Table',
           fieldId: 'table_1',
           columnKey: 'amount',
-          sourcePath: '$payload.sections.items.Table.values.amount',
-          sourceArrayPath: '$payload.sections.items.Table.values',
+          sourcePath: 'sections.items.Table.values.amount',
+          sourceArrayPath: 'sections.items.Table.values',
         },
       ],
-      '$payload.sections.items.Table',
+      'sections.items.Table',
     );
     assert.equal(next[0].sourceArrayPath, '$values');
     assert.equal(next[0].sourcePath, '$amount');

@@ -32,25 +32,66 @@ describe('mapping-result-helper', () => {
   });
 
   it('findPathTokenAtCursor locates partial path before cursor', () => {
-    const value = '"city": "$payload.se';
+    const value = '"city": "se';
     const token = findPathTokenAtCursor(value, value.length);
-    assert.deepEqual(token, { start: 9, end: 20, prefix: '$payload.se' });
+    assert.deepEqual(token, { start: 9, end: 11, prefix: 'se' });
+  });
+
+  it('findPathTokenAtCursor includes trailing dot for object drill-in', () => {
+    const value = '"Billing Address": "account_id."';
+    const start = value.indexOf('account_id.');
+    const cursor = start + 'account_id.'.length;
+    const token = findPathTokenAtCursor(value, cursor);
+    assert.deepEqual(token, {
+      start,
+      end: start + 'account_id.'.length,
+      prefix: 'account_id.',
+    });
+  });
+
+  it('resolveAutocompleteLookup lists children after account_id.', () => {
+    const payload = {
+      account_id: {
+        last_name: 'Ada',
+        billing_address: '1 Main',
+      },
+      name: 'Opp',
+    };
+    const value = '"Billing Address": "account_id."';
+    const cursor = value.indexOf('account_id.') + 'account_id.'.length;
+    const resolved = resolveAutocompleteLookup(payload, value, cursor);
+    assert.ok(resolved);
+    assert.strictEqual(resolved.lookupPrefix, 'account_id.');
+    const fields = getSourceFieldsAtPath(payload, resolved.lookupPrefix);
+    assert.ok(fields.some((field: any) => field.key === 'last_name'));
+    assert.ok(fields.some((field: any) => field.key === 'billing_address'));
+  });
+
+  it('resolveAutocompleteLookup also works for mistaken $account_id.', () => {
+    const payload = { account_id: { last_name: 'Ada' }, name: 'Opp' };
+    const value = '"Customer": "$account_id."';
+    const cursor = value.indexOf('$account_id.') + '$account_id.'.length;
+    const resolved = resolveAutocompleteLookup(payload, value, cursor);
+    assert.ok(resolved);
+    assert.strictEqual(resolved.lookupPrefix, 'account_id.');
+    const fields = getSourceFieldsAtPath(payload, resolved.lookupPrefix);
+    assert.ok(fields.some((field: any) => field.key === 'last_name'));
   });
 
   it('insertPathSegmentAtCursor completes only the current segment', () => {
     const textarea = patchTextarea(document.createElement('textarea'));
     textarea.dispatchEvent = () => true;
-    textarea.value = '"city": "$payload.sections.he';
+    textarea.value = '"city": "sections.he';
     textarea.selectionStart = textarea.value.length;
     textarea.selectionEnd = textarea.value.length;
 
     insertPathSegmentAtCursor(textarea, {
       key: 'header',
-      path: '$payload.sections.header',
+      path: 'sections.header',
       type: 'object',
     });
 
-    assert.strictEqual(textarea.value, '"city": "$payload.sections.header');
+    assert.strictEqual(textarea.value, '"city": "sections.header');
   });
 
   it('resolveAutocompleteLookup drills into completed object segment without trailing dot', () => {
@@ -60,12 +101,12 @@ describe('mapping-result-helper', () => {
         items: { Table: [{ name: 'A', amount: '1' }] },
       },
     };
-    const value = '"city": "$payload.sections.items.Table"';
+    const value = '"city": "sections.items.Table"';
     const cursor = value.length - 1;
 
     const resolved = resolveAutocompleteLookup(payload, value, cursor);
     assert.ok(resolved);
-    assert.strictEqual(resolved.lookupPrefix, '$payload.sections.items.Table.');
+    assert.strictEqual(resolved.lookupPrefix, 'sections.items.Table.');
 
     const fields = getSourceFieldsAtPath(payload, resolved.lookupPrefix);
     assert.ok(fields.some((field: any) => field.key === 'name'));
@@ -74,22 +115,22 @@ describe('mapping-result-helper', () => {
 
   it('resolveAutocompleteLookup keeps partial segment for filtering', () => {
     const payload = { sections: { header: { Text: 'hello' } } };
-    const value = '"city": "$payload.sections.he';
+    const value = '"city": "sections.he';
     const cursor = value.length;
 
     const resolved = resolveAutocompleteLookup(payload, value, cursor);
     assert.ok(resolved);
-    assert.strictEqual(resolved.lookupPrefix, '$payload.sections.he');
+    assert.strictEqual(resolved.lookupPrefix, 'sections.he');
   });
 
   it('insertPathSegmentAtCursor replaces selected range', () => {
     const textarea = patchTextarea(document.createElement('textarea'));
-    textarea.value = '"city": "$payload.old"';
+    textarea.value = '"city": "old"';
     textarea.selectionStart = 9;
-    textarea.selectionEnd = 21;
+    textarea.selectionEnd = 12;
 
     const range = getPathInsertRange(textarea);
-    assert.deepEqual(range, { start: 9, end: 21, prefix: '$payload.old' });
+    assert.deepEqual(range, { start: 9, end: 12, prefix: 'old' });
   });
 
   it('getMappingResultLeafKey prefers column and child path tails', () => {
@@ -108,7 +149,7 @@ describe('mapping-result-helper', () => {
         version: 1,
         sections: {
           Anamnesis: {
-            Complaints: '$payload.sections.anamnesis.complaints',
+            Complaints: 'sections.anamnesis.complaints',
           },
         },
       },
@@ -118,12 +159,12 @@ describe('mapping-result-helper', () => {
     const range = findMappingResultSelection(text, {
       section: 'Anamnesis',
       field: 'Complaints',
-      sourcePath: '$payload.sections.anamnesis.complaints',
+      sourcePath: 'sections.anamnesis.complaints',
     });
     assert.ok(range);
     assert.equal(
       text.slice(range.start, range.end),
-      '"$payload.sections.anamnesis.complaints"',
+      '"sections.anamnesis.complaints"',
     );
   });
 
@@ -134,7 +175,7 @@ describe('mapping-result-helper', () => {
         version: 2,
         sections: {
           Anamnesis: {
-            Complaints2: '$payload.sections.Untitled.Text_2',
+            Complaints2: 'sections.Untitled.Text_2',
           },
         },
       },
@@ -157,7 +198,7 @@ describe('mapping-result-helper', () => {
         version: 2,
         sections: {
           Anamnesis: {
-            Complaints: '$payload.sections.Untitled.TT',
+            Complaints: 'sections.Untitled.TT',
           },
         },
       },
@@ -168,13 +209,13 @@ describe('mapping-result-helper', () => {
       {
         section: 'Anamnesis',
         field: 'Complaints',
-        sourcePath: '$payload.sections.Untitled.TT',
+        sourcePath: 'sections.Untitled.TT',
         severity: 'warning',
-        message: 'Source path "$payload.sections.Untitled.TT" does not exist in the payload.',
+        message: 'Source path "sections.Untitled.TT" does not exist in the payload.',
       },
     ]);
     assert.equal(ranges.length, 1);
-    assert.equal(text.slice(ranges[0].start, ranges[0].end), '"$payload.sections.Untitled.TT"');
+    assert.equal(text.slice(ranges[0].start, ranges[0].end), '"sections.Untitled.TT"');
   });
 
   it('buildMappingResultHighlightHtml wraps issue ranges in mark tags', () => {

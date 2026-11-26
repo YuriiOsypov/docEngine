@@ -103,6 +103,16 @@ export function applyFieldHighlightCssVars(
 ): void {
   if (!holder) return;
   const resolved = normalizeFieldHighlightStyle(style);
+  // Defaults → clear inline so host/theme CSS can theme empty-field pills
+  // (stamping #F0FDFA/#0000FF locks light "white blocks" over dark chrome).
+  if (!compactFieldHighlightStyle(resolved)) {
+    holder.style.removeProperty('--me-field-fill-bg');
+    holder.style.removeProperty('--me-field-fill-color');
+    holder.style.removeProperty('--me-field-fill-font-weight');
+    holder.style.removeProperty('--me-field-fill-border-width');
+    holder.style.removeProperty('--me-field-active-outline');
+    return;
+  }
   holder.style.setProperty('--me-field-fill-bg', resolved.backgroundColor ?? '');
   holder.style.setProperty('--me-field-fill-color', resolved.color ?? '');
   holder.style.setProperty('--me-field-fill-font-weight', resolved.fontWeight ?? '');

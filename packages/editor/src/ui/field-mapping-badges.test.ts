@@ -20,7 +20,7 @@ describe('field-mapping-badges', () => {
         section: 'Anamnesis',
         field: 'Complaints',
         fieldId: 'fld1',
-        sourcePath: '$payload.sections.anamnesis.complaints',
+        sourcePath: 'sections.anamnesis.complaints',
       },
     ];
 
@@ -28,11 +28,11 @@ describe('field-mapping-badges', () => {
 
     const token = holder.querySelector('.field-token');
     assert.ok(token.classList.contains('field-token--mapped'));
-    assert.equal(token.title, '$payload.sections.anamnesis.complaints');
-    assert.equal(token.dataset.sourcePath, '$payload.sections.anamnesis.complaints');
+    assert.equal(token.title, 'sections.anamnesis.complaints');
+    assert.equal(token.dataset.sourcePath, 'sections.anamnesis.complaints');
     assert.equal(
       token.querySelector('.field-token__mapping-badge')?.title,
-      '$payload.sections.anamnesis.complaints',
+      'sections.anamnesis.complaints',
     );
   });
 
@@ -49,13 +49,13 @@ describe('field-mapping-badges', () => {
       {
         section: 'main',
         field: '_source',
-        sourcePath: '$payload.Contacts',
-        sourceArrayPath: '$payload.Contacts',
+        sourcePath: 'Contacts',
+        sourceArrayPath: 'Contacts',
       },
     ]);
     const header = holder.querySelector('.document-section__header');
     assert.ok(header?.classList.contains('document-section__header--sourced'));
-    assert.equal(header?.dataset.sectionSource, '$payload.Contacts');
+    assert.equal(header?.dataset.sectionSource, 'Contacts');
     assert.match(
       header?.querySelector('.document-section__source-badge')?.textContent ?? '',
       /_source:\s*Contacts/,
@@ -73,21 +73,21 @@ describe('field-mapping-badges', () => {
         section: 'Anamnesis',
         field: 'Complaints',
         fieldId: 'fld1',
-        sourcePath: '$payload.a',
+        sourcePath: 'a',
       },
       {
         section: 'VA',
         field: 'Table',
         fieldId: 'tbl',
         columnKey: 'vis',
-        sourcePath: '$payload.b',
+        sourcePath: 'b',
       },
     ];
     applyMappingBadges(holder, rules);
 
     const plain = holder.querySelector('[data-field-id="fld1"]');
     const cell = holder.querySelector('.field-token--cell');
-    assert.equal(findRuleForMappedToken(plain, rules)?.sourcePath, '$payload.a');
-    assert.equal(findRuleForMappedToken(cell, rules)?.sourcePath, '$payload.b');
+    assert.equal(findRuleForMappedToken(plain, rules)?.sourcePath, 'a');
+    assert.equal(findRuleForMappedToken(cell, rules)?.sourcePath, 'b');
   });
 });

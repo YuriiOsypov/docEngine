@@ -35,6 +35,9 @@ function readSampleAtPath(sample: any, path: string) {
     rel = rel.slice('$payload.'.length);
   } else if (rel === '$payload') {
     return sample;
+  } else if (rel.startsWith('$') && !rel.startsWith('$payload')) {
+    // Relative `$field` — sample tree only holds absolute paths.
+    rel = rel.slice(1);
   }
   if (!rel) return sample;
 

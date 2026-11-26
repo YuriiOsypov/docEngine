@@ -9,7 +9,10 @@ import {
  * @returns {{ start: number; end: number; prefix: string } | null}
  */
 export function findPathTokenAtCursor(value: any,cursor: any) {
-  const re = /\$[\w.]+(?:\[[^\]]+\])*/g;
+  // Absolute bare paths (`close_date`, `account_id.`) or `$`-paths (`$qty`, legacy `$payload…`).
+  // Trailing `.` is included so typing `account_id.` still opens the field helper.
+  // Stop at JSON quotes / whitespace so `"old"` does not swallow the closing quote.
+  const re = /\$?[A-Za-z_][\w]*(?:\[[^\]]+\])?(?:\.[A-Za-z_][\w]*(?:\[[^\]]+\])?)*\.?/g;
   let match: any;
   while ((match = re.exec(value)) !== null) {
     const start = match.index;
@@ -22,6 +25,20 @@ export function findPathTokenAtCursor(value: any,cursor: any) {
 }
 
 /**
+ * Mapping-result autocomplete always lists against the root sample.
+ * Normalize legacy `$payload…` and mistaken `$account_id.` absolute typing to bare paths.
+ * @param {string} prefix
+ */
+function normalizeAutocompleteLookupPrefix(prefix: any): string {
+  const text = String(prefix ?? '');
+  if (!text || text === '$payload' || text === '$payload.') return '';
+  if (text.startsWith('$payload.')) return text.slice('$payload.'.length);
+  // `$account_id.` → `account_id.` so root object children appear in the helper.
+  if (text.startsWith('$') && !text.startsWith('$payload')) return text.slice(1);
+  return text;
+}
+
+/**
  * @param {unknown} payload
  * @param {string} value
  * @param {number} cursor
@@ -29,22 +46,23 @@ export function findPathTokenAtCursor(value: any,cursor: any) {
  */
 export function resolveAutocompleteLookup(payload: any,value: any,cursor: any) {
   const token = findPathTokenAtCursor(value, cursor);
-  if (!token?.prefix.startsWith('$')) return null;
+  if (!token?.prefix) return null;
 
   const context = parsePathTokenContext(token.prefix);
-  if (!context) return { token, lookupPrefix: token.prefix };
+  if (!context) {
+    return { token, lookupPrefix: normalizeAutocompleteLookupPrefix(token.prefix) };
+  }
 
-  let lookupPrefix = token.prefix;
-  if (token.prefix.endsWith('.')) {
-    return { token, lookupPrefix };
+  let lookupPrefix = normalizeAutocompleteLookupPrefix(token.prefix);
+  if (token.prefix.endsWith('.') || lookupPrefix.endsWith('.')) {
+    return { token, lookupPrefix: lookupPrefix.endsWith('.') ? lookupPrefix : `${lookupPrefix}.` };
   }
 
   const atTokenEnd = cursor >= token.end;
   if (atTokenEnd && context.segmentPrefix) {
-    const parentLookup = context.basePath === '$payload'
-      ? '$payload.'
-      : `${context.basePath}.`;
-    const siblings = getSourceFieldsAtPath(payload, parentLookup);
+    const bareBase = normalizeAutocompleteLookupPrefix(context.basePath);
+    const parentLookup = bareBase ? `${bareBase}.` : '';
+    const siblings = getSourceFieldsAtPath(payload, parentLookup || context.segmentPrefix);
     const match = siblings.find((field: any) => field.key === context.segmentPrefix);
     if (match && (match.type === 'object' || match.type === 'array')) {
       lookupPrefix = `${match.path}.`;
@@ -590,8 +608,8 @@ export function wireMappingResultPathHelper(textarea: any,_anchorEl: any) {
 
     if (!resolved && options.force) {
       resolved = {
-        token: { start: cursor, end: cursor, prefix: '$payload' },
-        lookupPrefix: '$payload.',
+        token: { start: cursor, end: cursor, prefix: '' },
+        lookupPrefix: '',
       };
     }
 

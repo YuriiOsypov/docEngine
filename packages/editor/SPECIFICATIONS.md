@@ -1,6 +1,6 @@
 # @docengine/editor — Interface Specifications
 
-Version: **0.0.105** · IO format version: **`IO_VERSION = 1`**
+Version: **0.0.106** · IO format version: **`IO_VERSION = 1`**
 
 This document defines every public contract of the library: factory options, instance API, data shapes, catalogs, pickers, and extension points.
 
@@ -1575,7 +1575,7 @@ document.querySelector('#save').onclick = async () => {
 
 ## 18. Field mapping
 
-Templates may include a `fieldMapping` spec that maps a source payload (e.g. Salesforce / API JSON) onto template field names. The Mapping UI edits this as a **Mapping result** JSON of `$payload…` paths; applying the mapping produces a `kind: 'field'` export (or merges values into the document).
+Templates may include a `fieldMapping` spec that maps a source payload (e.g. Salesforce / API JSON) onto template field names. The Mapping UI edits this as a **Mapping result** JSON of absolute bare paths (`close_date`, `account_id.name`) and relative `$field` paths; applying the mapping produces a `kind: 'field'` export (or merges values into the document). Legacy `$payload…` absolute paths are still accepted.
 
 Core APIs live in `@docengine/engine` and are re-exported from `@docengine/editor`: `applyFieldMapping`, `previewFieldMapping`, `resolveMappedSourceValue`, `parseMappingSourcePath`, `formatDateValue`, etc.
 
@@ -1601,7 +1601,7 @@ interface FieldMappingRule {
   childFieldPath?: string;
   /** Table column key when mapping a table column to a source array. */
   columnKey?: string;
-  /** Source path, e.g. `$payload.CreatedDate` or `$payload.CreatedDate#dd/mm/yyyy`. */
+  /** Source path, e.g. `CreatedDate`, `CreatedDate#dd/mm/yyyy`, or relative `$qty`. */
   sourcePath: string;
   /** Base source array path for table column mapping. */
   sourceArrayPath?: string;
@@ -1612,7 +1612,8 @@ interface FieldMappingRule {
 
 ### 18.2 Source paths
 
-- Paths usually start with `$payload` (e.g. `$payload.Name`, `$payload.Account.BillingCity`).
+- **Absolute** paths are bare from the payload root (e.g. `Name`, `Account.BillingCity`). Legacy `$payload.Name` is still resolved and normalized to bare form when saved.
+- **Relative** paths under a table / section `_source` use a `$` prefix (e.g. `$qty`, `$item.name`).
 - Drag-and-drop writes a plain path with **no** format suffix.
 - Path existence checks (`sourcePathExists`, validation warnings) ignore any `#…` suffix (see below).
 
@@ -1627,7 +1628,7 @@ Unresolved **Mapping result** JSON for a table field uses an explicit source arr
   "sections": {
     "list": {
       "Table": {
-        "_source": "$payload.records",
+        "_source": "records",
         "items": {
           "name": "$name",
           "start": "$date_visit_start#DD-MM-YY",
@@ -1642,13 +1643,13 @@ Unresolved **Mapping result** JSON for a table field uses an explicit source arr
 
 | Key | Meaning |
 |-----|---------|
-| `_source` | Absolute (or section-relative) path to the source array (`$payload.records`, `$values`) |
+| `_source` | Absolute (or section-relative) path to the source array (`records`, `$values`) |
 | `items` | Map of table column key → mapping expression |
 
 Column paths in `items`:
 
 - **Relative (preferred):** `$name`, `$Item__r.Name` — resolved against each row of `_source`
-- **Absolute still allowed:** `$payload.records.name` (normalized on parse)
+- **Absolute still allowed:** `records.name` (legacy `$payload.records.name` normalized on parse)
 - `#format` suffixes work the same as scalar fields
 
 Resolved fields export / apply output remains a **row array** (`[{ name, start, … }, …]`). Internal `FieldMappingRule` still uses `columnKey` + `sourcePath` + `sourceArrayPath`.
@@ -1656,7 +1657,7 @@ Resolved fields export / apply output remains a **row array** (`[{ name, start, 
 Legacy Mapping result shapes still accepted when parsing:
 
 - `{ "source": "…", "items": { … } }` (renamed to `_source` on rebuild)
-- `[ { "name": "$payload.records.name", … } ]`
+- `[ { "name": "records.name", … } ]` / legacy `$payload.records.name`
 
 ```ts
 interface TableMappingResult {

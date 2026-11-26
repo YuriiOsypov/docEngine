@@ -1,6 +1,6 @@
 {
   "name": "@docengine/editor",
-  "version": "0.0.105",
+  "version": "0.0.106",
   "type": "module",
   "main": "./lib/index.js",
   "module": "./lib/index.js",
