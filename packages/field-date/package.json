@@ -1,6 +1,6 @@
 {
   "name": "@docengine/field-date",
-  "version": "0.0.106",
+  "version": "0.0.107",
   "description": "Reference DocEngine field plugin for the date field type",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,11 +17,11 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@docengine/editor": "0.0.105",
-    "@docengine/engine": "0.0.105"
+    "@docengine/editor": "0.0.107",
+    "@docengine/engine": "0.0.107"
   },
   "dependencies": {
-    "@docengine/engine": "0.0.105"
+    "@docengine/engine": "0.0.107"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
